@@ -1,7 +1,7 @@
 [run]
 branch = True
-source = shablona/*
-include = shablona/*
+source = p2pspatial/*
+include = p2pspatial/*
 omit = */setup.py
 [report]
-include = shablona/*
+include = p2pspatial/*

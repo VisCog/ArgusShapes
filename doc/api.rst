@@ -5,7 +5,7 @@ API
 Classes
 -------
 
-.. currentmodule:: shablona
+.. currentmodule:: p2pspatial
 
 .. autosummary::
    :template: class.rst
