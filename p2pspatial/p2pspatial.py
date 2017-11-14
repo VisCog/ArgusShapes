@@ -15,13 +15,14 @@ import skimage.filters as skif
 import skimage.transform as skit
 import skimage.measure as skim
 import sklearn.base as sklb
+import sklearn.metrics as sklm
 
 from .due import due, Doi
 
 p2p.console.setLevel(logging.ERROR)
 
 __all__ = ["get_thresholded_image", "get_region_props", "load_data",
-           "DataPreprocessor", "SpatialSimulation", "SpatialModelRegressor"]
+           "SpatialSimulation", "SpatialModelRegressor"]
 
 
 # Use duecredit (duecredit.org) to provide a citation to relevant work to
@@ -33,25 +34,29 @@ due.cite(Doi("10.1167/13.9.30"),
          path='p2pspatial')
 
 
-def get_thresholded_image(img, res_shape=None):
+def get_thresholded_image(img, res_shape=None, verbose=True):
     if res_shape is not None:
         img = skit.resize(img, res_shape, mode='reflect')
     try:
         img = (img > skif.threshold_minimum(img)).astype(np.uint8)
         return img
     except RuntimeError:
-        print('Runtime error with minimum threshold')
-        img = (img >= 128).astype(np.uint8)
+        if verbose:
+            print('Runtime error with minimum threshold')
+
+        halfway = (img.max() - img.min()) // 2
+        img = (img >= halfway).astype(np.uint8)
     return img
 
 
 def get_region_props(img, res_shape=None, verbose=True, return_all=False):
-    img = get_thresholded_image(img)
+    img = get_thresholded_image(img, verbose=verbose)
     if img is None:
         return None
 
     regions = skim.regionprops(img)
     if len(regions) == 0:
+        print('No regions: min=%f max=%f' % (img.min(), img.max()))
         return None
     elif len(regions) == 1:
         return regions[0]
@@ -68,8 +73,9 @@ def get_region_props(img, res_shape=None, verbose=True, return_all=False):
             return regions[idx]
 
 
-def load_data(folder, subject=None, electrodes=None, date=None, verbose=True,
-              random_state=None, scaling=4, img_shape=(41, 61)):
+def load_data(folder, subject=None, electrodes=None, date=None, verbose=False,
+              random_state=None, scaling=4, img_shape=(41, 61),
+              single_stim=True):
     # Recursive search for all files whose name contains the string
     # '_rawDataFileList_': These contain the paths to the raw bmp images
     search_pattern = os.path.join(folder, '**', '*_rawDataFileList_*')
@@ -101,6 +107,8 @@ def load_data(folder, subject=None, electrodes=None, date=None, verbose=True,
             if params[1] not in electrodes:
                 continue
         if date is not None and date != date:
+            continue
+        if single_stim and '_' in params[1]:
             continue
 
         # Find the Hu momemnts of the image: Calculate area in deg^2, but
@@ -142,93 +150,42 @@ def load_data(folder, subject=None, electrodes=None, date=None, verbose=True,
     return pd.DataFrame(features), pd.DataFrame(targets)
 
 
-class DataPreprocessor(sklb.TransformerMixin):
-
-    def __init__(self, subject=None, electrodes=None, date=None, verbose=True):
-        self.subject = subject
-        self.electrodes = electrodes
-        self.date = date
-        self.verbose = verbose
-
-    def get_params(self, deep=True):
-        return {'subject': self.subject,
-                'electrodes': self.electrodes,
-                'date': self.date,
-                'verbose': self.verbose}
-
-    def set_params(self, **params):
-        for param, value in six.iteritems(params):
-            setattr(self, param, value)
-
-    def fit(self, *_):
-        return self
-
-    def transform(self, X, *_):
-        assert isinstance(X, pd.core.frame.DataFrame)
-
-        features = []
-        for _, row in X.iterrows():
-            # Split the data strings to extract subject, electrode, etc.
-            fname = row['Filename']
-            date = fname.split('_')[0]
-            params = row['Params'].split(' ')
-            stim = params[0].split('_')
-            if len(params) < 2 or len(stim) < 2:
-                if self.verbose:
-                    print('Could not parse row:', row['Filename'],
-                          row['Params'])
-                continue
-            if self.subject is not None and stim[0] != self.subject:
-                continue
-            if self.electrodes is not None:
-                if params[1] not in self.electrodes:
-                    continue
-            if self.date is not None and date != self.date:
-                continue
-
-            # Find the Hu momemnts of the image: Calculate area in deg^2, but
-            # operate on image larger than 1px = 1deg so that thin lines
-            # are still visible
-            img = skio.imread(os.path.join(row['Folder'], row['Filename']),
-                              as_grey=True)
-            res_shape = (row['img_rows'] * row['scaling'],
-                         row['img_cols'] * row['scaling'])
-            props = get_region_props(img, res_shape=res_shape,
-                                     verbose=self.verbose)
-            if props is None:
-                if self.verbose:
-                    print('Found empty props:', row['Folder'], row['Filename'])
-
-            # Assemble all feature values in a dict
-            feat = {'filename': fname,
-                    'folder': row['Folder'],
-                    'param_str': row['Params'],
-                    'subject': stim[0],
-                    'electrode': params[1],
-                    'stim_class': stim[1],
-                    'date': date,
-                    'area': props.area / sc_fact ** 2,
-                    'orientation': props.orientation,
-                    'major_axis_length': props.major_axis_length / sc_fact,
-                    'minor_axis_length': props.minor_axis_length / sc_fact}
-            features.append(feat)
-        return features
-
-
 class SpatialSimulation(p2p.Simulation):
 
     def set_ganglion_cell_layer(self):
         pass
 
-    def pulse2percept(self, electrode, return_both=False):
-        cs = self.implant[electrode].current_spread(self.ofl.gridx,
-                                                    self.ofl.gridy,
-                                                    layer='OFL')
+    def calc_electrode_ecs(self, electrode, gridx, gridy):
+        ename = '%s%d' % (electrode[0], int(electrode[1:]))
+        cs = self.implant[ename].current_spread(gridx, gridy, layer='OFL')
         ecs = self.ofl.current2effectivecurrent(cs)
-        if return_both:
-            return cs, ecs
-        else:
-            return ecs
+        return ecs
+
+    def calc_currents(self, electrodes, verbose=False):
+        if verbose:
+            print('Calculating effective current...')
+
+        # Multiple electrodes possible, separated by '_'
+        list_2d = [e.split('_') for e in list(electrodes)]
+        list_1d = [item for sublist in list_2d for item in sublist]
+        electrodes = np.unique(list_1d)
+
+        ecs = p2p.utils.parfor(self.calc_electrode_ecs, electrodes,
+                               func_args=[self.ofl.gridx, self.ofl.gridy],
+                               engine=self.engine, scheduler=self.scheduler,
+                               n_jobs=self.n_jobs)
+        self.ecs = {}
+        for k, v in zip(electrodes, ecs):
+            self.ecs[k] = v
+        if verbose:
+            print('Done.')
+
+    def pulse2percept(self, electrodes):
+        ecs = np.zeros_like(self.ofl.gridx)
+        electrodes = electrodes.split('_')
+        for e in electrodes:
+            ecs += self.ecs[e]
+        return ecs
 
 
 class SpatialModelRegressor(sklb.BaseEstimator, sklb.RegressorMixin):
@@ -257,34 +214,46 @@ class SpatialModelRegressor(sklb.BaseEstimator, sklb.RegressorMixin):
         # Combine with `fit_params`
         model_params.update(fit_params)
         self.model_params = model_params
+        assert isinstance(self.model_params['implant_x'], (int, float))
+        assert isinstance(self.model_params['implant_y'], (int, float))
+        assert isinstance(self.model_params['implant_rot'], (int, float))
+
+        mp = self.model_params
+        implant = p2p.implants.ArgusII(x_center=mp['implant_x'],
+                                       y_center=mp['implant_y'],
+                                       rot=mp['implant_rot'])
+        sim = SpatialSimulation(implant)
+        sim.set_optic_fiber_layer(sampling=mp['sampling'],
+                                  x_range=p2p.retina.dva2ret((-30, 30)),
+                                  y_range=p2p.retina.dva2ret((-20, 20)),
+                                  decay_const=mp['decay_const'],
+                                  sensitivity_rule=mp['sensitivity_rule'])
+        sim.calc_currents(np.unique(X['electrode']))
+        self.sim = sim
         return self
+
+    def _predict(self, Xrow):
+        _, row = Xrow
+        img = self.sim.pulse2percept(row['electrode'])
+        res_shape = (row['img_shape'][0] * row['scaling'],
+                     row['img_shape'][1] * row['scaling'])
+        props = get_region_props(img, res_shape=res_shape, verbose=False)
+        if props is None:
+            print('Could not extract regions:', row['electrode'])
+            return np.zeros(7)
+        return props.moments_hu
 
     def predict(self, X):
         assert isinstance(X, pd.core.frame.DataFrame)
         assert self.model_params is not None
-        mp = self.model_params
+        assert self.sim is not None
 
-        y_pred = []
-        for _, row in X.iterrows():
-            implant = p2p.implants.ArgusII(x_center=mp['implant_x'],
-                                           y_center=mp['implant_y'],
-                                           rot=mp['implant_rot'])
-            sim = SpatialSimulation(implant)
-            sim.set_optic_fiber_layer(sampling=mp['sampling'],
-                                      x_range=p2p.retina.dva2ret((-30, 30)),
-                                      y_range=p2p.retina.dva2ret((-20, 20)),
-                                      decay_const=mp['decay_const'],
-                                      sensitivity_rule=mp['sensitivity_rule'])
-            # get rid of the leading zeros
-            electrode = '%s%d' % (row['electrode'][0],
-                                  int(row['electrode'][1:]))
-            img = sim.pulse2percept(electrode)
-            res_shape = (row['img_shape'][0] * row['scaling'],
-                         row['img_shape'][1] * row['scaling'])
-            props = get_region_props(img, res_shape=res_shape, verbose=False)
-            if props is None:
-                print('Could not extract regions:', electrode)
-                y_pred.append(np.zeros(7))
-            else:
-                y_pred.append(props.moments_hu)
+        y_pred = p2p.utils.parfor(self._predict, X.iterrows(),
+                                  engine=self.sim.engine,
+                                  scheduler=self.sim.scheduler,
+                                  n_jobs=self.sim.n_jobs)
         return y_pred
+
+    def rmse(self, X, y, sample_weight=None):
+        return np.sqrt(sklm.mean_squared_error(y, self.predict(X),
+                                               sample_weight=sample_weight))

@@ -23,6 +23,7 @@ def gridscore(g, ppipe, XX, yy, model_params={}):
     return pipe.score(XX, yy)
 
 
+filename = 'fit-spatial.pickle'
 rootfolder = 'C:/Users/mbeyeler/data/secondsight/shape/52-001'
 subject = None
 electrodes = 'A05'
@@ -31,11 +32,7 @@ img_shape = (41, 61)
 X, y = p2pspatial.load_data(rootfolder, subject=subject, electrodes=electrodes,
                             scaling=scaling, img_shape=img_shape)
 
-n_jobs = 1
-n_folds = 5
 sensitivity_rule = 'decay'
-cvmethod = 'random'
-cvparams = {'n_iter': 2}
 search_params = {'reg__decay_const': (1, 10, 10),
                  'reg__implant_x': (-1000, 1000, 10),
                  'reg__implant_y': (-1000, 1000, 10),
@@ -45,6 +42,7 @@ fit_params = {'reg__sampling': 200,
 orig_pipe = Pipeline([('reg', p2pspatial.SpatialModelRegressor())])
 
 print('performing grid search')
+t0 = time()
 grid = ParameterGrid(search_params)
 scores = p2p.utils.parfor(gridscore, grid, func_args=[orig_pipe, X, y],
                           func_kwargs={'model_params': fit_params})
