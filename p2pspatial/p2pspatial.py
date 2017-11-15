@@ -164,12 +164,14 @@ class SpatialSimulation(p2p.Simulation):
         pass
 
     def calc_electrode_ecs(self, electrode, gridx, gridy):
+        assert isinstance(electrode, six.string_types)
         ename = '%s%d' % (electrode[0], int(electrode[1:]))
         cs = self.implant[ename].current_spread(gridx, gridy, layer='OFL')
         ecs = self.ofl.current2effectivecurrent(cs)
         return ecs
 
     def calc_currents(self, electrodes, verbose=True):
+        assert isinstance(electrodes, (list, np.ndarray))
 
         # Multiple electrodes possible, separated by '_'
         list_2d = [e.split('_') for e in list(electrodes)]
@@ -189,14 +191,16 @@ class SpatialSimulation(p2p.Simulation):
         if verbose:
             print('Done.')
 
-    def pulse2percept(self, electrodes):
+    def pulse2percept(self, el_str):
+        assert isinstance(el_str, six.string_types)
+
         ecs = np.zeros_like(self.ofl.gridx)
-        electrodes = electrodes.split('_')
+        electrodes = el_str.split('_')
         for e in electrodes:
             if e not in self.ecs:
                 # It's possible that the test set contains an electrode that
                 # was not in the training set (and thus not in ``fit``)
-                self.calc_currents(e)
+                self.calc_currents([e])
             ecs += self.ecs[e]
         return ecs
 
