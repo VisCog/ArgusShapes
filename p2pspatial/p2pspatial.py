@@ -80,10 +80,18 @@ def load_data(folder, subject=None, electrodes=None, date=None, verbose=False,
     # '_rawDataFileList_': These contain the paths to the raw bmp images
     search_pattern = os.path.join(folder, '**', '*_rawDataFileList_*')
     dfs = []
+    n_samples = 0
     for fname in glob.iglob(search_pattern, recursive=True):
         tmp = pd.read_csv(fname)
         tmp['Folder'] = os.path.dirname(fname)
+        n_samples += len(tmp)
+        if verbose:
+            print('Found %d samples in %s' % (len(tmp), tmp['Folder']))
         dfs.append(tmp)
+    if n_samples == 0:
+        print('No data found in %s' % folder)
+        return pd.DataFrame([]), pd.DataFrame([])
+
     df = pd.concat(dfs)
     if random_state is not None:
         df = shuffle(df, random_state=random_state)
@@ -217,15 +225,23 @@ class SpatialModelRegressor(sklb.BaseEstimator, sklb.RegressorMixin):
         assert isinstance(self.model_params['implant_x'], (int, float))
         assert isinstance(self.model_params['implant_y'], (int, float))
         assert isinstance(self.model_params['implant_rot'], (int, float))
+        assert isinstance(self.model_params['loc_od'], tuple)
 
         mp = self.model_params
+        print('implant (x, y): (%.2f, %.2f), rot: %f' % (mp['implant_x'],
+                                                         mp['implant_y'],
+                                                         mp['implant_rot']))
         implant = p2p.implants.ArgusII(x_center=mp['implant_x'],
                                        y_center=mp['implant_y'],
                                        rot=mp['implant_rot'])
         sim = SpatialSimulation(implant)
+
+        print('Set loc_od:', mp['loc_od'], 'decay_const:', mp['decay_const'],
+              'sensitivity_rule:', mp['sensitivity_rule'])
         sim.set_optic_fiber_layer(sampling=mp['sampling'],
                                   x_range=p2p.retina.dva2ret((-30, 30)),
                                   y_range=p2p.retina.dva2ret((-20, 20)),
+                                  loc_od=mp['loc_od'],
                                   decay_const=mp['decay_const'],
                                   sensitivity_rule=mp['sensitivity_rule'])
         sim.calc_currents(np.unique(X['electrode']))
