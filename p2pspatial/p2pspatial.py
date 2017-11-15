@@ -169,20 +169,21 @@ class SpatialSimulation(p2p.Simulation):
         ecs = self.ofl.current2effectivecurrent(cs)
         return ecs
 
-    def calc_currents(self, electrodes, verbose=False):
-        if verbose:
-            print('Calculating effective current...')
+    def calc_currents(self, electrodes, verbose=True):
 
         # Multiple electrodes possible, separated by '_'
         list_2d = [e.split('_') for e in list(electrodes)]
         list_1d = [item for sublist in list_2d for item in sublist]
         electrodes = np.unique(list_1d)
+        if verbose:
+            print('Calculating effective current for electrodes:', electrodes)
 
         ecs = p2p.utils.parfor(self.calc_electrode_ecs, electrodes,
                                func_args=[self.ofl.gridx, self.ofl.gridy],
                                engine=self.engine, scheduler=self.scheduler,
                                n_jobs=self.n_jobs)
-        self.ecs = {}
+        if not self.ecs:
+            self.ecs = {}
         for k, v in zip(electrodes, ecs):
             self.ecs[k] = v
         if verbose:
@@ -192,6 +193,10 @@ class SpatialSimulation(p2p.Simulation):
         ecs = np.zeros_like(self.ofl.gridx)
         electrodes = electrodes.split('_')
         for e in electrodes:
+            if e not in self.ecs:
+                # It's possible that the test set contains an electrode that
+                # was not in the training set (and thus not in ``fit``)
+                self.calc_currents(e)
             ecs += self.ecs[e]
         return ecs
 
