@@ -38,15 +38,17 @@ due.cite(Doi("10.1167/13.9.30"),
 def get_thresholded_image(img, thresh='min', res_shape=None, verbose=True):
     if res_shape is not None:
         img = skit.resize(img, res_shape, mode='reflect')
-    if thresh is 'min':
+    if thresh == 'min':
         try:
             thresh = skif.threshold_minimum(img)
         except RuntimeError:
             if verbose:
                 print('Runtime error with minimum threshold')
-            halfway = (img.max() - img.min()) // 2
-
-    return (img > thresh).astype(np.uint8)
+            thresh = (img.max() - img.min()) // 2
+    else:
+        assert isinstance(thresh, (int, float))
+    img_th = img > thresh
+    return img_th.astype(np.uint8) * 255
 
 
 def get_region_props(img, thresh='min', res_shape=None, verbose=True,
@@ -75,7 +77,7 @@ def get_region_props(img, thresh='min', res_shape=None, verbose=True,
 
 
 def load_data(folder, subject=None, electrodes=None, date=None, verbose=False,
-              random_state=None, scaling=4, img_shape=(41, 61),
+              random_state=None, #scaling=4, img_shape=(41, 61),
               single_stim=True):
     # Recursive search for all files whose name contains the string
     # '_rawDataFileList_': These contain the paths to the raw bmp images
@@ -129,8 +131,8 @@ def load_data(folder, subject=None, electrodes=None, date=None, verbose=False,
             continue
         img = skio.imread(os.path.join(row['Folder'], row['Filename']),
                           as_grey=True)
-        res_shape = (img_shape[0] * scaling, img_shape[1] * scaling)
-        props = get_region_props(img, thresh=128, res_shape=res_shape,
+        # res_shape = (img_shape[0] * scaling, img_shape[1] * scaling)
+        props = get_region_props(img, thresh=128, #res_shape=res_shape,
                                  verbose=verbose)
         if props is None:
             if verbose:
@@ -144,12 +146,13 @@ def load_data(folder, subject=None, electrodes=None, date=None, verbose=False,
                 'electrode': params[1],
                 'stim_class': stim[1],
                 'date': date,
-                'scaling': scaling,
-                'img_shape': img_shape,
-                'area': props.area / scaling ** 2,
+                'img_shape': img.shape,
+                #'scaling': scaling,
+                #'img_shape': img_shape,
+                'area': props.area,# / scaling ** 2,
                 'orientation': props.orientation,
-                'major_axis_length': props.major_axis_length / scaling,
-                'minor_axis_length': props.minor_axis_length / scaling}
+                'major_axis_length': props.major_axis_length,# / scaling,
+                'minor_axis_length': props.minor_axis_length}# / scaling}
         features.append(feat)
         targets.append(props.moments_hu)
     if verbose:
@@ -161,14 +164,32 @@ def load_data(folder, subject=None, electrodes=None, date=None, verbose=False,
 
 class SpatialSimulation(p2p.Simulation):
 
+    def set_params(self, **params):
+        for param, value in six.iteritems(params):
+            setattr(self, param, value)
+
     def set_ganglion_cell_layer(self):
         self.gcl = {}
         pass
 
     def calc_electrode_ecs(self, electrode, gridx, gridy):
         assert isinstance(electrode, six.string_types)
+        assert isinstance(self.csmode, six.string_types)
         ename = '%s%d' % (electrode[0], int(electrode[1:]))
-        cs = self.implant[ename].current_spread(gridx, gridy, layer='OFL')
+
+        # Current spread either from Nanduri model or with fitted radius
+        if self.csmode.lower() == 'ahuja':
+            cs = self.implant[ename].current_spread(gridx, gridy, layer='OFL')
+        elif self.csmode.lower() == 'gaussian':
+            assert isinstance(self.cswidth, (int, float))
+            assert self.cswidth > 0
+            r2 = (gridx - self.implant[ename].x_center) ** 2
+            r2 += (gridy - self.implant[ename].y_center) ** 2
+            cs = np.exp(-r2 / (2.0 * self.cswidth ** 2))
+        else:
+            raise ValueError('Unknown csmode "%s"' % self.csmode)
+
+        # Take into account axonal stimulation
         ecs = self.ofl.current2effectivecurrent(cs)
         return ecs
 
@@ -251,6 +272,7 @@ class SpatialModelRegressor(sklb.BaseEstimator, sklb.RegressorMixin):
                                        y_center=mp['implant_y'],
                                        rot=mp['implant_rot'])
         sim = SpatialSimulation(implant)
+        sim.set_params(csmode=mp['csmode'], cswidth=mp['cswidth'])
 
         print('Set loc_od:', mp['loc_od'], 'decay_const:', mp['decay_const'],
               'sensitivity_rule:', mp['sensitivity_rule'],
@@ -268,14 +290,20 @@ class SpatialModelRegressor(sklb.BaseEstimator, sklb.RegressorMixin):
     def _predict(self, Xrow):
         _, row = Xrow
         img = self.sim.pulse2percept(row['electrode'])
-        res_shape = (row['img_shape'][0] * row['scaling'],
-                     row['img_shape'][1] * row['scaling'])
+        #res_shape = (row['img_shape'][0] * row['scaling'],
+        #             row['img_shape'][1] * row['scaling'])
         props = get_region_props(img, thresh=self.model_params['thresh'],
-                                 res_shape=res_shape, verbose=False)
+                                 res_shape=row['img_shape'], verbose=False)
         if props is None:
             print('Could not extract regions:', row['electrode'])
             return np.zeros(7)
         return props.moments_hu
+
+    def predict_image(self, X):
+        y_pred = []
+        for _, row in X.iterrows():
+            y_pred.append(self.sim.pulse2percept(row['electrode']))
+        return y_pred
 
     def predict(self, X):
         assert isinstance(X, pd.core.frame.DataFrame)

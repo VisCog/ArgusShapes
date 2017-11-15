@@ -19,8 +19,6 @@ import p2pspatial
 subject = None
 electrodes = None
 sensitivity_rule = 'Jeng2011'
-scaling = 8
-img_shape = (41, 61)
 n_jobs = 1
 n_folds = 5
 random_state = 42
@@ -31,18 +29,19 @@ filename = 'crossval-spatial_%s_%s.pickle' % (sensitivity_rule, now)
 
 t0 = time()
 X, y = p2pspatial.load_data(rootfolder, subject=subject, electrodes=electrodes,
-                            scaling=scaling, img_shape=img_shape,
                             random_state=random_state)
 print(X.shape, y.shape)
 assert len(X) == len(y) and len(X) > 0
 
-search_params = {'reg__thresh': (50, 200, 5)}
+search_params = {'reg__cswidth': (50, 500, 10)}
 fit_params = {'reg__sampling': 200,
               'reg__sensitivity_rule': sensitivity_rule,
               'reg__loc_od': (15.609559078040428, 2.2381648328706558),
               'reg__implant_x': -1657.11040863,
               'reg__implant_y': 196.93351877,
               'reg__implant_rot': -0.43376793904131516,
+              'reg__csmode': 'gaussian',
+              'reg__thresh': 'min',
               'reg__decay_const': 1}
 orig_pipe = Pipeline([('reg', p2pspatial.SpatialModelRegressor())])
 validator = p2pmodelselect.ModelValidator(orig_pipe, search_params,
@@ -56,6 +55,9 @@ print("done in %0.3fs" % sim_time)
 specifics = {'subject': subject,
              'electrodes': electrodes,
              'validator': validator,
+             'sensitivity_rule': sensitivity_rule,
+             'search_params': search_params,
+             'fit_params': fit_params,
              'X': X,
              'y': y,
              'n_folds': n_folds,
