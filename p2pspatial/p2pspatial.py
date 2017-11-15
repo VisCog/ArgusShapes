@@ -34,23 +34,23 @@ due.cite(Doi("10.1167/13.9.30"),
          path='p2pspatial')
 
 
-def get_thresholded_image(img, res_shape=None, verbose=True):
+def get_thresholded_image(img, thresh='min', res_shape=None, verbose=True):
     if res_shape is not None:
         img = skit.resize(img, res_shape, mode='reflect')
-    try:
-        img = (img > skif.threshold_minimum(img)).astype(np.uint8)
-        return img
-    except RuntimeError:
-        if verbose:
-            print('Runtime error with minimum threshold')
+    if thresh is 'min':
+        try:
+            thresh = skif.threshold_minimum(img)
+        except RuntimeError:
+            if verbose:
+                print('Runtime error with minimum threshold')
+            halfway = (img.max() - img.min()) // 2
 
-        halfway = (img.max() - img.min()) // 2
-        img = (img >= halfway).astype(np.uint8)
-    return img
+    return (img > thresh).astype(np.uint8)
 
 
-def get_region_props(img, res_shape=None, verbose=True, return_all=False):
-    img = get_thresholded_image(img, verbose=verbose)
+def get_region_props(img, thresh='min', res_shape=None, verbose=True,
+                     return_all=False):
+    img = get_thresholded_image(img, thresh=thresh, verbose=verbose)
     if img is None:
         return None
 
@@ -129,7 +129,7 @@ def load_data(folder, subject=None, electrodes=None, date=None, verbose=False,
         img = skio.imread(os.path.join(row['Folder'], row['Filename']),
                           as_grey=True)
         res_shape = (img_shape[0] * scaling, img_shape[1] * scaling)
-        props = get_region_props(img, res_shape=res_shape,
+        props = get_region_props(img, thresh=128, res_shape=res_shape,
                                  verbose=verbose)
         if props is None:
             if verbose:
@@ -161,6 +161,7 @@ def load_data(folder, subject=None, electrodes=None, date=None, verbose=False,
 class SpatialSimulation(p2p.Simulation):
 
     def set_ganglion_cell_layer(self):
+        self.gcl = {}
         pass
 
     def calc_electrode_ecs(self, electrode, gridx, gridy):
@@ -235,6 +236,9 @@ class SpatialModelRegressor(sklb.BaseEstimator, sklb.RegressorMixin):
         assert isinstance(self.model_params['implant_y'], (int, float))
         assert isinstance(self.model_params['implant_rot'], (int, float))
         assert isinstance(self.model_params['loc_od'], tuple)
+        assert isinstance(self.model_params['decay_const'], (int, float))
+        assert isinstance(self.model_params['thresh'], (int, float,
+                                                        six.string_types))
 
         mp = self.model_params
         print('implant (x, y): (%.2f, %.2f), rot: %f' % (mp['implant_x'],
@@ -262,7 +266,8 @@ class SpatialModelRegressor(sklb.BaseEstimator, sklb.RegressorMixin):
         img = self.sim.pulse2percept(row['electrode'])
         res_shape = (row['img_shape'][0] * row['scaling'],
                      row['img_shape'][1] * row['scaling'])
-        props = get_region_props(img, res_shape=res_shape, verbose=False)
+        props = get_region_props(img, thresh=self.model_params['thresh'],
+                                 res_shape=res_shape, verbose=False)
         if props is None:
             print('Could not extract regions:', row['electrode'])
             return np.zeros(7)
