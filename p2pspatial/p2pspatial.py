@@ -16,6 +16,7 @@ import skimage.transform as skit
 import skimage.measure as skim
 import sklearn.base as sklb
 import sklearn.metrics as sklm
+import sklearn.utils as sklu
 
 from .due import due, Doi
 
@@ -94,7 +95,7 @@ def load_data(folder, subject=None, electrodes=None, date=None, verbose=False,
 
     df = pd.concat(dfs)
     if random_state is not None:
-        df = shuffle(df, random_state=random_state)
+        df = sklu.shuffle(df, random_state=random_state)
 
     features = []
     targets = []
@@ -250,7 +251,8 @@ class SpatialModelRegressor(sklb.BaseEstimator, sklb.RegressorMixin):
         sim = SpatialSimulation(implant)
 
         print('Set loc_od:', mp['loc_od'], 'decay_const:', mp['decay_const'],
-              'sensitivity_rule:', mp['sensitivity_rule'])
+              'sensitivity_rule:', mp['sensitivity_rule'],
+              'thresh:', mp['thresh'])
         sim.set_optic_fiber_layer(sampling=mp['sampling'],
                                   x_range=p2p.retina.dva2ret((-30, 30)),
                                   y_range=p2p.retina.dva2ret((-20, 20)),
