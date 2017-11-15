@@ -19,13 +19,16 @@ import p2pspatial
 subject = None
 electrodes = None
 sensitivity_rule = 'Jeng2011'
+csmode = 'gaussian'
+thresh = 'min'
 n_jobs = 1
 n_folds = 5
 random_state = 42
 rootfolder = '/home/ubuntu/data/52-001'
 
 now = datetime.now().strftime('%Y-%m-%d_%H-%M-%S')
-filename = 'crossval-spatial_%s_%s.pickle' % (sensitivity_rule, now)
+filename = 'crossval-spatial_%s_%s_%s_%s.pickle' % (sensitivity_rule, csmode,
+                                                    thresh, now)
 
 t0 = time()
 X, y = p2pspatial.load_data(rootfolder, subject=subject, electrodes=electrodes,
@@ -40,8 +43,8 @@ fit_params = {'reg__sampling': 200,
               'reg__implant_x': -1657.11040863,
               'reg__implant_y': 196.93351877,
               'reg__implant_rot': -0.43376793904131516,
-              'reg__csmode': 'gaussian',
-              'reg__thresh': 'min',
+              'reg__csmode': csmode,
+              'reg__thresh': thresh,
               'reg__decay_const': 1}
 orig_pipe = Pipeline([('reg', p2pspatial.SpatialModelRegressor())])
 validator = p2pmodelselect.ModelValidator(orig_pipe, search_params,
