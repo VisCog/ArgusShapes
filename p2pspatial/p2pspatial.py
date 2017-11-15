@@ -204,6 +204,8 @@ class SpatialSimulation(p2p.Simulation):
                 # was not in the training set (and thus not in ``fit``)
                 self.calc_currents([e])
             ecs += self.ecs[e]
+        if ecs.max() > 0:
+            ecs = ecs / ecs.max() * 255
         return ecs
 
 
