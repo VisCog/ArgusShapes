@@ -182,7 +182,7 @@ class SpatialSimulation(p2p.Simulation):
                                func_args=[self.ofl.gridx, self.ofl.gridy],
                                engine=self.engine, scheduler=self.scheduler,
                                n_jobs=self.n_jobs)
-        if not self.ecs:
+        if not hasattr(self, 'ecs'):
             self.ecs = {}
         for k, v in zip(electrodes, ecs):
             self.ecs[k] = v
