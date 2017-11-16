@@ -154,7 +154,9 @@ def load_data(folder, subject=None, electrodes=None, date=None, verbose=False,
                 'major_axis_length': props.major_axis_length,# / scaling,
                 'minor_axis_length': props.minor_axis_length}# / scaling}
         features.append(feat)
-        targets.append(props.moments_hu)
+        # targets.append(props.moments_hu)
+        targets.append([props.area, props.orientation, props.major_axis_length,
+                        props.minor_axis_length])
     if verbose:
         print('Found %d samples: %d feature values, %d target values' % (
             len(features), len(features[0]), len(targets[0]))
@@ -297,7 +299,9 @@ class SpatialModelRegressor(sklb.BaseEstimator, sklb.RegressorMixin):
         if props is None:
             print('Could not extract regions:', row['electrode'])
             return np.zeros(7)
-        return props.moments_hu
+        y_pred = [props.area, props.orientation, props.major_axis_length,
+                  props.minor_axis_length]
+        return y_pred
 
     def predict_image(self, X):
         y_pred = []

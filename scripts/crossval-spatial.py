@@ -18,16 +18,18 @@ import p2pspatial
 
 subject = None
 electrodes = None
-sensitivity_rule = 'Jeng2011'
+sensitivity_rule = 'decay'
 csmode = 'gaussian'
-thresh = 'min'
+thresh = 128
+# scoring = 'neg_mean_squared_error'
+scoring = 'r2'
 n_jobs = 1
 n_folds = 5
 random_state = 42
-rootfolder = '/home/ubuntu/data/52-001'
+rootfolder = '/home/mbeyeler/data/secondsight/shape/52-001'
 
 now = datetime.now().strftime('%Y-%m-%d_%H-%M-%S')
-filename = 'crossval-spatial_%s_%s_%s_%s.pickle' % (sensitivity_rule, csmode,
+filename = 'crossval-spatial_%s_%s_%d_%s.pickle' % (sensitivity_rule, csmode,
                                                     thresh, now)
 
 t0 = time()
@@ -36,7 +38,8 @@ X, y = p2pspatial.load_data(rootfolder, subject=subject, electrodes=electrodes,
 print(X.shape, y.shape)
 assert len(X) == len(y) and len(X) > 0
 
-search_params = {'reg__cswidth': (50, 500, 10)}
+search_params = {'reg__cswidth': (50, 1000, 10),
+                 'reg__decay_const': (1, 20, 10)}
 fit_params = {'reg__sampling': 200,
               'reg__sensitivity_rule': sensitivity_rule,
               'reg__loc_od': (15.609559078040428, 2.2381648328706558),
@@ -44,12 +47,11 @@ fit_params = {'reg__sampling': 200,
               'reg__implant_y': 196.93351877,
               'reg__implant_rot': -0.43376793904131516,
               'reg__csmode': csmode,
-              'reg__thresh': thresh,
-              'reg__decay_const': 1}
+              'reg__thresh': thresh}
 orig_pipe = Pipeline([('reg', p2pspatial.SpatialModelRegressor())])
 validator = p2pmodelselect.ModelValidator(orig_pipe, search_params,
                                           fit_params=fit_params,
-                                          n_jobs=n_jobs)
+                                          n_jobs=n_jobs, scoring=scoring)
 X_test, y_true, y_pred, cv_results = p2pmodelselect.utils.crossval_predict(
     validator, X, y, n_folds=n_folds
 )
