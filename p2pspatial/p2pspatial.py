@@ -270,6 +270,9 @@ class SpatialModelRegressor(sklb.BaseEstimator, sklb.RegressorMixin):
         print('implant (x, y): (%.2f, %.2f), rot: %f' % (mp['implant_x'],
                                                          mp['implant_y'],
                                                          mp['implant_rot']))
+        if mp['implant_rot'] > 2 * np.pi:
+            print('[WARNING] implant_rot should be set in radians!!')
+
         implant = p2p.implants.ArgusII(x_center=mp['implant_x'],
                                        y_center=mp['implant_y'],
                                        rot=mp['implant_rot'])

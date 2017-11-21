@@ -45,7 +45,7 @@ fit_params = {'reg__sampling': 200,
               'reg__loc_od': (14.654583320031319, 2.2333036994345643),  # (15.609559078040428, 2.2381648328706558),
               'reg__implant_x': -1715.36406609,  #-1657.11040863,
               'reg__implant_y': 207.76526308,  #196.93351877,
-              'reg__implant_rot': -25.9491320411,  #-0.43376793904131516,
+              'reg__implant_rot': -0.452897792152,  #-0.43376793904131516,
               'reg__csmode': csmode,
               'reg__thresh': thresh}
 orig_pipe = Pipeline([('reg', p2pspatial.SpatialModelRegressor())])
