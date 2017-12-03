@@ -77,7 +77,7 @@ def get_region_props(img, thresh='min', res_shape=None, verbose=True,
 
 
 def load_data(folder, subject=None, electrodes=None, date=None, verbose=False,
-              random_state=None, #scaling=4, img_shape=(41, 61),
+              random_state=None, 
               single_stim=True):
     # Recursive search for all files whose name contains the string
     # '_rawDataFileList_': These contain the paths to the raw bmp images
@@ -149,8 +149,9 @@ def load_data(folder, subject=None, electrodes=None, date=None, verbose=False,
             continue
         img = skio.imread(os.path.join(row['Folder'], row['Filename']),
                           as_grey=True)
-        # res_shape = (img_shape[0] * scaling, img_shape[1] * scaling)
-        props = get_region_props(img, thresh=128, #res_shape=res_shape,
+
+        # We use the image at original resolution
+        props = get_region_props(img, thresh=128, 
                                  verbose=verbose)
         if props is None:
             if verbose:
@@ -166,12 +167,10 @@ def load_data(folder, subject=None, electrodes=None, date=None, verbose=False,
                 'amp': amp,
                 'date': date,
                 'img_shape': img.shape,
-                #'scaling': scaling,
-                #'img_shape': img_shape,
-                'area': props.area,# / scaling ** 2,
+                'area': props.area,
                 'orientation': props.orientation,
-                'major_axis_length': props.major_axis_length,# / scaling,
-                'minor_axis_length': props.minor_axis_length}# / scaling}
+                'major_axis_length': props.major_axis_length,
+                'minor_axis_length': props.minor_axis_length}
         features.append(feat)
         # targets.append(props.moments_hu)
         targets.append([props.area, props.orientation, props.major_axis_length,
@@ -320,8 +319,6 @@ class SpatialModelRegressor(sklb.BaseEstimator, sklb.RegressorMixin):
         img = self.sim.pulse2percept(row['electrode'], row['amp'])
         assert np.isclose(img.max(), row['amp'])
 
-        #res_shape = (row['img_shape'][0] * row['scaling'],
-        #             row['img_shape'][1] * row['scaling'])
         print(row['electrode'], row['amp'], self.model_params['thresh'])
         props = get_region_props(img, thresh=self.model_params['thresh'],
                                  res_shape=row['img_shape'], verbose=False)

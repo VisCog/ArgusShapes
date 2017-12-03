@@ -1,6 +1,7 @@
 import numpy as np
 import os
 import pickle
+import pyswarm
 from time import time
 from datetime import datetime
 
@@ -28,23 +29,25 @@ def swarm_error(search_vals, regressor, XX, yy, search_keys, fit_params={}):
 
 now = datetime.now().strftime('%Y-%m-%d_%H-%M-%S')
 filename = 'fit-spatial-swarm_%s.pickle' % now
-rootfolder = 'C:/Users/mbeyeler/data/secondsight/shape/52-001'
+rootfolder = os.path.join(os.environ['SECOND_SIGHT_DATA'], 'shape', '52-001')
 subject = None
 electrodes = None
-scaling = 8
-img_shape = (41, 61)
 X, y = p2pspatial.load_data(rootfolder, subject=subject, electrodes=electrodes,
-                            scaling=scaling, img_shape=img_shape,
                             single_stim=True, verbose=True)
 print(X.shape, y.shape)
+if len(X) == 0:
+    raise ValueError('No data found in %s' % rootfolder)
 
 sensitivity_rule = 'decay'
 search_params = {'decay_const': (1, 100),
+                 'cswidth': (50, 1000),
                  'implant_x': (-1500, 1500),
                  'implant_y': (-500, 500),
                  'implant_rot': (0, 2 * np.pi),
                  'thresh': (0.1, 1.2)}
 fit_params = {'sampling': 200,
+              'loc_od': (13.13228137, 2.163527405),
+              'csmode': 'gaussian',
               'sensitivity_rule': sensitivity_rule}
 regressor = p2pspatial.SpatialModelRegressor()
 
