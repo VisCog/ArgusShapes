@@ -26,7 +26,8 @@ def swarm_error(search_vals, regressor, XX, yy, search_keys, fit_params={}):
     return np.mean(reg.rmse(XX, yy))
 
 
-filename = 'fit-spatial-swarm.pickle'
+now = datetime.now().strftime('%Y-%m-%d_%H-%M-%S')
+filename = 'fit-spatial-swarm_%s.pickle' % now
 rootfolder = 'C:/Users/mbeyeler/data/secondsight/shape/52-001'
 subject = None
 electrodes = None
@@ -34,14 +35,15 @@ scaling = 8
 img_shape = (41, 61)
 X, y = p2pspatial.load_data(rootfolder, subject=subject, electrodes=electrodes,
                             scaling=scaling, img_shape=img_shape,
-                            single_stim=True)
+                            single_stim=True, verbose=True)
 print(X.shape, y.shape)
 
 sensitivity_rule = 'decay'
-search_params = {'decay_const': (1, 10),
-                 'implant_x': (-1000, 1000),
-                 'implant_y': (-1000, 1000),
-                 'implant_rot': (0, 2 * np.pi)}
+search_params = {'decay_const': (1, 100),
+                 'implant_x': (-1500, 1500),
+                 'implant_y': (-500, 500),
+                 'implant_rot': (0, 2 * np.pi),
+                 'thresh': (0.1, 1.2)}
 fit_params = {'sampling': 200,
               'sensitivity_rule': sensitivity_rule}
 regressor = p2pspatial.SpatialModelRegressor()

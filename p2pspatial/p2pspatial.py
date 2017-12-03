@@ -89,7 +89,7 @@ def load_data(folder, subject=None, electrodes=None, date=None, verbose=False,
         tmp['Folder'] = os.path.dirname(fname)
         n_samples += len(tmp)
         if verbose:
-            print('Found %d samples in %s' % (len(tmp), tmp['Folder']))
+            print('Found %d samples in %s' % (len(tmp), tmp['Folder'].values[0]))
         dfs.append(tmp)
     if n_samples == 0:
         print('No data found in %s' % folder)
@@ -122,6 +122,24 @@ def load_data(folder, subject=None, electrodes=None, date=None, verbose=False,
         if single_stim and '_' in params[1]:
             continue
 
+        # Find the current amplitude in the folder name
+        # It could have any of the following formats: '/3xTh', '_2.5xTh',
+        # ' 2xTh'. Idea: Find the string 'xTh', then walk backwards to
+        # find the last occurrence of '_', ' ', or '/'
+        idx_end = row['Folder'].find('xTh')
+        if idx_end == -1:
+            if verbose:
+                print('Could not find "xTh" in row:', row['Folder'])
+            continue
+        idx_start = np.max([row['Folder'].rfind('_', 0, idx_end),
+                            row['Folder'].rfind(' ', 0, idx_end),
+                            row['Folder'].rfind('/', 0, idx_end)])
+        if idx_start == -1:
+            if verbose:
+                print('Could not find amplitude in row:', row['Folder'])
+            continue
+        amp = float(row['Folder'][idx_start + 1:idx_end])
+
         # Find the Hu momemnts of the image: Calculate area in deg^2, but
         # operate on image larger than 1px = 1deg so that thin lines
         # are still visible
@@ -145,6 +163,7 @@ def load_data(folder, subject=None, electrodes=None, date=None, verbose=False,
                 'subject': stim[0],
                 'electrode': params[1],
                 'stim_class': stim[1],
+                'amp': amp,
                 'date': date,
                 'img_shape': img.shape,
                 #'scaling': scaling,
@@ -216,8 +235,12 @@ class SpatialSimulation(p2p.Simulation):
         if verbose:
             print('Done.')
 
-    def pulse2percept(self, el_str):
+    def pulse2percept(self, el_str, amp):
         assert isinstance(el_str, six.string_types)
+        assert isinstance(amp, (int, float))
+        assert amp >= 0
+        if np.isclose(amp, 0):
+            print('Warning: amp is zero on %s' % el_str)
 
         ecs = np.zeros_like(self.ofl.gridx)
         electrodes = el_str.split('_')
@@ -228,7 +251,7 @@ class SpatialSimulation(p2p.Simulation):
                 self.calc_currents([e])
             ecs += self.ecs[e]
         if ecs.max() > 0:
-            ecs = ecs / ecs.max() * 255
+            ecs = ecs / ecs.max() * amp
         return ecs
 
 
@@ -294,9 +317,12 @@ class SpatialModelRegressor(sklb.BaseEstimator, sklb.RegressorMixin):
 
     def _predict(self, Xrow):
         _, row = Xrow
-        img = self.sim.pulse2percept(row['electrode'])
+        img = self.sim.pulse2percept(row['electrode'], row['amp'])
+        assert np.isclose(img.max(), row['amp'])
+
         #res_shape = (row['img_shape'][0] * row['scaling'],
         #             row['img_shape'][1] * row['scaling'])
+        print(row['electrode'], row['amp'], self.model_params['thresh'])
         props = get_region_props(img, thresh=self.model_params['thresh'],
                                  res_shape=row['img_shape'], verbose=False)
         if props is None:
@@ -309,7 +335,7 @@ class SpatialModelRegressor(sklb.BaseEstimator, sklb.RegressorMixin):
     def predict_image(self, X):
         y_pred = []
         for _, row in X.iterrows():
-            y_pred.append(self.sim.pulse2percept(row['electrode']))
+            y_pred.append(self.sim.pulse2percept(row['electrode'], row['amp']))
         return y_pred
 
     def predict(self, X):
