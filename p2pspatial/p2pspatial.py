@@ -53,7 +53,8 @@ def get_thresholded_image(img, thresh='min', res_shape=None, verbose=True):
 
 def get_region_props(img, thresh='min', res_shape=None, verbose=True,
                      return_all=False):
-    img = get_thresholded_image(img, thresh=thresh, verbose=verbose)
+    img = get_thresholded_image(img, thresh=thresh, res_shape=res_shape,
+                                verbose=verbose)
     if img is None:
         return None
 
@@ -77,7 +78,7 @@ def get_region_props(img, thresh='min', res_shape=None, verbose=True,
 
 
 def load_data(folder, subject=None, electrodes=None, date=None, verbose=False,
-              random_state=None, 
+              random_state=None,
               single_stim=True):
     # Recursive search for all files whose name contains the string
     # '_rawDataFileList_': These contain the paths to the raw bmp images
@@ -151,7 +152,7 @@ def load_data(folder, subject=None, electrodes=None, date=None, verbose=False,
                           as_grey=True)
 
         # We use the image at original resolution
-        props = get_region_props(img, thresh=128, 
+        props = get_region_props(img, thresh=128,
                                  verbose=verbose)
         if props is None:
             if verbose:
@@ -169,6 +170,7 @@ def load_data(folder, subject=None, electrodes=None, date=None, verbose=False,
                 'img_shape': img.shape,
                 'area': props.area,
                 'orientation': props.orientation,
+                'centroid': props.centroid,
                 'major_axis_length': props.major_axis_length,
                 'minor_axis_length': props.minor_axis_length}
         features.append(feat)
