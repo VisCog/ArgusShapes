@@ -29,7 +29,7 @@ def swarm_error(search_vals, regressor, XX, yy, search_keys, fit_params={}):
 
 now = datetime.now().strftime('%Y-%m-%d_%H-%M-%S')
 filename = 'fit-spatial-swarm_%s.pickle' % now
-rootfolder = os.path.join(os.environ['SECOND_SIGHT_DATA'], 'shape', '52-001')
+rootfolder = os.path.join(os.environ['SECOND_SIGHT_DATA'], 'shape', '51-009')
 subject = None
 electrodes = None
 X, y = p2pspatial.load_data(rootfolder, subject=subject, electrodes=electrodes,
@@ -38,8 +38,11 @@ print(X.shape, y.shape)
 if len(X) == 0:
     raise ValueError('No data found in %s' % rootfolder)
 
+scoring_weights = {'orientation': 100.0,
+                   'major_axis_length': 1.0,
+                   'minor_axis_length': 1.0}
 sensitivity_rule = 'decay'
-search_params = {'decay_const': (1, 100),
+search_params = {'decay_const': (0.1, 5),
                  'cswidth': (50, 1000),
                  'implant_x': (-1500, 1500),
                  'implant_y': (-500, 500),
@@ -48,7 +51,8 @@ search_params = {'decay_const': (1, 100),
 fit_params = {'sampling': 200,
               'loc_od': (13.13228137, 2.163527405),
               'csmode': 'gaussian',
-              'sensitivity_rule': sensitivity_rule}
+              'sensitivity_rule': sensitivity_rule,
+              'scoring_weights': scoring_weights}
 regressor = p2pspatial.SpatialModelRegressor()
 
 print('performing swarm optimization')

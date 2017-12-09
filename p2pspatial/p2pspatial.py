@@ -117,7 +117,7 @@ def load_data(folder, subject=None, electrodes=None, amplitude=None,
             continue
         if electrodes is not None:
             if params[1] not in electrodes:
-                continue          
+                continue
         if date is not None and date != date:
             continue
         if single_stim and '_' in params[1]:
@@ -171,15 +171,13 @@ def load_data(folder, subject=None, electrodes=None, amplitude=None,
                 'amp': amp,
                 'date': date,
                 'img_shape': img.shape,
-                'area': props.area,
-                'orientation': props.orientation,
-                'centroid': props.centroid,
-                'major_axis_length': props.major_axis_length,
-                'minor_axis_length': props.minor_axis_length}
+                'centroid': props.centroid}
         features.append(feat)
-        # targets.append(props.moments_hu)
-        targets.append([props.area, props.orientation, props.major_axis_length,
-                        props.minor_axis_length])
+        target = {'area': props.area,
+                  'orientation': props.orientation,
+                  'major_axis_length': props.major_axis_length,
+                  'minor_axis_length': props.minor_axis_length}
+        targets.append(target)
     if verbose:
         print('Found %d samples: %d feature values, %d target values' % (
             len(features), len(features[0]), len(targets[0]))
@@ -270,6 +268,8 @@ class SpatialModelRegressor(sklb.BaseEstimator, sklb.RegressorMixin):
 
     def fit(self, X, y=None, **fit_params):
         """Gather all parameters needed to instantiate a model"""
+        assert isinstance(X, pd.core.frame.DataFrame)
+        assert isinstance(y, pd.core.frame.DataFrame)
         # The grid search call will add all `search_params` as attributes of
         # this class. They need to be combined with `fit_params` and all
         # passed to the model constructor.
@@ -297,7 +297,7 @@ class SpatialModelRegressor(sklb.BaseEstimator, sklb.RegressorMixin):
         print('implant (x, y): (%.2f, %.2f), rot: %f' % (mp['implant_x'],
                                                          mp['implant_y'],
                                                          mp['implant_rot']))
-        if mp['implant_rot'] > 2 * np.pi:
+        if np.abs(mp['implant_rot']) > 2 * np.pi:
             print('[WARNING] implant_rot should be set in radians!!')
 
         implant = p2p.implants.ArgusII(x_center=mp['implant_x'],
@@ -324,14 +324,15 @@ class SpatialModelRegressor(sklb.BaseEstimator, sklb.RegressorMixin):
         img = self.sim.pulse2percept(row['electrode'], row['amp'])
         assert np.isclose(img.max(), row['amp'])
 
-        print(row['electrode'], row['amp'], self.model_params['thresh'])
         props = get_region_props(img, thresh=self.model_params['thresh'],
                                  res_shape=row['img_shape'], verbose=False)
         if props is None:
             print('Could not extract regions:', row['electrode'])
             return np.zeros(7)
-        y_pred = [props.area, props.orientation, props.major_axis_length,
-                  props.minor_axis_length]
+        y_pred = {'area': props.area,
+                  'orientation': props.orientation,
+                  'major_axis_length': props.major_axis_length,
+                  'minor_axis_length': props.minor_axis_length}
         return y_pred
 
     def predict_image(self, X):
@@ -351,6 +352,23 @@ class SpatialModelRegressor(sklb.BaseEstimator, sklb.RegressorMixin):
                                   n_jobs=self.sim.n_jobs)
         return y_pred
 
-    def rmse(self, X, y, sample_weight=None):
-        return np.sqrt(sklm.mean_squared_error(y, self.predict(X),
-                                               sample_weight=sample_weight))
+    def score(self, X, y, sample_weight=None):
+        assert isinstance(X, pd.core.frame.DataFrame)
+        assert isinstance(self.scoring_weights, dict)
+
+        y_pred = self.predict(X)
+        rmse = 0
+        for key, colweight in six.iteritems(self.scoring_weights):
+            if colweight is None or np.islcose(colweight, 0):
+                continue
+
+            if key == 'orientation':
+                # Error is periodic with 2pi
+                err = np.mod(y_pred[key] - y[key], 2 * np.pi)
+                err = np.where(err > np.pi, 2 * np.pi - err, err)
+                mse = np.average(err ** 2, axis=0, weights=sample_weight)
+            else:
+                mse = np.average((y[key] - y_pred[key]) ** 2, axis=0,
+                                 weights=sample_weight)
+            rmse += colweight * np.sqrt(mse)
+        return rmse
