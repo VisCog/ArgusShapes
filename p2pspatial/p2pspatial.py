@@ -185,6 +185,18 @@ def load_data(folder, subject=None, electrodes=None, amplitude=None,
     return pd.DataFrame(features), pd.DataFrame(targets)
 
 
+def transform_data(Xold, yold):
+    """Average trials to yield mean images"""
+    Xy = pd.concat((Xold, yold), axis=1).groupby(['electrode', 'amp'])
+    df = pd.DataFrame(Xy[yold.columns].mean()).reset_index()
+
+    Xnew = df.loc[:, ['electrode', 'amp']]
+    for col in set(Xold.columns) - set(Xnew.columns) & set(Xold.columns):
+        Xnew[col] = Xold[col]
+    ynew = df.loc[:, yold.columns]
+    return Xnew, ynew
+
+
 class SpatialSimulation(p2p.Simulation):
 
     def set_params(self, **params):

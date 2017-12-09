@@ -35,6 +35,8 @@ electrodes = None
 X, y = p2pspatial.load_data(rootfolder, subject=subject, electrodes=electrodes,
                             single_stim=True, verbose=True)
 print(X.shape, y.shape)
+X, y = p2pspatial.transform_data(X, y)
+print(X.shape, y.shape)
 if len(X) == 0:
     raise ValueError('No data found in %s' % rootfolder)
 
