@@ -23,7 +23,7 @@ from .due import due, Doi
 p2p.console.setLevel(logging.ERROR)
 
 __all__ = ["get_thresholded_image", "get_region_props", "load_data",
-           "SpatialSimulation", "SpatialModelRegressor"]
+           "transform_data", "SpatialSimulation", "SpatialModelRegressor"]
 
 
 # Use duecredit (duecredit.org) to provide a citation to relevant work to
@@ -281,7 +281,6 @@ class SpatialModelRegressor(sklb.BaseEstimator, sklb.RegressorMixin):
     def fit(self, X, y=None, **fit_params):
         """Gather all parameters needed to instantiate a model"""
         assert isinstance(X, pd.core.frame.DataFrame)
-        assert isinstance(y, pd.core.frame.DataFrame)
         # The grid search call will add all `search_params` as attributes of
         # this class. They need to be combined with `fit_params` and all
         # passed to the model constructor.
@@ -304,6 +303,7 @@ class SpatialModelRegressor(sklb.BaseEstimator, sklb.RegressorMixin):
         assert isinstance(self.model_params['decay_const'], (int, float))
         assert isinstance(self.model_params['thresh'], (int, float,
                                                         six.string_types))
+        assert isinstance(self.model_params['scoring_weights'], dict)
 
         mp = self.model_params
         print('implant (x, y): (%.2f, %.2f), rot: %f' % (mp['implant_x'],
@@ -366,21 +366,24 @@ class SpatialModelRegressor(sklb.BaseEstimator, sklb.RegressorMixin):
 
     def score(self, X, y, sample_weight=None):
         assert isinstance(X, pd.core.frame.DataFrame)
-        assert isinstance(self.scoring_weights, dict)
+        assert isinstance(y, pd.core.frame.DataFrame)
+        assert isinstance(self.model_params['scoring_weights'], dict)
+        scoring_weights = self.model_params['scoring_weights']
 
-        y_pred = self.predict(X)
+        y_pred = pd.DataFrame(self.predict(X))
         rmse = 0
-        for key, colweight in six.iteritems(self.scoring_weights):
-            if colweight is None or np.islcose(colweight, 0):
+        for key, colweight in six.iteritems(scoring_weights):
+            if colweight is None or np.isclose(colweight, 0):
                 continue
 
             if key == 'orientation':
                 # Error is periodic with 2pi
-                err = np.mod(y_pred[key] - y[key], 2 * np.pi)
+                err = np.mod(y_pred.loc[:, key] - y.loc[:, key], 2 * np.pi)
                 err = np.where(err > np.pi, 2 * np.pi - err, err)
                 mse = np.average(err ** 2, axis=0, weights=sample_weight)
             else:
-                mse = np.average((y[key] - y_pred[key]) ** 2, axis=0,
-                                 weights=sample_weight)
+                mse = np.average((y.loc[:, key] - y_pred.loc[:, key]) ** 2,
+                                 axis=0, weights=sample_weight)
             rmse += colweight * np.sqrt(mse)
+        print('RMSE:', rmse)
         return rmse

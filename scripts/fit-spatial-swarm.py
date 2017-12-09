@@ -24,7 +24,7 @@ def swarm_error(search_vals, regressor, XX, yy, search_keys, fit_params={}):
     reg = clone(regressor)
     reg.set_params(**search_params)
     reg.fit(XX, **fit_params)
-    return np.mean(reg.rmse(XX, yy))
+    return reg.score(XX, yy)
 
 
 now = datetime.now().strftime('%Y-%m-%d_%H-%M-%S')
