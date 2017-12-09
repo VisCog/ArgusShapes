@@ -77,9 +77,8 @@ def get_region_props(img, thresh='min', res_shape=None, verbose=True,
             return regions[idx]
 
 
-def load_data(folder, subject=None, electrodes=None, date=None, verbose=False,
-              random_state=None,
-              single_stim=True):
+def load_data(folder, subject=None, electrodes=None, amplitude=None,
+              date=None, verbose=False, random_state=None, single_stim=True):
     # Recursive search for all files whose name contains the string
     # '_rawDataFileList_': These contain the paths to the raw bmp images
     search_pattern = os.path.join(folder, '**', '*_rawDataFileList_*')
@@ -90,7 +89,8 @@ def load_data(folder, subject=None, electrodes=None, date=None, verbose=False,
         tmp['Folder'] = os.path.dirname(fname)
         n_samples += len(tmp)
         if verbose:
-            print('Found %d samples in %s' % (len(tmp), tmp['Folder'].values[0]))
+            print('Found %d samples in %s' % (len(tmp),
+                                              tmp['Folder'].values[0]))
         dfs.append(tmp)
     if n_samples == 0:
         print('No data found in %s' % folder)
@@ -117,7 +117,7 @@ def load_data(folder, subject=None, electrodes=None, date=None, verbose=False,
             continue
         if electrodes is not None:
             if params[1] not in electrodes:
-                continue
+                continue          
         if date is not None and date != date:
             continue
         if single_stim and '_' in params[1]:
@@ -140,6 +140,9 @@ def load_data(folder, subject=None, electrodes=None, date=None, verbose=False,
                 print('Could not find amplitude in row:', row['Folder'])
             continue
         amp = float(row['Folder'][idx_start + 1:idx_end])
+        if amplitude is not None:
+            if not np.isclose(amp, amplitude):
+                continue
 
         # Find the Hu momemnts of the image: Calculate area in deg^2, but
         # operate on image larger than 1px = 1deg so that thin lines
