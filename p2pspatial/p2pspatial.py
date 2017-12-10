@@ -340,11 +340,13 @@ class SpatialModelRegressor(sklb.BaseEstimator, sklb.RegressorMixin):
                                  res_shape=row['img_shape'], verbose=False)
         if props is None:
             print('Could not extract regions:', row['electrode'])
-            return np.zeros(7)
-        y_pred = {'area': props.area,
-                  'orientation': props.orientation,
-                  'major_axis_length': props.major_axis_length,
-                  'minor_axis_length': props.minor_axis_length}
+            y_pred = {'area': 0, 'orientation': 0, 'major_axis_length': 0,
+                      'minor_axis_length': 0}
+        else:
+            y_pred = {'area': props.area,
+                      'orientation': props.orientation,
+                      'major_axis_length': props.major_axis_length,
+                      'minor_axis_length': props.minor_axis_length}
         return y_pred
 
     def predict_image(self, X):

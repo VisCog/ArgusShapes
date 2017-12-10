@@ -29,8 +29,8 @@ def swarm_error(search_vals, regressor, XX, yy, search_keys, fit_params={}):
 
 now = datetime.now().strftime('%Y-%m-%d_%H-%M-%S')
 filename = 'fit-spatial-swarm_%s.pickle' % now
-rootfolder = os.path.join(os.environ['SECOND_SIGHT_DATA'], 'shape', '51-009')
-subject = None
+rootfolder = os.path.join(os.environ['SECOND_SIGHT_DATA'], 'shape')
+subject = '12-005'
 electrodes = None
 X, y = p2pspatial.load_data(rootfolder, subject=subject, electrodes=electrodes,
                             single_stim=True, verbose=True)
