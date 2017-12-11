@@ -53,7 +53,7 @@ search_params = {'decay_const': (0.01, 5),
                  'implant_rot': (-np.pi / 4, np.pi / 4),
                  'thresh': (0.1, 1.2)}
 fit_params = {'sampling': 200,
-              # 'loc_od': (13.13228137, 2.163527405),
+              'loc_od': (15.5, 1.5),
               'csmode': 'gaussian',
               'sensitivity_rule': sensitivity_rule,
               'scoring_weights': scoring_weights}
@@ -66,7 +66,7 @@ ub = [v[1] for v in search_params.values()]
 xopt, fopt = pyswarm.pso(swarm_error, lb, ub, swarmsize=swarmsize,
                          minfunc=minfunc, debug=True,
                          args=[regressor, X, y, list(search_params.keys())],
-                         kwargs={'fit_params': fit_params}, debug=True)
+                         kwargs={'fit_params': fit_params})
 
 pickle.dump((X, y, xopt, fopt, regressor, search_params, fit_params),
             open(filename, 'wb'))
