@@ -266,7 +266,7 @@ class SpatialSimulation(p2p.Simulation):
             ecs += self.ecs[e]
         if ecs.max() > 0:
             ecs = ecs / ecs.max() * amp
-        return ecs
+        return np.flipud(ecs)
 
 
 class SpatialModelRegressor(sklb.BaseEstimator, sklb.RegressorMixin):

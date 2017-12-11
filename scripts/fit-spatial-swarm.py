@@ -27,10 +27,10 @@ def swarm_error(search_vals, regressor, XX, yy, search_keys, fit_params={}):
     return reg.score(XX, yy)
 
 
-now = datetime.now().strftime('%Y-%m-%d_%H-%M-%S')
-filename = 'fit-spatial-swarm_%s.pickle' % now
-rootfolder = os.path.join(os.environ['SECOND_SIGHT_DATA'], 'shape')
 subject = '12-005'
+now = datetime.now().strftime('%Y-%m-%d_%H-%M-%S')
+filename = 'fit-spatial-swarm_%s_%s.pickle' % (subject, now)
+rootfolder = os.path.join(os.environ['SECOND_SIGHT_DATA'], 'shape')
 electrodes = None
 X, y = p2pspatial.load_data(rootfolder, subject=subject, electrodes=electrodes,
                             single_stim=True, verbose=True)
@@ -40,18 +40,20 @@ print(X.shape, y.shape)
 if len(X) == 0:
     raise ValueError('No data found in %s' % rootfolder)
 
+swarmsize = 60  # roughly 10 x dimensions
+minfunc = 1e-4
 scoring_weights = {'orientation': 100.0,
                    'major_axis_length': 1.0,
                    'minor_axis_length': 1.0}
 sensitivity_rule = 'decay'
-search_params = {'decay_const': (0.1, 5),
+search_params = {'decay_const': (0.01, 5),
                  'cswidth': (50, 1000),
                  'implant_x': (-1500, 1500),
                  'implant_y': (-500, 500),
-                 'implant_rot': (0, 2 * np.pi),
+                 'implant_rot': (-np.pi / 4, np.pi / 4),
                  'thresh': (0.1, 1.2)}
 fit_params = {'sampling': 200,
-              'loc_od': (13.13228137, 2.163527405),
+              # 'loc_od': (13.13228137, 2.163527405),
               'csmode': 'gaussian',
               'sensitivity_rule': sensitivity_rule,
               'scoring_weights': scoring_weights}
@@ -61,7 +63,8 @@ print('performing swarm optimization')
 t0 = time()
 lb = [v[0] for v in search_params.values()]
 ub = [v[1] for v in search_params.values()]
-xopt, fopt = pyswarm.pso(swarm_error, lb, ub,
+xopt, fopt = pyswarm.pso(swarm_error, lb, ub, swarmsize=swarmsize,
+                         minfunc=minfunc, debug=True,
                          args=[regressor, X, y, list(search_params.keys())],
                          kwargs={'fit_params': fit_params}, debug=True)
 
