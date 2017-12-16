@@ -40,23 +40,24 @@ print(X.shape, y.shape)
 if len(X) == 0:
     raise ValueError('No data found in %s' % rootfolder)
 
-swarmsize = 60  # roughly 10 x dimensions
+
 minfunc = 1e-4
 scoring_weights = {'orientation': 100.0,
                    'major_axis_length': 1.0,
                    'minor_axis_length': 1.0}
 sensitivity_rule = 'decay'
-search_params = {'decay_const': (0.01, 5),
-                 'cswidth': (50, 1000),
-                 'implant_x': (-1500, 1500),
-                 'implant_y': (-500, 500),
-                 'implant_rot': (-np.pi / 4, np.pi / 4),
-                 'thresh': (0.1, 1.2)}
+search_params = {'decay_const': (0.001, 5),
+                 'cswidth': (10, 1000),
+                 'thresh': (0.1, 1)}
 fit_params = {'sampling': 200,
+              'implant_x': -1344.36597,
+              'implant_y': 537.7463881,
+              'implant_rot': -0.664813628,
               'loc_od': (15.5, 1.5),
               'csmode': 'gaussian',
               'sensitivity_rule': sensitivity_rule,
               'scoring_weights': scoring_weights}
+swarmsize = 10 * len(search_params)
 regressor = p2pspatial.SpatialModelRegressor()
 
 print('performing swarm optimization')
