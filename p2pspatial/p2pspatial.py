@@ -205,7 +205,6 @@ class SpatialSimulation(p2p.Simulation):
 
     def set_ganglion_cell_layer(self):
         self.gcl = {}
-        pass
 
     def calc_electrode_ecs(self, electrode, gridx, gridy):
         assert isinstance(electrode, six.string_types)
