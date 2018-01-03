@@ -22,8 +22,9 @@ from .due import due, Doi
 
 p2p.console.setLevel(logging.ERROR)
 
-__all__ = ["get_thresholded_image", "get_region_props", "load_data",
-           "transform_data", "SpatialSimulation", "SpatialModelRegressor"]
+__all__ = ["get_thresholded_image", "get_avg_image", "get_region_props",
+           "load_data", "transform_data",
+           "SpatialSimulation", "SpatialModelRegressor"]
 
 
 # Use duecredit (duecredit.org) to provide a citation to relevant work to
@@ -49,6 +50,32 @@ def get_thresholded_image(img, thresh='min', res_shape=None, verbose=True):
         assert isinstance(thresh, (int, float))
     img_th = img > thresh
     return img_th.astype(np.uint8) * 255
+
+
+def get_avg_image(X, subject, electrode, amp=None, align_center=None):
+    idx = np.logical_and(X['subject'] == subject, X['electrode'] == electrode)
+    if amp is not None:
+        idx_amp = np.isclose(amp, X['amp'])
+        assert np.any(idx_amp)
+        idx = np.logical_and(idx, idx_amp)
+
+    avg_img = None
+    for _, row in X[idx].iterrows():
+        img = skio.imread(os.path.join(row['folder'], row['filename']),
+                          as_grey=True)
+        if align_center is None:
+            # Choose center of image
+            img_shape = img.shape[:2]
+            align_center = [img_shape[1] // 2, img_shape[0] // 2]
+
+        transl = [align_center[0] - row['centroid'][1],
+                  align_center[1] - row['centroid'][0]]
+        trafo = skit.EuclideanTransform(translation=transl)
+        if avg_img is None:
+            avg_img = skit.warp(img, trafo.inverse)
+        else:
+            avg_img += skit.warp(img, trafo.inverse)
+    return avg_img
 
 
 def get_region_props(img, thresh='min', res_shape=None, verbose=True,
