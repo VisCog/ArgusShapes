@@ -7,14 +7,27 @@ import scipy.stats as spst
 
 
 def crossval_predict(estimator, X, y, n_folds=5):
+    """Performs cross-validation
+
+    Parameters
+    ----------
+    estimator : estimator object
+        This is assumed to implement the scikit-learn estimator interface. Must
+        possess a ``fit``, ``predict``, and ``score`` method.
+    X : pd.core.data.DataFrame, shape = [n_samples, n_features]
+        Training matrix, where `n_samples` is the number of samples and
+        `n_features` is the number of features.
+    y : pd.core.data.DataFrame, shape = [n_samples] or [n_samples, n_output]
+        Target relative to `X` for classification or regression
+    n_folds : int, optional, default: 2
+        Number of cross-validation folds.
+    """
     assert isinstance(X, pd.core.frame.DataFrame)
     assert isinstance(y, pd.core.frame.DataFrame)
     # Manual partitioning of X
     all_idx = np.arange(len(X))
     groups = np.array_split(all_idx, n_folds)
 
-    # For every test split, save the CV overview and predictions
-    cv_results = []
     X_test = []
     y_true = []
     y_pred = []
