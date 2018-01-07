@@ -62,7 +62,7 @@ class ParticleSwarmOptimizer(sklb.BaseEstimator, sklb.RegressorMixin):
         # error function
         return -estimator.score(X, y)
 
-    def fit(self, X, y, **fit_params):
+    def fit(self, X, y, fit_params={}):
         # Run particle swarm optimization
         lb = [v[0] for v in self.search_params.values()]
         ub = [v[1] for v in self.search_params.values()]
@@ -88,7 +88,7 @@ class ParticleSwarmOptimizer(sklb.BaseEstimator, sklb.RegressorMixin):
         return self.estimator.predict(X)
 
 
-def crossval_predict(estimator, X, y, n_folds=5):
+def crossval_predict(estimator, X, y, fit_params={}, n_folds=5):
     """Performs cross-validation
 
     Parameters
@@ -116,7 +116,7 @@ def crossval_predict(estimator, X, y, n_folds=5):
     for test_idx in groups:
         train_idx = np.delete(all_idx, test_idx)
         est = sklb.clone(estimator)
-        est.fit(X.iloc[train_idx, :], y.iloc[train_idx])
+        est.fit(X.iloc[train_idx, :], y.iloc[train_idx], fit_params=fit_params)
         if hasattr(est, 'best_params_'):
             best_params.append(est.best_params_)
         else:

@@ -297,8 +297,14 @@ class SpatialSimulation(p2p.Simulation):
 
 class SpatialModelRegressor(sklb.BaseEstimator, sklb.RegressorMixin):
 
-    def get_params(self, deep=True):
-        return {}
+    def __init__(self, sampling=100, x_range=(-30, 30), y_range=(-20, 20),
+                 sensitivity_rule='decay', thresh=1.0, csmode='gaussian'):
+        self.sampling = sampling
+        self.x_range = x_range
+        self.y_range = y_range
+        self.sensitivity_rule = sensitivity_rule
+        self.thresh = thresh
+        self.csmode = csmode
 
     def set_params(self, **params):
         for param, value in six.iteritems(params):
@@ -321,38 +327,37 @@ class SpatialModelRegressor(sklb.BaseEstimator, sklb.RegressorMixin):
 
         # Combine with `fit_params`
         model_params.update(fit_params)
-        self.model_params = model_params
-        assert isinstance(self.model_params['implant_x'], (int, float))
-        assert isinstance(self.model_params['implant_y'], (int, float))
-        assert isinstance(self.model_params['implant_rot'], (int, float))
-        assert isinstance(self.model_params['loc_od'], tuple)
-        assert isinstance(self.model_params['decay_const'], (int, float))
-        assert isinstance(self.model_params['thresh'], (int, float,
-                                                        six.string_types))
-        assert isinstance(self.model_params['scoring_weights'], dict)
+        self.set_params(**model_params)
+        assert isinstance(self.implant_x, (int, float))
+        assert isinstance(self.implant_y, (int, float))
+        assert isinstance(self.implant_rot, (int, float))
+        assert isinstance(self.loc_od_x, (int, float))
+        assert isinstance(self.loc_od_y, (int, float))
+        assert isinstance(self.decay_const, (int, float))
+        assert isinstance(self.scoring_weights, dict)
 
-        mp = self.model_params
-        print('implant (x, y): (%.2f, %.2f), rot: %f' % (mp['implant_x'],
-                                                         mp['implant_y'],
-                                                         mp['implant_rot']))
-        if np.abs(mp['implant_rot']) > 2 * np.pi:
+        print('implant (x, y): (%.2f, %.2f), rot: %f' % (self.implant_x,
+                                                         self.implant_y,
+                                                         self.implant_rot))
+        if np.abs(self.implant_rot) > 2 * np.pi:
             print('[WARNING] implant_rot should be set in radians!!')
 
-        implant = p2p.implants.ArgusII(x_center=mp['implant_x'],
-                                       y_center=mp['implant_y'],
-                                       rot=mp['implant_rot'])
+        implant = p2p.implants.ArgusII(x_center=self.implant_x,
+                                       y_center=self.implant_y,
+                                       rot=self.implant_rot)
         sim = SpatialSimulation(implant)
-        sim.set_params(csmode=mp['csmode'], cswidth=mp['cswidth'])
+        sim.set_params(csmode=self.csmode, cswidth=self.cswidth)
 
-        print('Set loc_od:', mp['loc_od'], 'decay_const:', mp['decay_const'],
-              'sensitivity_rule:', mp['sensitivity_rule'],
-              'thresh:', mp['thresh'])
-        sim.set_optic_fiber_layer(sampling=mp['sampling'],
-                                  x_range=p2p.retina.dva2ret((-30, 30)),
-                                  y_range=p2p.retina.dva2ret((-20, 20)),
-                                  loc_od=mp['loc_od'],
-                                  decay_const=mp['decay_const'],
-                                  sensitivity_rule=mp['sensitivity_rule'])
+        print('Set loc_od:', self.loc_od_x, self.loc_od_y,
+              'decay_const:', self.decay_const,
+              'sensitivity_rule:', self.sensitivity_rule,
+              'thresh:', self.thresh)
+        sim.set_optic_fiber_layer(sampling=self.sampling,
+                                  x_range=p2p.retina.dva2ret(self.x_range),
+                                  y_range=p2p.retina.dva2ret(self.y_range),
+                                  loc_od=(self.loc_od_x, self.loc_od_y),
+                                  decay_const=self.decay_const,
+                                  sensitivity_rule=self.sensitivity_rule)
         sim.calc_currents(np.unique(X['electrode']))
         self.sim = sim
         return self
@@ -362,7 +367,7 @@ class SpatialModelRegressor(sklb.BaseEstimator, sklb.RegressorMixin):
         img = self.sim.pulse2percept(row['electrode'], row['amp'])
         assert np.isclose(img.max(), row['amp'])
 
-        props = get_region_props(img, thresh=self.model_params['thresh'],
+        props = get_region_props(img, thresh=self.thresh,
                                  res_shape=row['img_shape'], verbose=False)
         if props is None:
             print('Could not extract regions:', row['electrode'])
@@ -395,8 +400,8 @@ class SpatialModelRegressor(sklb.BaseEstimator, sklb.RegressorMixin):
     def score(self, X, y, sample_weight=None):
         assert isinstance(X, pd.core.frame.DataFrame)
         assert isinstance(y, pd.core.frame.DataFrame)
-        assert isinstance(self.model_params['scoring_weights'], dict)
-        scoring_weights = self.model_params['scoring_weights']
+        assert isinstance(self.scoring_weights, dict)
+        scoring_weights = self.scoring_weights
 
         y_pred = pd.DataFrame(self.predict(X))
         rmse = 0
