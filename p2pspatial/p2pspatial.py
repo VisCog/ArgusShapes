@@ -363,7 +363,9 @@ class SpatialModelRegressor(sklb.BaseEstimator, sklb.RegressorMixin):
         return self
 
     def _predict(self, Xrow):
+        assert isinstance(Xrow, tuple)
         _, row = Xrow
+        assert isinstance(row, pd.core.series.Series)
         empty_pred = {'area': 0, 'orientation': 0, 'major_axis_length': 0,
                       'minor_axis_length': 0}
         img = self.sim.pulse2percept(row['electrode'], row['amp'])
@@ -378,7 +380,7 @@ class SpatialModelRegressor(sklb.BaseEstimator, sklb.RegressorMixin):
                   'orientation': props.orientation,
                   'major_axis_length': props.major_axis_length,
                   'minor_axis_length': props.minor_axis_length}
-        return np.nan_to_num(y_pred)
+        return y_pred
 
     def predict_image(self, X):
         for _, row in X.iterrows():
@@ -389,11 +391,14 @@ class SpatialModelRegressor(sklb.BaseEstimator, sklb.RegressorMixin):
         assert isinstance(X, pd.core.frame.DataFrame)
         assert self.sim is not None
 
+        # Predict attributes of region props (area, orientation, etc.)
         y_pred = p2p.utils.parfor(self._predict, X.iterrows(),
                                   engine=self.sim.engine,
                                   scheduler=self.sim.scheduler,
                                   n_jobs=self.sim.n_jobs)
-        return y_pred
+
+        # Convert to DataFrame, preserving the index of `X`
+        return pd.DataFrame(y_pred, index=X.index)
 
     def score(self, X, y, sample_weight=None):
         assert isinstance(X, pd.core.frame.DataFrame)
@@ -402,7 +407,10 @@ class SpatialModelRegressor(sklb.BaseEstimator, sklb.RegressorMixin):
         assert np.all([key in y.columns
                        for key in self.scoring_weights.keys()])
 
-        y_pred = pd.DataFrame(self.predict(X))
+        # `y` and `y_pred` must have the same index, otherwise subtraction
+        # produces nan
+        y_pred = self.predict(X)
+        assert y_pred.index == y.index
         assert np.all([key in y_pred.columns
                        for key in self.scoring_weights.keys()])
 
@@ -412,17 +420,12 @@ class SpatialModelRegressor(sklb.BaseEstimator, sklb.RegressorMixin):
                 continue
 
             err = y_pred.loc[:, key] - y.loc[:, key]
+            assert not np.any(pd.isnull(err))
             if key == 'orientation':
                 # Error is periodic with 2pi
                 err = np.mod(err, 2 * np.pi)
                 err = np.where(err > np.pi, 2 * np.pi - err, err)
-            if np.any(np.isnan(err)):
-                print(key, 'isnan')
-            err = np.nan_to_num(err)
             rmse = np.sqrt(np.average(err ** 2, axis=0, weights=sample_weight))
             sum_err += colweight * rmse
-        if np.isnan(sum_err):
-            print('sum_err is nan')
-        sum_err = np.nan_to_num(sum_err)
         print('RMSE:', sum_err)
         return sum_err
