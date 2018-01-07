@@ -22,6 +22,7 @@ subject = '12-005'
 amplitude = 2.0
 electrodes = None
 random_state = 42
+n_folds = 5
 
 
 # In[4]:
@@ -62,8 +63,7 @@ search_params = {'decay_const': (0.001, 10),
                  'loc_od_y': (0, 4),
                  'implant_rot': np.deg2rad((-75, -15))}
 pso_options = {'max_iter': 100,
-               'min_func': 1e-4,
-               'n_folds': 5}
+               'min_func': 1e-4}
 pso = p2pspatial.model_selection.ParticleSwarmOptimizer(
     regressor, search_params, **pso_options
 )
@@ -88,6 +88,7 @@ print("Done in %.3fs" % (time() - t_start))
 specifics = {'subject': subject,
              'amplitude': amplitude,
              'electrodes': electrodes,
+             'n_folds': n_folds,
              'regressor': regressor,
              'optimizer': pso,
              'model_params': model_params,
