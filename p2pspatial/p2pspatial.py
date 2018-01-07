@@ -400,7 +400,7 @@ class SpatialModelRegressor(sklb.BaseEstimator, sklb.RegressorMixin):
         assert isinstance(X, pd.core.frame.DataFrame)
         assert isinstance(y, pd.core.frame.DataFrame)
         assert isinstance(self.scoring_weights, dict)
-        assert np.all([key in y.columns for self.scoring_weights.keys()])
+        assert np.all([k in y.columns for k in self.scoring_weights.keys()])
 
         y_pred = pd.DataFrame(self.predict(X))
         sum_err = 0.0

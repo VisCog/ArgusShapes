@@ -59,8 +59,6 @@ search_params = {'decay_const': (0.001, 10),
                  'cswidth': (1, 10000),
                  'implant_x': (-1500, 1500),
                  'implant_y': (-1000, 1000),
-                 'loc_od_x': (13, 17),
-                 'loc_od_y': (0, 4),
                  'implant_rot': np.deg2rad((-75, -15))}
 pso_options = {'max_iter': 100,
                'min_func': 1e-4}
@@ -71,7 +69,9 @@ pso = p2pspatial.model_selection.ParticleSwarmOptimizer(
 
 # In[7]:
 
-fit_params = {'scoring_weights': {'area': 0.001,
+fit_params = {'loc_od_x': 15.5,
+              'loc_od_y': 1.2,
+              'scoring_weights': {'area': 0.001,
                                   'orientation': 100.0,
                                   'major_axis_length': 0.1,
                                   'minor_axis_length': 0.1}}
