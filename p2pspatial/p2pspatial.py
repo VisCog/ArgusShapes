@@ -388,7 +388,6 @@ class SpatialModelRegressor(sklb.BaseEstimator, sklb.RegressorMixin):
 
     def predict(self, X):
         assert isinstance(X, pd.core.frame.DataFrame)
-        assert self.model_params is not None
         assert self.sim is not None
 
         y_pred = p2p.utils.parfor(self._predict, X.iterrows(),
