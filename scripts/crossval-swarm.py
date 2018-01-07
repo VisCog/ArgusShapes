@@ -28,7 +28,7 @@ random_state = 42
 
 t_start = time()
 now = datetime.now().strftime('%Y-%m-%d_%H-%M-%S')
-filename = 'fit-spatial-swarm_%s_%s.pickle' % (subject, now)
+filename = 'crossval-swarm_%s_%s.pickle' % (subject, now)
 print(filename)
 
 
