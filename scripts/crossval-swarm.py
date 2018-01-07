@@ -56,7 +56,7 @@ regressor = p2pspatial.SpatialModelRegressor(**model_params)
 # In[6]:
 
 search_params = {'decay_const': (0.001, 10),
-                 'cswidth': (1, 10000),
+                 'cswidth': (10, 1000),
                  'implant_x': (-1500, 1500),
                  'implant_y': (-1000, 1000),
                  'implant_rot': np.deg2rad((-75, -15))}

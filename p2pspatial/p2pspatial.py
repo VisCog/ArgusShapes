@@ -161,7 +161,7 @@ def load_data(folder, subject=None, electrodes=None, amplitude=None,
             continue
         idx_start = np.max([row['Folder'].rfind('_', 0, idx_end),
                             row['Folder'].rfind(' ', 0, idx_end),
-                            row['Folder'].rfind('/', 0, idx_end)])
+                            row['Folder'].rfind(os.sep, 0, idx_end)])
         if idx_start == -1:
             if verbose:
                 print('Could not find amplitude in row:', row['Folder'])
@@ -364,21 +364,21 @@ class SpatialModelRegressor(sklb.BaseEstimator, sklb.RegressorMixin):
 
     def _predict(self, Xrow):
         _, row = Xrow
+        empty_pred = {'area': 0, 'orientation': 0, 'major_axis_length': 0,
+                      'minor_axis_length': 0}
         img = self.sim.pulse2percept(row['electrode'], row['amp'])
-        assert np.isclose(img.max(), row['amp'])
-
         props = get_region_props(img, thresh=self.thresh,
                                  res_shape=row['img_shape'], verbose=False)
         if props is None:
-            print('Could not extract regions:', row['electrode'])
-            y_pred = {'area': 0, 'orientation': 0, 'major_axis_length': 0,
-                      'minor_axis_length': 0}
-        else:
-            y_pred = {'area': props.area,
-                      'orientation': props.orientation,
-                      'major_axis_length': props.major_axis_length,
-                      'minor_axis_length': props.minor_axis_length}
-        return y_pred
+            print("%s %.2f: Could not extract regions" % (row['electrode'],
+                                                          row['amp']))
+            return empty_pred
+
+        y_pred = {'area': props.area,
+                  'orientation': props.orientation,
+                  'major_axis_length': props.major_axis_length,
+                  'minor_axis_length': props.minor_axis_length}
+        return np.nan_to_num(y_pred)
 
     def predict_image(self, X):
         y_pred = []
