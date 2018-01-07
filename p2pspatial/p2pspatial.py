@@ -381,7 +381,6 @@ class SpatialModelRegressor(sklb.BaseEstimator, sklb.RegressorMixin):
         return np.nan_to_num(y_pred)
 
     def predict_image(self, X):
-        y_pred = []
         for _, row in X.iterrows():
             y_pred.append(self.sim.pulse2percept(row['electrode'], row['amp']))
         return y_pred
@@ -400,9 +399,13 @@ class SpatialModelRegressor(sklb.BaseEstimator, sklb.RegressorMixin):
         assert isinstance(X, pd.core.frame.DataFrame)
         assert isinstance(y, pd.core.frame.DataFrame)
         assert isinstance(self.scoring_weights, dict)
-        assert np.all([k in y.columns for k in self.scoring_weights.keys()])
+        assert np.all([key in y.columns
+                       for key in self.scoring_weights.keys()])
 
         y_pred = pd.DataFrame(self.predict(X))
+        assert np.all([key in y_pred.columns
+                       for key in self.scoring_weights.keys()])
+
         sum_err = 0.0
         for key, colweight in six.iteritems(self.scoring_weights):
             if colweight is None or np.isclose(colweight, 0):
@@ -414,7 +417,7 @@ class SpatialModelRegressor(sklb.BaseEstimator, sklb.RegressorMixin):
                 err = np.mod(err, 2 * np.pi)
                 err = np.where(err > np.pi, 2 * np.pi - err, err)
             if np.any(np.isnan(err)):
-                print(key, 'isnan', err)
+                print(key, 'isnan')
             err = np.nan_to_num(err)
             rmse = np.sqrt(np.average(err ** 2, axis=0, weights=sample_weight))
             sum_err += colweight * rmse
