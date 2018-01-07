@@ -400,27 +400,26 @@ class SpatialModelRegressor(sklb.BaseEstimator, sklb.RegressorMixin):
         assert isinstance(X, pd.core.frame.DataFrame)
         assert isinstance(y, pd.core.frame.DataFrame)
         assert isinstance(self.scoring_weights, dict)
-        scoring_weights = self.scoring_weights
+        assert np.all([key in y.columns for self.scoring_weights.keys()])
 
         y_pred = pd.DataFrame(self.predict(X))
-        rmse = 0
-        for key, colweight in six.iteritems(scoring_weights):
+        sum_err = 0.0
+        for key, colweight in six.iteritems(self.scoring_weights):
             if colweight is None or np.isclose(colweight, 0):
                 continue
 
+            err = y_pred.loc[:, key] - y.loc[:, key]
             if key == 'orientation':
                 # Error is periodic with 2pi
-                err = np.mod(y_pred.loc[:, key] - y.loc[:, key], 2 * np.pi)
+                err = np.mod(err, 2 * np.pi)
                 err = np.where(err > np.pi, 2 * np.pi - err, err)
-                mse = np.average(err ** 2, axis=0, weights=sample_weight)
-            else:
-                mse = np.average((y.loc[:, key] - y_pred.loc[:, key]) ** 2,
-                                 axis=0, weights=sample_weight)
-            rmse += colweight * np.sqrt(mse)
-        if np.isnan(rmse):
-            print('RMSE isnan!')
-            print(y)
-            print(y_pred)
-            rmse = np.inf
-        print('RMSE:', rmse)
-        return rmse
+            if np.any(np.isnan(err)):
+                print(key, 'isnan', err)
+            err = np.nan_to_num(err)
+            rmse = np.sqrt(np.average(err ** 2, axis=0, weights=sample_weight))
+            sum_err += colweight * rmse
+        if np.isnan(sum_err):
+            print('sum_err is nan')
+        sum_err = np.nan_to_num(sum_err)
+        print('RMSE:', sum_err)
+        return sum_err

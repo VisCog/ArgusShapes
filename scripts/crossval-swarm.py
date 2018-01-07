@@ -71,9 +71,10 @@ pso = p2pspatial.model_selection.ParticleSwarmOptimizer(
 
 # In[7]:
 
-fit_params = {'scoring_weights': {'orientation': 100.0,
-                                  'major_axis_length': 1.0,
-                                  'minor_axis_length': 1.0}}
+fit_params = {'scoring_weights': {'area': 0.001,
+                                  'orientation': 100.0,
+                                  'major_axis_length': 0.1,
+                                  'minor_axis_length': 0.1}}
 y_test, y_pred, best_params = p2pspatial.model_selection.crossval_predict(
     pso, X, y, fit_params=fit_params, n_folds=n_folds)
 
