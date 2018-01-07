@@ -417,5 +417,10 @@ class SpatialModelRegressor(sklb.BaseEstimator, sklb.RegressorMixin):
                 mse = np.average((y.loc[:, key] - y_pred.loc[:, key]) ** 2,
                                  axis=0, weights=sample_weight)
             rmse += colweight * np.sqrt(mse)
+        if np.isnan(rmse):
+            print('RMSE isnan!')
+            print(y)
+            print(y_pred)
+            rmse = np.inf
         print('RMSE:', rmse)
         return rmse
