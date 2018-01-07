@@ -2,8 +2,90 @@ from __future__ import absolute_import, division, print_function
 import numpy as np
 import pandas as pd
 import six
+import pyswarm
 import sklearn.base as sklb
-import scipy.stats as spst
+import sklearn.metrics as sklm
+import sklearn.utils.validation as skluv
+
+
+class ParticleSwarmOptimizer(sklb.BaseEstimator, sklb.RegressorMixin):
+
+    def __init__(self, estimator, search_params, swarm_size=None, max_iter=100,
+                 min_func=1e-4, verbose=True):
+        """Performs particle swarm optimization
+
+        Parameters
+        ----------
+        estimator :
+            A scikit-learn estimator. Make sure its scoring function has
+            greater equals better.
+        search_params : dict of tupels (lower bound, upper bound)
+            Search parameters
+        swarm_size : int, optional, default: 10 * number of search params
+            The number of particles in the swarm.
+        max_iter : int, optional, default: 100
+            Maximum number of iterations for the swarm to search.
+        min_func : float, optional, default: 1e-4
+            The minimum change of swarm's best objective value before the
+            search terminates.
+        verbose : bool, optional, default: True
+            Flag whether to print more stuff
+        """
+        if swarm_size is None:
+            swarm_size = 10 * len(search_params)
+        self.estimator = estimator
+        self.search_params = search_params
+        self.swarm_size = swarm_size
+        self.max_iter = max_iter
+        self.min_func = min_func
+        self.verbose = verbose
+
+    def swarm_error(self, search_vals, X, y, fit_params={}):
+        """Calculates the particle swarm error
+
+        The error is calculated using the estimator's scoring function (assumes
+        a true scoring function, i.e. greater == better).
+        """
+        # pyswarm provides values for all search parameters in a list:
+        # Need to pair these values with the names of the search params
+        # to build a dict
+        search_params = {}
+        for k, v in zip(list(self.search_params.keys()), search_vals):
+            search_params[k] = v
+
+        # Clone the estimator to make sure we have a clean slate
+        estimator = sklb.clone(self.estimator)
+        estimator.set_params(**search_params)
+        estimator.fit(X, y=y, **fit_params)
+
+        # Scoring function: greater is better, so invert to get an
+        # error function
+        return -estimator.score(X, y)
+
+    def fit(self, X, y, **fit_params):
+        # Run particle swarm optimization
+        lb = [v[0] for v in self.search_params.values()]
+        ub = [v[1] for v in self.search_params.values()]
+        best_vals, best_err = pyswarm.pso(
+            self.swarm_error, lb, ub, swarmsize=self.swarm_size,
+            maxiter=self.max_iter, minfunc=self.min_func, debug=self.verbose,
+            args=[X, y], kwargs={'fit_params': fit_params}
+        )
+
+        # Pair values of best params with their names to build a dict
+        self.best_params_ = {}
+        for k, v in zip(list(self.search_params.keys()), best_vals):
+            self.best_params_[k] = v
+        print('Best err:', best_err, 'Best params:', self.best_params_)
+
+        # Fit the class attribute with best params
+        self.estimator.set_params(**self.best_params_)
+        self.estimator.fit(X, y=y, **fit_params)
+
+    def predict(self, X):
+        msg = "Estimator, %(name)s, must be fitted before predicting."
+        skluv.check_is_fitted(self, "best_params_", msg=msg)
+        return self.estimator.predict(X)
 
 
 def crossval_predict(estimator, X, y, n_folds=5):
@@ -28,152 +110,27 @@ def crossval_predict(estimator, X, y, n_folds=5):
     all_idx = np.arange(len(X))
     groups = np.array_split(all_idx, n_folds)
 
-    X_test = []
     y_true = []
     y_pred = []
+    best_params = []
     for test_idx in groups:
         train_idx = np.delete(all_idx, test_idx)
         est = sklb.clone(estimator)
         est.fit(X.iloc[train_idx, :], y.iloc[train_idx])
-        X_test.append(X.iloc[test_idx, :])
+        if hasattr(est, 'best_params_'):
+            best_params.append(est.best_params_)
+        else:
+            best_params.append(None)
         y_true.append(y.iloc[test_idx])
         y_pred.append(est.predict(X.iloc[test_idx, :]))
-    return X_test, y_true, y_pred
+    return y_true, y_pred, best_params
 
 
-def crossval_score(X_test, y_true, y_pred, metric='mse', tasks=None):
+def crossval_score(y_true, y_pred, metric='mse'):
     score_funcs = {'mse': sklm.mean_squared_error,
                    'mae': sklm.mean_absolute_error,
                    'msle': sklm.mean_squared_log_error,
                    'var_explained': sklm.explained_variance_score,
                    'r2': sklm.r2_score}
-    if tasks is None or len(tasks) == 0:
-        tasks = ['all']
-        X_tasks = tasks
-    else:
-        X_tasks = np.unique([xt['task'].unique() for xt in X_test])
-
-    t_mu = []
-    t_std = []
-    for task in tasks:
-        if task != 'all' and task not in X_tasks:
-            t_mu.append(np.nan)
-            t_std.append(np.nan)
-            continue
-
-        fold_mse = []
-        for xt, yt, yp in zip(X_test, y_true, y_pred):
-            assert len(xt) == len(yt)
-            assert len(yt) == len(yp)
-            if task == 'all':
-                idx = np.ones(len(xt), dtype=np.bool)
-            else:
-                idx = np.array(xt['task'] == task, dtype=np.bool)
-            assert len(idx) == len(yt)
-            yt = np.array(yt)[idx]
-            yp = np.array(yp)[idx]
-            score = score_funcs[metric](yt, yp)
-            fold_mse.append(score)
-        t_mu.append(np.mean(fold_mse))
-        t_std.append(np.std(fold_mse))
-    return t_mu, t_std
-
-
-class NestedCV(sklb.BaseEstimator):
-
-    def __init__(self, pipe, search_params, fit_params={}, n_jobs=-1,
-                 cv=5, cvmethod='grid', cvsample='uniform', cvparams={},
-                 return_train_score=False):
-        """Hyperparameter selection using nested cross-validation
-
-        The outer loop of the model validation procedure:
-        - Data is split into development and evaluation sets.
-        - The development set is split again in the `fit` method to perform
-          grid search with cross-validation on it.
-        - The model's performance is then evaluated on the evaluation set.
-        """
-        self.pipe = pipe
-        self.cv = cv
-        self.cvmethod = cvmethod
-        self.cvsample = cvsample
-        self.cvparams = cvparams
-        self.return_train_score = return_train_score
-        self.search_params = search_params
-        self.fit_params = fit_params
-        self.n_jobs = n_jobs
-
-    def get_params(self, deep=True):
-        if deep:
-            get_pipe = clone(self.pipe)
-        else:
-            get_pipe = self.pipe
-
-        return {'pipe': get_pipe,
-                'search_params': self.search_params,
-                'fit_params': self.fit_params,
-                'n_jobs': self.n_jobs,
-                'cv': self.cv,
-                'cvmethod': self.cvmethod,
-                'cvsample': self.cvsample,
-                'cvparams': self.cvparams,
-                'return_train_score': self.return_train_score}
-
-    def set_params(self, **params):
-        for param, value in six.iteritems(params):
-            setattr(self, param, value)
-
-    def predict(self, X):
-        return self.pipe.predict(X)
-
-    def fit(self, X, y=None, **fit_params):
-        """Perform search on parameter space with cross-validation"""
-        if self.cvmethod.lower() == 'grid':
-            # Grid search: Generate parameter grid from value ranges
-            if self.cvsample.lower() == 'uniform':
-                for key, valrange in six.iteritems(self.search_params):
-                    assert isinstance(self.search_params[key], (tuple, list))
-                    self.search_params[key] = np.linspace(*valrange)
-            else:
-                raise NotImplementedError
-            # Run grid search
-            search = GridSearchCV(self.pipe, self.search_params, verbose=1,
-                                  cv=self.cv, n_jobs=self.n_jobs,
-                                  return_train_score=self.return_train_score,
-                                  **self.cvparams)
-
-        elif self.cvmethod.lower() == 'random':
-            # Randomized grid search
-            if self.cvsample.lower() == 'uniform':
-                for key, valrange in six.iteritems(self.search_params):
-                    assert isinstance(self.search_params[key], (tuple, list))
-                    self.search_params[key] = scst.uniform(
-                        loc=valrange[0], scale=valrange[1] - valrange[0]
-                    )
-            else:
-                raise NotImplementedError
-
-            # Run randomized grid search
-            search = RandomizedSearchCV(
-                self.pipe, self.search_params, verbose=1, cv=self.cv,
-                n_jobs=self.n_jobs, return_train_score=self.return_train_score,
-                **self.cvparams
-            )
-
-        elif self.cvmethod.lower() == 'swarm':
-            # Particle swarm optimization
-            search = ParticleSwarmCV(self.pipe, self.search_params, verbose=1,
-                                     cv=self.cv, n_jobs=self.n_jobs,
-                                     **self.cv_params)
-            raise NotImplementedError
-        else:
-            raise ValueError('Unknown `cvmethod` "%s"' % self.cvmethod)
-
-        search.fit(X, y, **self.fit_params)
-        self.pipe = search.best_estimator_
-        self.best_params = search.best_params_
-        self.cv_result = search.cv_results_
-        print(search.best_params_)
-        return self
-
-    def score(self, X, y):
-        return self.pipe.score(X, y)
+    assert metric in score_funcs.keys()
+    return [score_funcs[metric](yt, yp) for yt, yp in zip(y_true, y_pred)]
