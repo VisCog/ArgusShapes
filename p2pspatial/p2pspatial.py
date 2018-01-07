@@ -410,7 +410,7 @@ class SpatialModelRegressor(sklb.BaseEstimator, sklb.RegressorMixin):
         # `y` and `y_pred` must have the same index, otherwise subtraction
         # produces nan
         y_pred = self.predict(X)
-        assert y_pred.index == y.index
+        assert np.allclose(y_pred.index, y.index)
         assert np.all([key in y_pred.columns
                        for key in self.scoring_weights.keys()])
 
