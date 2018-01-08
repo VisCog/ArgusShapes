@@ -11,7 +11,7 @@ import sklearn.utils.validation as skluv
 class ParticleSwarmOptimizer(sklb.BaseEstimator, sklb.RegressorMixin):
 
     def __init__(self, estimator, search_params, swarm_size=None, max_iter=100,
-                 min_func=1e-4, verbose=True):
+                 min_func=1e-4, greater_is_better=True, verbose=True):
         """Performs particle swarm optimization
 
         Parameters
@@ -28,6 +28,10 @@ class ParticleSwarmOptimizer(sklb.BaseEstimator, sklb.RegressorMixin):
         min_func : float, optional, default: 1e-4
             The minimum change of swarm's best objective value before the
             search terminates.
+        greater_is_better : bool, optional, True
+            Whether score_func is a score function (default), meaning high is
+            good, or a loss function, meaning low is good. In the latter case,
+            the score will be sign-flipped.
         verbose : bool, optional, default: True
             Flag whether to print more stuff
         """
@@ -38,6 +42,7 @@ class ParticleSwarmOptimizer(sklb.BaseEstimator, sklb.RegressorMixin):
         self.swarm_size = swarm_size
         self.max_iter = max_iter
         self.min_func = min_func
+        self.greater_is_better = greater_is_better
         self.verbose = verbose
 
     def swarm_error(self, search_vals, X, y, fit_params={}):
@@ -58,9 +63,11 @@ class ParticleSwarmOptimizer(sklb.BaseEstimator, sklb.RegressorMixin):
         estimator.set_params(**search_params)
         estimator.fit(X, y=y, **fit_params)
 
-        # Scoring function: greater is better, so invert to get an
+        # Scoring function: if greater is better, invert to get an
         # error function
-        return -estimator.score(X, y)
+        score = estimator.score(X, y)
+        score = -score if self.greater_is_better else score
+        return score
 
     def fit(self, X, y, fit_params={}):
         # Run particle swarm optimization

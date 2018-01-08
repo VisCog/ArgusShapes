@@ -61,7 +61,8 @@ search_params = {'decay_const': (0.001, 10),
                  'implant_y': (-1000, 1000),
                  'implant_rot': np.deg2rad((-75, -15))}
 pso_options = {'max_iter': 100,
-               'min_func': 1e-4}
+               'min_func': 1e-4,
+               'greater_is_better': False}
 pso = p2pspatial.model_selection.ParticleSwarmOptimizer(
     regressor, search_params, **pso_options
 )
