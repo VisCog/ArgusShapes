@@ -251,6 +251,7 @@ class SpatialSimulation(p2p.Simulation):
     def calc_electrode_ecs(self, electrode, gridx, gridy):
         assert isinstance(electrode, six.string_types)
         assert isinstance(self.csmode, six.string_types)
+        assert isinstance(self.use_ofl, bool)
         ename = '%s%d' % (electrode[0], int(electrode[1:]))
 
         # Current spread either from Nanduri model or with fitted radius
@@ -265,9 +266,10 @@ class SpatialSimulation(p2p.Simulation):
         else:
             raise ValueError('Unknown csmode "%s"' % self.csmode)
 
-        # Take into account axonal stimulation
-        ecs = self.ofl.current2effectivecurrent(cs)
-        return ecs
+        if self.use_ofl:
+            # Take into account axonal stimulation
+            cs = self.ofl.current2effectivecurrent(cs)
+        return cs
 
     def calc_currents(self, electrodes, verbose=False):
         assert isinstance(electrodes, (list, np.ndarray))
@@ -429,6 +431,7 @@ class SpatialModelRegressor(sklb.BaseEstimator, sklb.RegressorMixin):
         assert isinstance(self.decay_const, (int, float))
         assert isinstance(self.scoring_weights, dict)
         assert isinstance(self.use_persp_trafo, bool)
+        assert isinstance(self.use_ofl, bool)
 
         print('implant (x, y): (%.2f, %.2f), rot: %f' % (self.implant_x,
                                                          self.implant_y,
@@ -442,18 +445,29 @@ class SpatialModelRegressor(sklb.BaseEstimator, sklb.RegressorMixin):
         sim = SpatialSimulation(implant)
         sim.set_params(csmode=self.csmode, cswidth=self.cswidth,
                        out_x_range=self.x_range, out_y_range=self.y_range,
-                       use_persp_trafo=self.use_persp_trafo)
+                       use_persp_trafo=self.use_persp_trafo,
+                       use_ofl=self.use_ofl)
 
         print('Set loc_od:', self.loc_od_x, self.loc_od_y,
               'decay_const:', self.decay_const,
               'sensitivity_rule:', self.sensitivity_rule,
               'thresh:', self.thresh)
-        sim.set_optic_fiber_layer(sampling=self.sampling,
-                                  x_range=p2p.retina.dva2ret(self.x_range),
-                                  y_range=p2p.retina.dva2ret(self.y_range),
-                                  loc_od=(self.loc_od_x, self.loc_od_y),
-                                  decay_const=self.decay_const,
-                                  sensitivity_rule=self.sensitivity_rule)
+        if self.use_ofl:
+            sim.set_optic_fiber_layer(sampling=self.sampling,
+                                      x_range=p2p.retina.dva2ret(self.x_range),
+                                      y_range=p2p.retina.dva2ret(self.y_range),
+                                      loc_od=(self.loc_od_x, self.loc_od_y),
+                                      decay_const=self.decay_const,
+                                      sensitivity_rule=self.sensitivity_rule)
+        else:
+            # we need gridx, gridy but don't want to do all the axon math
+            sim.set_optic_fiber_layer(sampling=self.sampling, n_axons=1,
+                                      x_range=p2p.retina.dva2ret(self.x_range),
+                                      y_range=p2p.retina.dva2ret(self.y_range),
+                                      loc_od=(self.loc_od_x, self.loc_od_y),
+                                      decay_const=self.decay_const,
+                                      sensitivity_rule=self.sensitivity_rule)
+
         sim.calc_currents(np.unique(X['electrode']))
         self.sim = sim
         return self

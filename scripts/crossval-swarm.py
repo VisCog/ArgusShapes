@@ -73,6 +73,7 @@ pso = p2pspatial.model_selection.ParticleSwarmOptimizer(
 fit_params = {'loc_od_x': 15.5,
               'loc_od_y': 1.2,
               'use_persp_trafo': True,
+              'use_ofl': True,
               'scoring_weights': {'area': 0.001,
                                   'orientation': 100.0,
                                   'major_axis_length': 0.1,
