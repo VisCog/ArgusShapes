@@ -120,7 +120,8 @@ def crossval_predict(estimator, X, y, fit_params={}, n_folds=5):
     y_true = []
     y_pred = []
     best_params = []
-    for test_idx in groups:
+    for i, test_idx in enumerate(groups):
+        print('Fold %d / %d' % (i + 1, n_folds))
         train_idx = np.delete(all_idx, test_idx)
         est = sklb.clone(estimator)
         est.fit(X.iloc[train_idx, :], y.iloc[train_idx], fit_params=fit_params)

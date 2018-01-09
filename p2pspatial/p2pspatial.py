@@ -448,10 +448,10 @@ class SpatialModelRegressor(sklb.BaseEstimator, sklb.RegressorMixin):
                        use_persp_trafo=self.use_persp_trafo,
                        use_ofl=self.use_ofl)
 
-        print('Set loc_od:', self.loc_od_x, self.loc_od_y,
-              'decay_const:', self.decay_const,
-              'sensitivity_rule:', self.sensitivity_rule,
-              'thresh:', self.thresh)
+        # print('Set loc_od:', self.loc_od_x, self.loc_od_y,
+        #       'decay_const:', self.decay_const,
+        #       'sensitivity_rule:', self.sensitivity_rule,
+        #       'thresh:', self.thresh)
         if self.use_ofl:
             sim.set_optic_fiber_layer(sampling=self.sampling,
                                       x_range=p2p.retina.dva2ret(self.x_range),
@@ -537,5 +537,5 @@ class SpatialModelRegressor(sklb.BaseEstimator, sklb.RegressorMixin):
                 err = np.where(err > np.pi, 2 * np.pi - err, err)
             rmse = np.sqrt(np.average(err ** 2, axis=0, weights=sample_weight))
             sum_err += colweight * rmse
-        print('RMSE:', sum_err)
+        # print('RMSE:', sum_err)
         return sum_err
