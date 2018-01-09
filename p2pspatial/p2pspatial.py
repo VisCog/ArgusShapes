@@ -8,6 +8,9 @@ import logging
 import numpy as np
 import pandas as pd
 
+import scipy.interpolate as spi
+import scipy.stats as sps
+
 import pulse2percept as p2p
 
 import skimage.io as skio
@@ -224,6 +227,18 @@ def transform_data(Xold, yold):
     return Xnew, ynew
 
 
+def cart2pol(x, y):
+    theta = np.arctan2(y, x)
+    rho = np.hypot(x, y)
+    return theta, rho
+
+
+def pol2cart(theta, rho):
+    x = rho * np.cos(theta)
+    y = rho * np.sin(theta)
+    return x, y
+
+
 class SpatialSimulation(p2p.Simulation):
 
     def set_params(self, **params):
@@ -254,7 +269,7 @@ class SpatialSimulation(p2p.Simulation):
         ecs = self.ofl.current2effectivecurrent(cs)
         return ecs
 
-    def calc_currents(self, electrodes, verbose=True):
+    def calc_currents(self, electrodes, verbose=False):
         assert isinstance(electrodes, (list, np.ndarray))
 
         # Multiple electrodes possible, separated by '_'
@@ -275,9 +290,82 @@ class SpatialSimulation(p2p.Simulation):
         if verbose:
             print('Done.')
 
+    def calc_displacement(self, r, meridian='temporal'):
+        alpha = np.where(meridian == 'temporal', 1.8938, 2.4607)
+        beta = np.where(meridian == 'temporal', 2.4598, 1.7463)
+        gamma = np.where(meridian == 'temporal', 0.91565, 0.77754)
+        delta = np.where(meridian == 'temporal', 14.904, 15.111)
+        mu = np.where(meridian == 'temporal', -0.09386, -0.15933)
+        scale = np.where(meridian == 'temporal', 12.0, 10.0)
+
+        rmubeta = (np.abs(r) - mu) / beta
+        numer = delta * gamma * np.exp(-rmubeta ** gamma)
+        numer *= rmubeta ** (alpha * gamma - 1)
+        denom = beta * sps.gamma.pdf(alpha, 5)
+
+        return numer / denom / scale
+
+    def inv_displace(self, xy):
+        """In: visual field coords (dva), Out: retinal surface coords (um)"""
+        if self.implant.eye == 'LE':
+            # Let's not think about eyes right now...
+            raise NotImplementedError
+
+        nasal_in = np.arange(0, 30, 0.1)
+        nasal_out = nasal_in + self.calc_displacement(nasal_in,
+                                                      meridian='nasal')
+        inv_displace_nasal = spi.interp1d(nasal_out, nasal_in,
+                                          bounds_error=False)
+
+        temporal_in = np.arange(0, 30, 0.1)
+        temporal_out = temporal_in + self.calc_displacement(
+            temporal_in, meridian='temporal'
+        )
+        inv_displace_temporal = spi.interp1d(temporal_out, temporal_in,
+                                             bounds_error=False)
+
+        # Convert x, y (dva) into polar coordinates
+        theta, rho_dva = cart2pol(xy[:, 0], xy[:, 1])
+
+        # Add inverse displacement
+        rho_dva = np.where(xy[:, 0] < 0, inv_displace_temporal(rho_dva),
+                           inv_displace_nasal(rho_dva))
+
+        # Convert radius from um to dva
+        rho_ret = p2p.retina.dva2ret(rho_dva)
+
+        # Convert back to x, y (dva)
+        x, y = pol2cart(theta, rho_ret)
+        return np.vstack((x, y)).T
+
+    def inv_warp(self, xy, img_shape=None):
+        # From output img coords to output dva coords
+        x_out_range = self.out_x_range
+        y_out_range = self.out_y_range
+        print(y_out_range)
+        xy_dva = np.zeros_like(xy)
+        xy_dva[:, 0] = (x_out_range[0] +
+                        xy[:, 0] / img_shape[1] * np.diff(x_out_range))
+        xy_dva[:, 1] = (y_out_range[0] +
+                        xy[:, 1] / img_shape[0] * np.diff(y_out_range))
+
+        # From output dva coords ot input ret coords
+        xy_ret = self.inv_displace(xy_dva)
+
+        # From input ret coords to input img coords
+        x_in_range = self.ofl.x_range
+        y_in_range = self.ofl.y_range
+        xy_img = np.zeros_like(xy_ret)
+        xy_img[:, 0] = ((xy_ret[:, 0] - x_in_range[0]) /
+                        np.diff(x_in_range) * img_shape[1])
+        xy_img[:, 1] = ((xy_ret[:, 1] - y_in_range[0]) /
+                        np.diff(y_in_range) * img_shape[0])
+        return xy_img
+
     def pulse2percept(self, el_str, amp):
         assert isinstance(el_str, six.string_types)
         assert isinstance(amp, (int, float))
+        assert isinstance(self.use_persp_trafo, bool)
         assert amp >= 0
         if np.isclose(amp, 0):
             print('Warning: amp is zero on %s' % el_str)
@@ -292,7 +380,13 @@ class SpatialSimulation(p2p.Simulation):
             ecs += self.ecs[e]
         if ecs.max() > 0:
             ecs = ecs / ecs.max() * amp
-        return np.flipud(ecs)
+
+        if self.use_persp_trafo:
+            out = skit.warp(ecs, self.inv_warp,
+                            map_args={'img_shape': ecs.shape})
+        else:
+            out = ecs
+        return out
 
 
 class SpatialModelRegressor(sklb.BaseEstimator, sklb.RegressorMixin):
@@ -335,6 +429,7 @@ class SpatialModelRegressor(sklb.BaseEstimator, sklb.RegressorMixin):
         assert isinstance(self.loc_od_y, (int, float))
         assert isinstance(self.decay_const, (int, float))
         assert isinstance(self.scoring_weights, dict)
+        assert isinstance(self.use_persp_trafo, bool)
 
         print('implant (x, y): (%.2f, %.2f), rot: %f' % (self.implant_x,
                                                          self.implant_y,
@@ -346,7 +441,9 @@ class SpatialModelRegressor(sklb.BaseEstimator, sklb.RegressorMixin):
                                        y_center=self.implant_y,
                                        rot=self.implant_rot)
         sim = SpatialSimulation(implant)
-        sim.set_params(csmode=self.csmode, cswidth=self.cswidth)
+        sim.set_params(csmode=self.csmode, cswidth=self.cswidth,
+                       out_x_range=self.x_range, out_y_range=self.y_range,
+                       use_persp_trafo=self.use_persp_trafo)
 
         print('Set loc_od:', self.loc_od_x, self.loc_od_y,
               'decay_const:', self.decay_const,
