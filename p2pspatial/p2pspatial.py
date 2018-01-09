@@ -342,7 +342,6 @@ class SpatialSimulation(p2p.Simulation):
         # From output img coords to output dva coords
         x_out_range = self.out_x_range
         y_out_range = self.out_y_range
-        print(y_out_range)
         xy_dva = np.zeros_like(xy)
         xy_dva[:, 0] = (x_out_range[0] +
                         xy[:, 0] / img_shape[1] * np.diff(x_out_range))
