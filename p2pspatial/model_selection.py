@@ -134,11 +134,12 @@ def crossval_predict(estimator, X, y, fit_params={}, n_folds=5):
     return y_true, y_pred, best_params
 
 
-def crossval_score(y_true, y_pred, metric='mse'):
+def crossval_score(y_true, y_pred, metric='mse', weights=None):
     score_funcs = {'mse': sklm.mean_squared_error,
                    'mae': sklm.mean_absolute_error,
                    'msle': sklm.mean_squared_log_error,
                    'var_explained': sklm.explained_variance_score,
                    'r2': sklm.r2_score}
     assert metric in score_funcs.keys()
-    return [score_funcs[metric](yt, yp) for yt, yp in zip(y_true, y_pred)]
+    return [score_funcs[metric](yt, yp, multioutput=weights)
+            for yt, yp in zip(y_true, y_pred)]
