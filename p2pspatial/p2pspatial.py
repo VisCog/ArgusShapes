@@ -90,7 +90,7 @@ def get_region_props(img, thresh='min', res_shape=None, verbose=True,
 
     regions = skim.regionprops(img)
     if len(regions) == 0:
-        print('No regions: min=%f max=%f' % (img.min(), img.max()))
+        #print('No regions: min=%f max=%f' % (img.min(), img.max()))
         return None
     elif len(regions) == 1:
         return regions[0]
@@ -433,9 +433,9 @@ class SpatialModelRegressor(sklb.BaseEstimator, sklb.RegressorMixin):
         assert isinstance(self.use_persp_trafo, bool)
         assert isinstance(self.use_ofl, bool)
 
-        print('implant (x, y): (%.2f, %.2f), rot: %f' % (self.implant_x,
-                                                         self.implant_y,
-                                                         self.implant_rot))
+        #print('implant (x, y): (%.2f, %.2f), rot: %f' % (self.implant_x,
+        #                                                 self.implant_y,
+        #                                                 self.implant_rot))
         if np.abs(self.implant_rot) > 2 * np.pi:
             print('[WARNING] implant_rot should be set in radians!!')
 
@@ -482,8 +482,8 @@ class SpatialModelRegressor(sklb.BaseEstimator, sklb.RegressorMixin):
         props = get_region_props(img, thresh=self.thresh,
                                  res_shape=row['img_shape'], verbose=False)
         if props is None:
-            print("%s %.2f: Could not extract regions" % (row['electrode'],
-                                                          row['amp']))
+            #print("%s %.2f: Could not extract regions" % (row['electrode'],
+            #                                              row['amp']))
             return empty_pred
 
         y_pred = {'area': props.area,
