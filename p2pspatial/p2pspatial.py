@@ -433,7 +433,7 @@ class SpatialModelRegressor(sklb.BaseEstimator, sklb.RegressorMixin):
         assert isinstance(self.use_persp_trafo, bool)
         assert isinstance(self.use_ofl, bool)
 
-        #print('implant (x, y): (%.2f, %.2f), rot: %f' % (self.implant_x,
+        # print('implant (x, y): (%.2f, %.2f), rot: %f' % (self.implant_x,
         #                                                 self.implant_y,
         #                                                 self.implant_rot))
         if np.abs(self.implant_rot) > 2 * np.pi:
@@ -482,7 +482,7 @@ class SpatialModelRegressor(sklb.BaseEstimator, sklb.RegressorMixin):
         props = get_region_props(img, thresh=self.thresh,
                                  res_shape=row['img_shape'], verbose=False)
         if props is None:
-            #print("%s %.2f: Could not extract regions" % (row['electrode'],
+            # print("%s %.2f: Could not extract regions" % (row['electrode'],
             #                                              row['amp']))
             return empty_pred
 
@@ -514,6 +514,7 @@ class SpatialModelRegressor(sklb.BaseEstimator, sklb.RegressorMixin):
         assert isinstance(X, pd.core.frame.DataFrame)
         assert isinstance(y, pd.core.frame.DataFrame)
         assert isinstance(self.scoring_weights, dict)
+        assert isinstance(self.scoring_metric, six.string_types)
         assert np.all([key in y.columns
                        for key in self.scoring_weights.keys()])
 
@@ -524,18 +525,25 @@ class SpatialModelRegressor(sklb.BaseEstimator, sklb.RegressorMixin):
         assert np.all([key in y_pred.columns
                        for key in self.scoring_weights.keys()])
 
-        sum_err = 0.0
-        for key, colweight in six.iteritems(self.scoring_weights):
-            if colweight is None or np.isclose(colweight, 0):
-                continue
+        if self.scoring_metric == 'r2':
+            sum_r2 = 0.0
+            score = sum_r2
+        elif self.scoring_metric == 'mse':
+            sum_err = 0.0
+            for key, colweight in six.iteritems(self.scoring_weights):
+                if colweight is None or np.isclose(colweight, 0):
+                    continue
 
-            err = y_pred.loc[:, key] - y.loc[:, key]
-            assert not np.any(pd.isnull(err))
-            if key == 'orientation':
-                # Error is periodic with 2pi
-                err = np.mod(err, 2 * np.pi)
-                err = np.where(err > np.pi, 2 * np.pi - err, err)
-            rmse = np.sqrt(np.average(err ** 2, axis=0, weights=sample_weight))
-            sum_err += colweight * rmse
-        # print('RMSE:', sum_err)
-        return sum_err
+                err = y_pred.loc[:, key] - y.loc[:, key]
+                assert not np.any(pd.isnull(err))
+                if key == 'orientation':
+                    # Error is periodic with 2pi
+                    err = np.mod(err, 2 * np.pi)
+                    err = np.where(err > np.pi, 2 * np.pi - err, err)
+                rmse = np.sqrt(np.average(err ** 2, axis=0, weights=sample_weight))
+                sum_err += colweight * rmse
+            score = sum_err
+        else:
+            msg = 'Unknown scoring metric "%s"' % self.scoring_metric
+            raise ValueError(msg)
+        return score
