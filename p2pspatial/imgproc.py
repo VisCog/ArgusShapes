@@ -1,5 +1,6 @@
 import os
 import numpy as np
+import pandas as pd
 import skimage.io as skio
 import skimage.filters as skif
 import skimage.transform as skit
@@ -94,3 +95,35 @@ def dice_coeff(img0, img1):
     img0 = img0 > 0
     img1 = img1 > 0
     return 2 * np.sum(img0 * img1) / (np.sum(img0) + np.sum(img1))
+
+
+def dice_loss(images, w_deg=1, n_angles=101):
+    """Calculate loss function"""
+    (_, y_true_row), (_, y_pred_row) = images
+    assert isinstance(y_true_row, pd.core.series.Series)
+    assert isinstance(y_pred_row, pd.core.series.Series)
+
+    img_true = y_true_row['image']
+    img_pred = y_pred_row['image']
+    assert isinstance(img_true, np.ndarray)
+    assert isinstance(img_pred, np.ndarray)
+    if not np.allclose(img_true.shape, img_pred.shape):
+        print('img_true:', img_true.shape)
+        print('img_pred:', img_pred.shape)
+        assert False
+
+    img_true = center_phosphene(img_true)
+    img_pred = center_phosphene(img_pred)
+
+    # Scale phosphene in `img_pred` to area of phosphene in `img_truth`
+    area_true = skim.moments(img_true, order=0)[0, 0]
+    area_pred = skim.moments(img_pred, order=0)[0, 0]
+    scale = area_true / area_pred
+    img_pred = scale_phosphene(img_pred, scale)
+
+    # Rotate the phosphene so that dice coefficient is maximized
+    angles = np.linspace(-180, 180, n_angles)
+    dice = [dice_coeff(img_true, skit.rotate(img_pred, r)) for r in angles]
+    rot_deg = np.abs(angles[np.isclose(dice, np.max(dice))]).min()
+
+    return scale + w_deg * rot_deg - np.max(dice)

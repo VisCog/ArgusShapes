@@ -24,7 +24,7 @@ import sklearn.utils as sklu
 
 from .due import due, Doi
 from .imgproc import (get_thresholded_image, center_phosphene, scale_phosphene,
-                      dice_coeff)
+                      dice_coeff, dice_loss)
 
 p2p.console.setLevel(logging.ERROR)
 
@@ -417,34 +417,6 @@ class SpatialModelRegressor(sklb.BaseEstimator, sklb.RegressorMixin):
         # Convert to DataFrame, preserving the index of `X`
         return pd.DataFrame(y_pred, index=X.index)
 
-    def _loss(self, images, w_deg=1):
-        """Calculate loss function"""
-        (_, y_true_row), (_, y_pred_row) = images
-        img_true = y_true_row['image']
-        img_pred = y_pred_row['image']
-        assert isinstance(img_true, np.ndarray)
-        assert isinstance(img_pred, np.ndarray)
-        if not np.allclose(img_true.shape, img_pred.shape):
-            print('img_true:', img_true.shape)
-            print('img_pred:', img_pred.shape)
-            assert False
-
-        img_true = center_phosphene(img_true)
-        img_pred = center_phosphene(img_pred)
-
-        # Scale phosphene in `img_pred` to area of phosphene in `img_truth`
-        area_true = skim.moments(img_true, order=0)[0, 0]
-        area_pred = skim.moments(img_pred, order=0)[0, 0]
-        scale = area_true / area_pred
-        img_pred = scale_phosphene(img_pred, scale)
-
-        # Rotate the phosphene so that dice coefficient is maximized
-        angles = np.linspace(-180, 180, 101)
-        dice = [dice_coeff(img_true, skit.rotate(img_pred, r)) for r in angles]
-        rot_deg = np.abs(angles[np.isclose(dice, np.max(dice))]).min()
-
-        return scale + w_deg * rot_deg - np.max(dice)
-
     def score(self, X, y, sample_weight=None):
         assert isinstance(X, pd.core.frame.DataFrame)
         assert isinstance(y, pd.core.frame.DataFrame)
@@ -454,8 +426,7 @@ class SpatialModelRegressor(sklb.BaseEstimator, sklb.RegressorMixin):
         y_pred = self.predict(X)
         assert np.allclose(y_pred.index, y.index)
 
-        losses = p2p.utils.parfor(self._loss, zip(y.iterrows(),
-                                                  y_pred.iterrows()))
+        losses = p2p.utils.parfor(dice_loss, zip(y.iterrows(),
+                                                 y_pred.iterrows()))
         loss = np.mean(losses)
-        print('mean loss:', np.mean(losses), np.std(losses))
         return loss
