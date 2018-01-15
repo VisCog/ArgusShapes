@@ -20,7 +20,7 @@ import p2pspatial
 
 subject = '12-005'
 amplitude = 2.0
-electrodes = None
+electrodes = ['A01']
 random_state = 42
 n_folds = 5
 
@@ -33,7 +33,7 @@ filename = 'crossval-swarm_%s_%s.pickle' % (subject, now)
 print(filename)
 
 
-# In[ ]:
+# In[5]:
 
 rootfolder = os.path.join(os.environ['SECOND_SIGHT_DATA'], 'shape')
 X, y = p2pspatial.load_data(rootfolder, subject=subject, electrodes=electrodes,
@@ -44,7 +44,7 @@ if len(X) == 0:
     raise ValueError('no data found')
 
 
-# In[5]:
+# In[6]:
 
 model_params = {'sampling': 200,
                 'csmode': 'gaussian',
@@ -53,7 +53,7 @@ model_params = {'sampling': 200,
 regressor = p2pspatial.SpatialModelRegressor(**model_params)
 
 
-# In[6]:
+# In[7]:
 
 search_params = {'decay_const': (0.001, 10),
                  'cswidth': (10, 1000),
@@ -61,28 +61,23 @@ search_params = {'decay_const': (0.001, 10),
                  'implant_y': (-1000, 1000),
                  'implant_rot': np.deg2rad((-75, -15))}
 pso_options = {'max_iter': 100,
-               'min_func': 0.01,
-               'greater_is_better': False}
+               'min_func': 0.1}
 pso = p2pspatial.model_selection.ParticleSwarmOptimizer(
     regressor, search_params, **pso_options
 )
 
 
-# In[7]:
+# In[8]:
 
 fit_params = {'loc_od_x': 15.5,
-              'loc_od_y': 1.2,
-              'use_persp_trafo': True,
+              'loc_od_y': 1.5,
               'use_ofl': True,
-              'scoring_weights': {'area': 0.001,
-                                  'orientation': 100.0,
-                                  'major_axis_length': 0.1,
-                                  'minor_axis_length': 0.1}}
+              'use_persp_trafo': False}
 y_test, y_pred, best_params = p2pspatial.model_selection.crossval_predict(
     pso, X, y, fit_params=fit_params, n_folds=n_folds)
 
 
-# In[10]:
+# In[ ]:
 
 print("Done in %.3fs" % (time() - t_start))
 

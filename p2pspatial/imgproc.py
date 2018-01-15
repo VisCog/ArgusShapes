@@ -67,3 +67,30 @@ def get_region_props(img, thresh='min', res_shape=None, return_all=False):
             areas = np.array([r.area for r in regions])
             idx = np.argmax(areas)
             return regions[idx]
+
+
+def center_phosphene(img_in):
+    """Centers a phosphene in an image"""
+    # Subtract center of mass from image center
+    m = skim.moments(img_in, order=1)
+    transl = (img_in.shape[1] // 2 - m[1, 0] / m[0, 0],
+              img_in.shape[0] // 2 - m[0, 1] / m[0, 0])
+    tf_shift = skit.SimilarityTransform(translation=transl)
+    return skit.warp(img_in, tf_shift.inverse)
+
+
+def scale_phosphene(img, scale):
+    """Scales phosphene with a scaling factor"""
+    # Shift the phosphene to (0, 0), scale, shift back to the image center
+    shift_y, shift_x = np.array(img.shape[:2]) / 2.0
+    tf_shift = skit.SimilarityTransform(translation=[-shift_x, -shift_y])
+    tf_scale = skit.SimilarityTransform(scale=scale)
+    tf_shift_inv = skit.SimilarityTransform(translation=[shift_x, shift_y])
+    return skit.warp(img, (tf_shift + (tf_scale + tf_shift_inv)).inverse)
+
+
+def dice_coeff(img0, img1):
+    """Compute dice coefficient"""
+    img0 = img0 > 0
+    img1 = img1 > 0
+    return 2 * np.sum(img0 * img1) / (np.sum(img0) + np.sum(img1))

@@ -17,16 +17,18 @@ import skimage.io as skio
 import skimage.filters as skif
 import skimage.transform as skit
 import skimage.measure as skim
+
 import sklearn.base as sklb
 import sklearn.metrics as sklm
 import sklearn.utils as sklu
 
 from .due import due, Doi
-from .imgproc import get_thresholded_image, get_region_props
+from .imgproc import (get_thresholded_image, center_phosphene, scale_phosphene,
+                      dice_coeff)
 
 p2p.console.setLevel(logging.ERROR)
 
-__all__ = ["load_data", "transform_data",
+__all__ = ["load_data", "average_data",
            "SpatialSimulation", "SpatialModelRegressor"]
 
 
@@ -106,21 +108,13 @@ def load_data(folder, subject=None, electrodes=None, amplitude=None,
             if not np.isclose(amp, amplitude):
                 continue
 
-        # Find the Hu momemnts of the image: Calculate area in deg^2, but
-        # operate on image larger than 1px = 1deg so that thin lines
-        # are still visible
+        # Load image
         if not os.path.isfile(os.path.join(row['Folder'], row['Filename'])):
             if verbose:
                 print('Could not find file:', row['Folder'], row['Filename'])
             continue
         img = skio.imread(os.path.join(row['Folder'], row['Filename']),
                           as_grey=True)
-
-        # We use the image at original resolution
-        props = get_region_props(img, thresh=128)
-        if props is None:
-            if verbose:
-                print('Found empty props:', row['Folder'], row['Filename'])
 
         # Assemble all feature values in a dict
         feat = {'filename': fname,
@@ -131,13 +125,9 @@ def load_data(folder, subject=None, electrodes=None, amplitude=None,
                 'stim_class': stim[1],
                 'amp': amp,
                 'date': date,
-                'img_shape': img.shape,
-                'centroid': props.centroid}
+                'img_shape': img.shape}
         features.append(feat)
-        target = {'area': props.area,
-                  'orientation': props.orientation,
-                  'major_axis_length': props.major_axis_length,
-                  'minor_axis_length': props.minor_axis_length}
+        target = {'image': img}
         targets.append(target)
     if verbose:
         print('Found %d samples: %d feature values, %d target values' % (
@@ -146,7 +136,7 @@ def load_data(folder, subject=None, electrodes=None, amplitude=None,
     return pd.DataFrame(features), pd.DataFrame(targets)
 
 
-def transform_data(Xold, yold):
+def average_data(Xold, yold):
     """Average trials to yield mean images"""
     Xy = pd.concat((Xold, yold), axis=1).groupby(['electrode', 'amp'])
     df = pd.DataFrame(Xy[yold.columns].mean()).reset_index()
@@ -331,6 +321,7 @@ class SpatialModelRegressor(sklb.BaseEstimator, sklb.RegressorMixin):
         self.sensitivity_rule = sensitivity_rule
         self.thresh = thresh
         self.csmode = csmode
+        self.greater_is_better = False
 
     def set_params(self, **params):
         for param, value in six.iteritems(params):
@@ -360,7 +351,8 @@ class SpatialModelRegressor(sklb.BaseEstimator, sklb.RegressorMixin):
         assert isinstance(self.loc_od_x, (int, float))
         assert isinstance(self.loc_od_y, (int, float))
         assert isinstance(self.decay_const, (int, float))
-        assert isinstance(self.scoring_weights, dict)
+        if hasattr(self, 'scoring_weights'):
+            print("Warning: `scoring_weights` present, deprecated")
         assert isinstance(self.use_persp_trafo, bool)
         assert isinstance(self.use_ofl, bool)
 
@@ -407,25 +399,9 @@ class SpatialModelRegressor(sklb.BaseEstimator, sklb.RegressorMixin):
         assert isinstance(Xrow, tuple)
         _, row = Xrow
         assert isinstance(row, pd.core.series.Series)
-        empty_pred = {'area': 0, 'orientation': 0, 'major_axis_length': 0,
-                      'minor_axis_length': 0}
         img = self.sim.pulse2percept(row['electrode'], row['amp'])
-        props = get_region_props(img, thresh=self.thresh,
-                                 res_shape=row['img_shape'])
-        if props is None:
-            # print("%s %.2f: Could not extract regions" % (row['electrode'],
-            #                                              row['amp']))
-            return empty_pred
-
-        y_pred = {'area': props.area,
-                  'orientation': props.orientation,
-                  'major_axis_length': props.major_axis_length,
-                  'minor_axis_length': props.minor_axis_length}
-        return y_pred
-
-    def predict_image(self, X):
-        for _, row in X.iterrows():
-            y_pred.append(self.sim.pulse2percept(row['electrode'], row['amp']))
+        img = get_thresholded_image(img, thresh=1, res_shape=row['img_shape'])
+        y_pred = {'image': img}
         return y_pred
 
     def predict(self, X):
@@ -441,41 +417,45 @@ class SpatialModelRegressor(sklb.BaseEstimator, sklb.RegressorMixin):
         # Convert to DataFrame, preserving the index of `X`
         return pd.DataFrame(y_pred, index=X.index)
 
+    def _loss(self, images, w_deg=1):
+        """Calculate loss function"""
+        (_, y_true_row), (_, y_pred_row) = images
+        img_true = y_true_row['image']
+        img_pred = y_pred_row['image']
+        assert isinstance(img_true, np.ndarray)
+        assert isinstance(img_pred, np.ndarray)
+        if not np.allclose(img_true.shape, img_pred.shape):
+            print('img_true:', img_true.shape)
+            print('img_pred:', img_pred.shape)
+            assert False
+
+        img_true = center_phosphene(img_true)
+        img_pred = center_phosphene(img_pred)
+
+        # Scale phosphene in `img_pred` to area of phosphene in `img_truth`
+        area_true = skim.moments(img_true, order=0)[0, 0]
+        area_pred = skim.moments(img_pred, order=0)[0, 0]
+        scale = area_true / area_pred
+        img_pred = scale_phosphene(img_pred, scale)
+
+        # Rotate the phosphene so that dice coefficient is maximized
+        angles = np.linspace(-180, 180, 101)
+        dice = [dice_coeff(img_true, skit.rotate(img_pred, r)) for r in angles]
+        rot_deg = np.abs(angles[np.isclose(dice, np.max(dice))]).min()
+
+        return scale + w_deg * rot_deg - np.max(dice)
+
     def score(self, X, y, sample_weight=None):
         assert isinstance(X, pd.core.frame.DataFrame)
         assert isinstance(y, pd.core.frame.DataFrame)
-        assert isinstance(self.scoring_weights, dict)
-        assert isinstance(self.scoring_metric, six.string_types)
-        assert np.all([key in y.columns
-                       for key in self.scoring_weights.keys()])
 
         # `y` and `y_pred` must have the same index, otherwise subtraction
         # produces nan
         y_pred = self.predict(X)
         assert np.allclose(y_pred.index, y.index)
-        assert np.all([key in y_pred.columns
-                       for key in self.scoring_weights.keys()])
 
-        if self.scoring_metric == 'r2':
-            sum_r2 = 0.0
-            score = sum_r2
-        elif self.scoring_metric == 'mse':
-            sum_err = 0.0
-            for key, colweight in six.iteritems(self.scoring_weights):
-                if colweight is None or np.isclose(colweight, 0):
-                    continue
-
-                err = y_pred.loc[:, key] - y.loc[:, key]
-                assert not np.any(pd.isnull(err))
-                if key == 'orientation':
-                    # Error is periodic with 2pi
-                    err = np.mod(err, 2 * np.pi)
-                    err = np.where(err > np.pi, 2 * np.pi - err, err)
-                rmse = np.sqrt(np.average(
-                    err ** 2, axis=0, weights=sample_weight))
-                sum_err += colweight * rmse
-            score = sum_err
-        else:
-            msg = 'Unknown scoring metric "%s"' % self.scoring_metric
-            raise ValueError(msg)
-        return score
+        losses = p2p.utils.parfor(self._loss, zip(y.iterrows(),
+                                                  y_pred.iterrows()))
+        loss = np.mean(losses)
+        print('mean loss:', np.mean(losses), np.std(losses))
+        return loss
