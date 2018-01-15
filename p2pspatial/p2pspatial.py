@@ -22,11 +22,11 @@ import sklearn.metrics as sklm
 import sklearn.utils as sklu
 
 from .due import due, Doi
+from .imgproc import get_thresholded_image, get_region_props
 
 p2p.console.setLevel(logging.ERROR)
 
-__all__ = ["get_thresholded_image", "get_avg_image", "get_region_props",
-           "load_data", "transform_data",
+__all__ = ["load_data", "transform_data",
            "SpatialSimulation", "SpatialModelRegressor"]
 
 
@@ -37,74 +37,6 @@ due.cite(Doi("10.1167/13.9.30"),
          description="Template project for small scientific Python projects",
          tags=["reference-implementation"],
          path='p2pspatial')
-
-
-def get_thresholded_image(img, thresh='min', res_shape=None, verbose=True):
-    if res_shape is not None:
-        img = skit.resize(img, res_shape, mode='reflect')
-    if thresh == 'min':
-        try:
-            thresh = skif.threshold_minimum(img)
-        except RuntimeError:
-            if verbose:
-                print('Runtime error with minimum threshold')
-            thresh = (img.max() - img.min()) // 2
-    else:
-        assert isinstance(thresh, (int, float))
-    img_th = img > thresh
-    return img_th.astype(np.uint8) * 255
-
-
-def get_avg_image(X, subject, electrode, amp=None, align_center=None):
-    idx = np.logical_and(X['subject'] == subject, X['electrode'] == electrode)
-    if amp is not None:
-        idx_amp = np.isclose(amp, X['amp'])
-        assert np.any(idx_amp)
-        idx = np.logical_and(idx, idx_amp)
-
-    avg_img = None
-    for _, row in X[idx].iterrows():
-        img = skio.imread(os.path.join(row['folder'], row['filename']),
-                          as_grey=True)
-        if align_center is None:
-            # Choose center of image
-            img_shape = img.shape[:2]
-            align_center = [img_shape[1] // 2, img_shape[0] // 2]
-
-        transl = [align_center[0] - row['centroid'][1],
-                  align_center[1] - row['centroid'][0]]
-        trafo = skit.EuclideanTransform(translation=transl)
-        if avg_img is None:
-            avg_img = skit.warp(img, trafo.inverse)
-        else:
-            avg_img += skit.warp(img, trafo.inverse)
-    return avg_img
-
-
-def get_region_props(img, thresh='min', res_shape=None, verbose=True,
-                     return_all=False):
-    img = get_thresholded_image(img, thresh=thresh, res_shape=res_shape,
-                                verbose=verbose)
-    if img is None:
-        return None
-
-    regions = skim.regionprops(img)
-    if len(regions) == 0:
-        #print('No regions: min=%f max=%f' % (img.min(), img.max()))
-        return None
-    elif len(regions) == 1:
-        return regions[0]
-    else:
-        if return_all:
-            return regions
-        else:
-            # Multiple props, choose largest
-            areas = np.array([r.area for r in regions])
-            idx = np.argmax(areas)
-            if verbose:
-                print(('Found multiple regions, chose regions[%d] with '
-                       'area %f') % (idx, regions[idx].area))
-            return regions[idx]
 
 
 def load_data(folder, subject=None, electrodes=None, amplitude=None,
@@ -185,8 +117,7 @@ def load_data(folder, subject=None, electrodes=None, amplitude=None,
                           as_grey=True)
 
         # We use the image at original resolution
-        props = get_region_props(img, thresh=128,
-                                 verbose=verbose)
+        props = get_region_props(img, thresh=128)
         if props is None:
             if verbose:
                 print('Found empty props:', row['Folder'], row['Filename'])
@@ -480,7 +411,7 @@ class SpatialModelRegressor(sklb.BaseEstimator, sklb.RegressorMixin):
                       'minor_axis_length': 0}
         img = self.sim.pulse2percept(row['electrode'], row['amp'])
         props = get_region_props(img, thresh=self.thresh,
-                                 res_shape=row['img_shape'], verbose=False)
+                                 res_shape=row['img_shape'])
         if props is None:
             # print("%s %.2f: Could not extract regions" % (row['electrode'],
             #                                              row['amp']))
@@ -540,7 +471,8 @@ class SpatialModelRegressor(sklb.BaseEstimator, sklb.RegressorMixin):
                     # Error is periodic with 2pi
                     err = np.mod(err, 2 * np.pi)
                     err = np.where(err > np.pi, 2 * np.pi - err, err)
-                rmse = np.sqrt(np.average(err ** 2, axis=0, weights=sample_weight))
+                rmse = np.sqrt(np.average(
+                    err ** 2, axis=0, weights=sample_weight))
                 sum_err += colweight * rmse
             score = sum_err
         else:
