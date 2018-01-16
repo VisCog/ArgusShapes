@@ -97,7 +97,7 @@ def dice_coeff(img0, img1):
     return 2 * np.sum(img0 * img1) / (np.sum(img0) + np.sum(img1))
 
 
-def dice_loss(images, w_deg=1, n_angles=101):
+def dice_loss(images, w_deg=1, n_angles=101, return_raw=False):
     """Calculate loss function"""
     (_, y_true_row), (_, y_pred_row) = images
     assert isinstance(y_true_row, pd.core.series.Series)
@@ -126,4 +126,8 @@ def dice_loss(images, w_deg=1, n_angles=101):
     dice = [dice_coeff(img_true, skit.rotate(img_pred, r)) for r in angles]
     rot_deg = np.abs(angles[np.isclose(dice, np.max(dice))]).min()
 
-    return scale + w_deg * rot_deg - np.max(dice)
+    loss = scale + w_deg * rot_deg - np.max(dice)
+    if return_raw:
+        return loss, scale, rot_deg, np.max(dice)
+    else:
+        return loss
