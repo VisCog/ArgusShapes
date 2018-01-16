@@ -119,7 +119,7 @@ def dice_loss(images, n_angles=73, return_raw=False):
     area_true = skim.moments(img_true, order=0)[0, 0]
     area_pred = skim.moments(img_pred, order=0)[0, 0]
     img_pred = scale_phosphene(img_pred, area_true / area_pred)
-    
+
     # Area loss: Make symmetric around 1, so that a scaling factor of 0.5 and
     # 2 both have the same loss. Bound the error in [0, 10] first, then scale
     # to [0, 1]
@@ -136,8 +136,8 @@ def dice_loss(images, n_angles=73, return_raw=False):
     # Dice loss: Turn the dice coefficient into a loss in [0, 1]
     loss_dice = 1 - np.max(dice)
 
-    # Now all terms are in [0, 1], so loss is in [0, 3]
-    loss = loss_scale + loss_rot + loss_dice
+    # Now all terms are in [0, 1], but make loss in [0, 100]
+    loss = 33 * loss_scale + 34 * loss_rot + 33 * loss_dice
     if return_raw:
         return loss, loss_scale, loss_rot, loss_dice
     else:
