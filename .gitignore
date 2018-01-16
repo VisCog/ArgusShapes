@@ -1,6 +1,12 @@
 *.pyc
 *~
+*.log
+*.cache
 *.DS_Store
-_build/
+*.npz
+*.egg-info/
+*.ipynb_checkpoints/
+build/
+dist/
 auto_examples/
 gen_api/

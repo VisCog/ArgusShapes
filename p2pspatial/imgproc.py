@@ -97,7 +97,7 @@ def dice_coeff(img0, img1):
     return 2 * np.sum(img0 * img1) / (np.sum(img0) + np.sum(img1))
 
 
-def dice_loss(images, w_deg=1, n_angles=101, return_raw=False):
+def dice_loss(images, n_angles=73, return_raw=False):
     """Calculate loss function"""
     (_, y_true_row), (_, y_pred_row) = images
     assert isinstance(y_true_row, pd.core.series.Series)
@@ -118,16 +118,27 @@ def dice_loss(images, w_deg=1, n_angles=101, return_raw=False):
     # Scale phosphene in `img_pred` to area of phosphene in `img_truth`
     area_true = skim.moments(img_true, order=0)[0, 0]
     area_pred = skim.moments(img_pred, order=0)[0, 0]
-    scale = area_true / area_pred
-    img_pred = scale_phosphene(img_pred, scale)
+    img_pred = scale_phosphene(img_pred, area_true / area_pred)
+    
+    # Area loss: Make symmetric around 1, so that a scaling factor of 0.5 and
+    # 2 both have the same loss. Bound the error in [0, 10] first, then scale
+    # to [0, 1]
+    loss_scale = np.maximum(area_true / area_pred, area_pred / area_true) - 1
+    loss_scale = np.minimum(10, loss_scale) / 10.0
 
-    # Rotate the phosphene so that dice coefficient is maximized
+    # Rotation loss: Rotate the phosphene so that the dice coefficient is
+    # maximized. If multiple angles give the same dice coefficient, choose
+    # the smallest angle. Scale the loss to [0, 1]
     angles = np.linspace(-180, 180, n_angles)
     dice = [dice_coeff(img_true, skit.rotate(img_pred, r)) for r in angles]
-    rot_deg = np.abs(angles[np.isclose(dice, np.max(dice))]).min()
+    loss_rot = np.abs(angles[np.isclose(dice, np.max(dice))]).min() / 180.0
 
-    loss = scale + w_deg * rot_deg - np.max(dice)
+    # Dice loss: Turn the dice coefficient into a loss in [0, 1]
+    loss_dice = 1 - np.max(dice)
+
+    # Now all terms are in [0, 1], so loss is in [0, 3]
+    loss = loss_scale + loss_rot + loss_dice
     if return_raw:
-        return loss, scale, rot_deg, np.max(dice)
+        return loss, loss_scale, loss_rot, loss_dice
     else:
         return loss
