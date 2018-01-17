@@ -13,8 +13,8 @@ import pytest
 
 class DummyModel(models.RetinalGridMixin, models.BaseModel):
 
-    def _calc_curr_map(self, Xrow):
-        return Xrow[1]['electrode'], 0
+    def _calc_curr_map(self, electrode):
+        return electrode, 0
 
     def _predict(self, Xrow):
         """Returns the input (a DataFrame row, without its index)"""
@@ -29,16 +29,16 @@ def test_BaseModel():
         with pytest.raises(TypeError):
             model = DummyModel(implant)
 
-    model = DummyModel(p2pi.ArgusI())
-    npt.assert_equal(hasattr(model, 'implant'), True)
-    npt.assert_equal(isinstance(model.implant, p2pi.ElectrodeArray), True)
+    model = DummyModel(implant_type=p2pi.ArgusI)
+    npt.assert_equal(hasattr(model, 'implant_type'), True)
+    npt.assert_equal(isinstance(model.implant_type, type), True)
 
     # All these parameters should be settable in the constructor:
     model_params = model.get_params()
     DummyModel(**model_params)
     # But not others:
     with pytest.raises(ValueError):
-        DummyModel(p2pi.ArgusI(), meow=0)
+        DummyModel(meow=0)
 
     # Create a valid DataFrame with two different images
     img1 = np.ones((10, 10))
@@ -54,6 +54,8 @@ def test_BaseModel():
         model.predict(X)
     model.fit(X)
     npt.assert_equal(model._is_fitted, True)
+    npt.assert_equal(hasattr(model, 'implant'), True)
+    npt.assert_equal(isinstance(model.implant, p2pi.ArgusI), True)
 
     # Must pass correctly through ``predict`` and ``score``
     npt.assert_equal(X.equals(model.predict(X)), True)
@@ -74,16 +76,16 @@ def test_BaseModel():
 
 
 def test_ModelA():
-    model = models.ModelA(p2pi.ArgusII())
-    npt.assert_equal(hasattr(model, 'implant'), True)
-    npt.assert_equal(isinstance(model.implant, p2pi.ElectrodeArray), True)
+    model = models.ModelA(implant_type=p2pi.ArgusII)
+    npt.assert_equal(hasattr(model, 'implant_type'), True)
+    npt.assert_equal(isinstance(model.implant_type, type), True)
 
     # All these parameters should be settable in the constructor:
     model_params = model.get_params()
     models.ModelA(**model_params)
     # But not others:
     with pytest.raises(ValueError):
-        models.ModelA(p2pi.ArgusI(), meow=0)
+        models.ModelA(implant_type=p2pi.ArgusI, meow=0)
 
     # Build a data matrix
     img = np.ones((10, 10))

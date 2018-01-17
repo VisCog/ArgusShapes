@@ -47,7 +47,7 @@ if len(X) == 0:
 
 # In[6]:
 
-model_params = {}
+model_params = {'w_scale': 34, 'w_rot': 33, 'w_dice': 34}
 regressor = modelname[1](**model_params)
 
 

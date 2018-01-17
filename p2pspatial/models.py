@@ -97,18 +97,20 @@ class RetinalGridMixin(object):
 class BaseModel(sklb.BaseEstimator):
 
     def __init__(self, **kwargs):
-        # if not isinstance(implant, p2pi.ElectrodeArray):
-        #     raise TypeError(("'implant' must be of type 'ElectrodeArray', "
-        #                      "not '%s'." % type(implant)))
         # The following parameters serve as default values and can be
         # overwritten via `kwargs`
+
+        # The model operates on an electrode array, but we cannot instantiate
+        # it here since we might pass the array's location as search params.
+        # So we save the array type and set some default values for its
+        # location:
         self.implant_type = p2pi.ArgusII
         self.implant_x = 0
         self.implant_y = 0
         self.implant_rot = 0
 
-        # We will be simulating an x,y patch of the visual field (min, max)
-        # at a given spatial resolution (step size):
+        # We will be simulating an x,y patch of the visual field (min, max) in
+        # degrees of visual angle, at a given spatial resolution (step size):
         self.xrange = (-30, 30)  # dva
         self.yrange = (-20, 20)  # dva
         self.xystep = 0.1  # dva
@@ -117,13 +119,21 @@ class BaseModel(sklb.BaseEstimator):
         self.img_thresh = 0.1
 
         # The new scoring function is actually a loss function, so that
-        # greater values do *not* imply that the estimator is better
+        # greater values do *not* imply that the estimator is better (required
+        # for ParticleSwarmOptimizer)
         self.greater_is_better = False
 
+        # By default, the loss function will return values in [0, 100], scoring
+        # the scaling factor, rotation angle, and dice coefficient of precition
+        # vs ground truth with the following weights:
+        self.w_scale = 34
+        self.w_rot = 33
+        self.w_dice = 34
+
         # JobLib or Dask can be used to parallelize computations:
-        self.engine = 'joblib'
+        self.engine = 'serial'
         self.scheduler = 'threading'
-        self.n_jobs = -1
+        self.n_jobs = 1
 
         # We will store the current map for each electrode in a dict: Since we
         # are usually fitting to individual drawings, we don't want to
@@ -188,6 +198,9 @@ class BaseModel(sklb.BaseEstimator):
         # Set additional parameters:
         self.set_params(**fit_params)
         # Instantiate implant:
+        if not isinstance(self.implant_type, type):
+            raise TypeError(("'implant_type' must be a type, not "
+                             "'%s'." % type(implant_type)))
         self.implant = self.implant_type(x_center=self.implant_x,
                                          y_center=self.implant_y,
                                          rot=self.implant_rot)
@@ -251,6 +264,9 @@ class BaseModel(sklb.BaseEstimator):
         # The loss function expects a tupel of two DataFrame rows
         losses = p2pu.parfor(imgproc.scale_rot_dice_loss,
                              zip(y.iterrows(), y_pred.iterrows()),
+                             func_kwargs={'w_scale': self.w_scale,
+                                          'w_rot': self.w_rot,
+                                          'w_dice': self.w_dice},
                              engine=self.engine, scheduler=self.scheduler,
                              n_jobs=self.n_jobs)
         return np.mean(losses)

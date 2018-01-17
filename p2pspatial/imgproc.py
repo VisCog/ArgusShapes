@@ -104,7 +104,8 @@ def dice_coeff(img0, img1):
     return 2 * np.sum(img0 * img1) / (np.sum(img0) + np.sum(img1))
 
 
-def scale_rot_dice_loss(images, n_angles=73, return_raw=False):
+def scale_rot_dice_loss(images, n_angles=73, w_scale=33, w_rot=34, w_dice=33,
+                        return_raw=False):
     """Calculates new loss function"""
     (_, y_true_row), (_, y_pred_row) = images
     assert isinstance(y_true_row, pd.core.series.Series)
@@ -146,8 +147,8 @@ def scale_rot_dice_loss(images, n_angles=73, return_raw=False):
     # Dice loss: Turn the dice coefficient into a loss in [0, 1]
     loss_dice = 1 - np.max(dice)
 
-    # Now all terms are in [0, 1], but make loss in [0, 100]
-    loss = 33 * loss_scale + 34 * loss_rot + 33 * loss_dice
+    # Now all terms are in [0, 1], but by default loss is in [0, 100]
+    loss = w_scale * loss_scale + w_rot * loss_rot + w_dice * loss_dice
     if return_raw:
         return loss, loss_scale, loss_rot, loss_dice
     else:
