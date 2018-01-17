@@ -116,6 +116,10 @@ class BaseModel(sklb.BaseEstimator):
         # Current maps are thresholded to produce a binary image:
         self.img_thresh = 0.1
 
+        # The new scoring function is actually a loss function, so that
+        # greater values do *not* imply that the estimator is better
+        self.greater_is_better = False
+
         # JobLib or Dask can be used to parallelize computations:
         self.engine = 'joblib'
         self.scheduler = 'threading'

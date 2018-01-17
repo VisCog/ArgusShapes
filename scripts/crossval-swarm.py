@@ -47,7 +47,7 @@ if len(X) == 0:
 
 # In[6]:
 
-model_params = {'engine': 'serial', 'n_jobs': 1}
+model_params = {}
 regressor = modelname[1](**model_params)
 
 

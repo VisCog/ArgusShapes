@@ -34,6 +34,7 @@ class ParticleSwarmOptimizer(sklb.BaseEstimator, sklb.RegressorMixin):
         if swarm_size is None:
             swarm_size = 10 * len(search_params)
         self.estimator = estimator
+        assert hasattr(estimator, 'greater_is_better')
         self.search_params = search_params
         self.swarm_size = swarm_size
         self.max_iter = max_iter
