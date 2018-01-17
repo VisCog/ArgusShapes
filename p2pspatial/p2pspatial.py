@@ -23,8 +23,7 @@ import sklearn.metrics as sklm
 import sklearn.utils as sklu
 
 from .due import due, Doi
-from .imgproc import (get_thresholded_image, center_phosphene, scale_phosphene,
-                      dice_coeff, dice_loss)
+from . import imgproc
 
 p2p.console.setLevel(logging.ERROR)
 
@@ -400,7 +399,8 @@ class SpatialModelRegressor(sklb.BaseEstimator, sklb.RegressorMixin):
         _, row = Xrow
         assert isinstance(row, pd.core.series.Series)
         img = self.sim.pulse2percept(row['electrode'], row['amp'])
-        img = get_thresholded_image(img, thresh=1, res_shape=row['img_shape'])
+        img = imgproc.get_thresholded_image(img, thresh=1,
+                                            res_shape=row['img_shape'])
         y_pred = {'image': img}
         return y_pred
 
@@ -426,7 +426,7 @@ class SpatialModelRegressor(sklb.BaseEstimator, sklb.RegressorMixin):
         y_pred = self.predict(X)
         assert np.allclose(y_pred.index, y.index)
 
-        losses = p2p.utils.parfor(dice_loss, zip(y.iterrows(),
-                                                 y_pred.iterrows()))
+        losses = p2p.utils.parfor(imgproc.scale_rot_dice_loss,
+                                  zip(y.iterrows(), y_pred.iterrows()))
         loss = np.mean(losses)
         return loss

@@ -1,6 +1,7 @@
 import os
 import numpy as np
 import pandas as pd
+
 import skimage.io as skio
 import skimage.filters as skif
 import skimage.transform as skit
@@ -74,6 +75,12 @@ def center_phosphene(img_in):
     """Centers a phosphene in an image"""
     # Subtract center of mass from image center
     m = skim.moments(img_in, order=1)
+
+    # No area found:
+    if np.isclose(m[0, 0], 0):
+        return img_in
+
+    # Valid image: shift the image by -centroid, +image center
     transl = (img_in.shape[1] // 2 - m[1, 0] / m[0, 0],
               img_in.shape[0] // 2 - m[0, 1] / m[0, 0])
     tf_shift = skit.SimilarityTransform(translation=transl)
@@ -91,14 +98,14 @@ def scale_phosphene(img, scale):
 
 
 def dice_coeff(img0, img1):
-    """Compute dice coefficient"""
+    """Computes dice coefficient"""
     img0 = img0 > 0
     img1 = img1 > 0
     return 2 * np.sum(img0 * img1) / (np.sum(img0) + np.sum(img1))
 
 
-def dice_loss(images, n_angles=73, return_raw=False):
-    """Calculate loss function"""
+def scale_rot_dice_loss(images, n_angles=73, return_raw=False):
+    """Calculates new loss function"""
     (_, y_true_row), (_, y_pred_row) = images
     assert isinstance(y_true_row, pd.core.series.Series)
     assert isinstance(y_pred_row, pd.core.series.Series)
@@ -118,6 +125,9 @@ def dice_loss(images, n_angles=73, return_raw=False):
     # Scale phosphene in `img_pred` to area of phosphene in `img_truth`
     area_true = skim.moments(img_true, order=0)[0, 0]
     area_pred = skim.moments(img_pred, order=0)[0, 0]
+    if np.isclose(area_true, 0) or np.isclose(area_pred, 0):
+        return 100
+
     img_pred = scale_phosphene(img_pred, area_true / area_pred)
 
     # Area loss: Make symmetric around 1, so that a scaling factor of 0.5 and

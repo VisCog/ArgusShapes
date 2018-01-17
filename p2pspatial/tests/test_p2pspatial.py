@@ -18,7 +18,7 @@ def test_transform_data():
     Xold = pd.DataFrame(Xrows)
     yold = pd.DataFrame(yrows)
 
-    Xnew, ynew = p2pspatial.transform_data(Xold, yold)
+    Xnew, ynew = p2pspatial.average_data(Xold, yold)
 
     npt.assert_equal(len(np.unique(Xnew['amp'])), n_amps)
     npt.assert_equal(len(np.unique(Xnew['electrode'])), n_amps)

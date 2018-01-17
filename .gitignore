@@ -4,6 +4,10 @@
 *.cache
 *.DS_Store
 *.npz
+*.png
+*.jpg
+*.eps
+*.pickle
 *.egg-info/
 *.ipynb_checkpoints/
 build/

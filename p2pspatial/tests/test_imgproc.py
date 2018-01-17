@@ -3,7 +3,7 @@ import os.path as op
 import numpy as np
 import pandas as pd
 import numpy.testing as npt
-from p2pspatial import imgproc
+from .. import imgproc
 
 
 def test_get_thresholded_image():
@@ -38,3 +38,17 @@ def test_get_region_props():
         regions = imgproc.get_region_props(img, return_all=return_all)
         npt.assert_equal(regions.area, img.sum())
         npt.assert_almost_equal(regions.orientation, np.pi / 4)
+
+
+def test_center_phosphene():
+    bright = 13
+    img = np.zeros((5, 5))
+    img[0, 0] = bright
+    center_img = imgproc.center_phosphene(img)
+    npt.assert_equal(np.sum(img), np.sum(center_img))
+    npt.assert_equal(center_img[2, 2], bright)
+    npt.assert_equal(np.sum(np.delete(center_img.ravel(), 12)), 0)
+
+
+def test_scale_rot_dice_loss():
+    pass
