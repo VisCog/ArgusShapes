@@ -96,13 +96,16 @@ class RetinalGridMixin(object):
 @six.add_metaclass(abc.ABCMeta)
 class BaseModel(sklb.BaseEstimator):
 
-    def __init__(self, implant, **kwargs):
-        if not isinstance(implant, p2pi.ElectrodeArray):
-            raise TypeError(("'implant' must be of type 'ElectrodeArray', "
-                             "not '%s'." % type(implant)))
+    def __init__(self, **kwargs):
+        # if not isinstance(implant, p2pi.ElectrodeArray):
+        #     raise TypeError(("'implant' must be of type 'ElectrodeArray', "
+        #                      "not '%s'." % type(implant)))
         # The following parameters serve as default values and can be
         # overwritten via `kwargs`
-        self.implant = implant
+        self.implant_type = p2pi.ArgusII
+        self.implant_x = 0
+        self.implant_y = 0
+        self.implant_rot = 0
 
         # We will be simulating an x,y patch of the visual field (min, max)
         # at a given spatial resolution (step size):
@@ -132,7 +135,10 @@ class BaseModel(sklb.BaseEstimator):
 
     def get_params(self, deep=True):
         """Returns all params that can be set on-the-fly via 'set_params'"""
-        return {'implant': self.implant,
+        return {'implant_type': self.implant_type,
+                'implant_x': self.implant_x,
+                'implant_y': self.implant_y,
+                'implant_rot': self.implant_rot,
                 'xrange': self.xrange,
                 'yrange': self.yrange,
                 'xystep': self.xystep,
@@ -159,12 +165,8 @@ class BaseModel(sklb.BaseEstimator):
         has_el = set(self._curr_map.keys())
         # - Compare with electrodes in `X` to find the ones we don't have:
         needs_el = set(X.electrode).difference(has_el)
-        # - Get the row indices of the electrodes we need:
-        keep_idx = [idx for idx, row in X.iterrows()
-                    if row['electrode'] in needs_el]
-        # - Calculate the current maps for these indices:
-        curr_map = p2pu.parfor(self._calc_curr_map,
-                               X.loc[keep_idx, :].iterrows(),
+        # - Calculate the current maps for the missing electrodes:
+        curr_map = p2pu.parfor(self._calc_curr_map, needs_el,
                                engine=self.engine, scheduler=self.scheduler,
                                n_jobs=self.n_jobs)
         # - Store the new current maps:
@@ -177,10 +179,14 @@ class BaseModel(sklb.BaseEstimator):
         """Fits the model"""
         if not isinstance(X, pd.core.frame.DataFrame):
             raise TypeError("'X' must be a pandas DataFrame, not %s" % type(X))
-        if y and not isinstance(y, pd.core.frame.DataFrame):
+        if y is not None and not isinstance(y, pd.core.frame.DataFrame):
             raise TypeError("'y' must be a pandas DataFrame, not %s" % type(y))
         # Set additional parameters:
         self.set_params(**fit_params)
+        # Instantiate implant:
+        self.implant = self.implant_type(x_center=self.implant_x,
+                                         y_center=self.implant_y,
+                                         rot=self.implant_rot)
         # Convert dva to retinal coordinates:
         self._build_retinal_grid()
         # Calculate current spread for every electrode in `X`:
@@ -259,18 +265,17 @@ class ModelA(RetinalGridMixin, BaseModel):
         params.update(rho=self.rho)
         return params
 
-    def _calc_curr_map(self, Xrow):
+    def _calc_curr_map(self, electrode):
         """Calculates the current map for a specific electrode"""
-        _, row = Xrow
-        assert isinstance(row, pd.core.series.Series)
+        assert isinstance(electrode, six.string_types)
         # Find the `implant` index by trimming zeros in the electrode name
-        ename = '%s%d' % (row['electrode'][0], int(row['electrode'][1:]))
+        ename = '%s%d' % (electrode[0], int(electrode[1:]))
         if not self.implant[ename]:
             raise ValueError("Electrode '%s' could not be found." % ename)
         r2 = (self.xret - self.implant[ename].x_center) ** 2
         r2 += (self.yret - self.implant[ename].y_center) ** 2
         cm = np.exp(-r2 / (2.0 * self.rho ** 2))
-        return row['electrode'], cm
+        return electrode, cm
 
 
 class ModelB(CoordTrafoMixin, ModelA):
