@@ -11,7 +11,7 @@ import numpy.testing as npt
 import pytest
 
 
-class DummyModel(models.BaseModel):
+class DummyModel(models.RetinalGridMixin, models.BaseModel):
 
     def _calc_curr_map(self, Xrow):
         return Xrow[1]['electrode'], 0

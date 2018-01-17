@@ -62,6 +62,37 @@ def displace(xy, eye='RE'):
     return p2pr.dva2ret(x), p2pr.dva2ret(y)
 
 
+class CoordTrafoMixin(object):
+
+    def _build_retinal_grid(self):
+        # Build the grid from `x_range`, `y_range`:
+        nx = int(np.ceil((np.diff(self.xrange) + 1) / self.xystep))
+        ny = int(np.ceil((np.diff(self.yrange) + 1) / self.xystep))
+        xdva, ydva = np.meshgrid(np.linspace(*self.xrange, num=nx),
+                                 np.linspace(*self.yrange, num=ny),
+                                 indexing='xy')
+
+        # Convert dva to retinal coordinates
+        xydva = np.vstack((xdva.ravel(), ydva.ravel())).T
+        xret, yret = displace(xydva)
+        self.xret = xret.reshape(xdva.shape)
+        self.yret = yret.reshape(ydva.shape)
+
+
+class RetinalGridMixin(object):
+
+    def _build_retinal_grid(self):
+        # Build the grid from `x_range`, `y_range`:
+        nx = int(np.ceil((np.diff(self.xrange) + 1) / self.xystep))
+        ny = int(np.ceil((np.diff(self.yrange) + 1) / self.xystep))
+        xdva, ydva = np.meshgrid(np.linspace(*self.xrange, num=nx),
+                                 np.linspace(*self.yrange, num=ny),
+                                 indexing='xy')
+
+        self.xret = p2pr.dva2ret(xdva)
+        self.yret = p2pr.dva2ret(ydva)
+
+
 @six.add_metaclass(abc.ABCMeta)
 class BaseModel(sklb.BaseEstimator):
 
@@ -82,10 +113,7 @@ class BaseModel(sklb.BaseEstimator):
         # Current maps are thresholded to produce a binary image:
         self.img_thresh = 0.1
 
-        # Optionally, we can use Watson's displacement formula to convert
-        # between visual field and retinal coordinates
-        self.has_displace = False
-
+        # JobLib or Dask can be used to parallelize computations:
         self.engine = 'joblib'
         self.scheduler = 'threading'
         self.n_jobs = -1
@@ -109,7 +137,6 @@ class BaseModel(sklb.BaseEstimator):
                 'yrange': self.yrange,
                 'xystep': self.xystep,
                 'img_thresh': self.img_thresh,
-                'has_displace': self.has_displace,
                 'engine': self.engine,
                 'scheduler': self.scheduler,
                 'n_jobs': self.n_jobs}
@@ -118,23 +145,9 @@ class BaseModel(sklb.BaseEstimator):
         """Derived classes can set additional default parameters here"""
         pass
 
+    @abc.abstractmethod
     def _build_retinal_grid(self):
-        # Build the grid from `x_range`, `y_range`:
-        nx = int(np.ceil((np.diff(self.xrange) + 1) / self.xystep))
-        ny = int(np.ceil((np.diff(self.yrange) + 1) / self.xystep))
-        xdva, ydva = np.meshgrid(np.linspace(*self.xrange, num=nx),
-                                 np.linspace(*self.yrange, num=ny),
-                                 indexing='xy')
-
-        # Convert dva to retinal coordinates
-        if self.has_displace:
-            xydva = np.vstack((xdva.ravel(), ydva.ravel())).T
-            xret, yret = displace(xydva)
-            self.xret = xret.reshape(xdva.shape)
-            self.yret = yret.reshape(ydva.shape)
-        else:
-            self.xret = p2pr.dva2ret(xdva)
-            self.yret = p2pr.dva2ret(ydva)
+        raise NotImplementedError
 
     @abc.abstractmethod
     def _calc_curr_map(self, Xrow):
@@ -233,7 +246,7 @@ class BaseModel(sklb.BaseEstimator):
         return np.mean(losses)
 
 
-class ModelA(BaseModel):
+class ModelA(RetinalGridMixin, BaseModel):
     """Scoreboard model"""
 
     def _set_default_params(self):
@@ -241,13 +254,9 @@ class ModelA(BaseModel):
         # Current spread falls off exponentially from electrode center:
         self.rho = 100
 
-        # Model A does not use displacement
-        self.has_displace = False
-
     def get_params(self, deep=True):
         params = super(ModelA, self).get_params(deep=deep)
         params.update(rho=self.rho)
-        params.pop('has_displace')
         return params
 
     def _calc_curr_map(self, Xrow):
@@ -264,13 +273,7 @@ class ModelA(BaseModel):
         return row['electrode'], cm
 
 
-class ModelB(ModelA):
+class ModelB(CoordTrafoMixin, ModelA):
     """Scoreboard model with perspective transform"""
 
-    def _set_default_params(self):
-        """Sets default parameters of the scoreboard model"""
-        # Current spread falls off exponentially from electrode center:
-        self.rho = 100
-
-        # Model B uses displacement
-        self.has_displace = True
+    pass
