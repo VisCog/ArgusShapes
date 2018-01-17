@@ -19,11 +19,11 @@ import p2pspatial
 # In[3]:
 
 subject = '12-005'
-modelname = ['A', p2pspatial.models.ModelA]
+modelname = ['B', p2pspatial.models.ModelB]
 amplitude = 2.0
 electrodes = None
 random_state = 42
-n_folds = 5
+n_folds = 10
 
 
 # In[4]:
@@ -53,7 +53,10 @@ regressor = modelname[1](**model_params)
 
 # In[ ]:
 
-search_params = {'rho': (20, 1000)}
+search_params = {'rho': (20, 1000),
+                 'implant_x': (-2000, 1000),
+                 'implant_y': (-2000, 2000),
+                 'implant_rot': (np.deg2rad(-45), 0)}
 pso_options = {'max_iter': 100,
                'min_func': 0.1}
 pso = p2pspatial.model_selection.ParticleSwarmOptimizer(
