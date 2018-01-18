@@ -247,6 +247,10 @@ def test_ModelB():
     model.fit(X, rho=987)
     npt.assert_equal(model.rho, 987)
 
+    # Some electrodes in the test set might not be in the train set:
+    X.loc[0, 'electrode'] = 'F09'
+    model.predict(X)
+
     for electrode, cm in six.iteritems(model._curr_map):
         # Current maps must be in [0, 1]
         npt.assert_almost_equal(cm.min(), 0, decimal=3)
