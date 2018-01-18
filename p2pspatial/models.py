@@ -168,6 +168,9 @@ class BaseModel(sklb.BaseEstimator):
         """Derived classes can set additional default parameters here"""
         pass
 
+    def _ename(self, electrode):
+        return '%s%d' % (electrode[0], int(electrode[1:]))
+
     @abc.abstractmethod
     def _builds_retinal_grid(self):
         raise NotImplementedError
@@ -180,11 +183,10 @@ class BaseModel(sklb.BaseEstimator):
         # Calculate current maps only if necessary:
         # - Get a list of all electrodes for which we already have a curr map,
         #   but trim the zeros before the number, e.g. 'A01' => 'A1'
-        has_el = set(self._curr_map.keys())
-        has_el = set(['%s%d' % (e[0], int(e[1:])) for e in has_el])
+        has_el = set([self._ename(k) for k in self._curr_map.keys()])
         # - Compare with electrodes in `X` to find the ones we don't have,
         #   but trim the zeros:
-        wants_el = set(['%s%d' % (e[0], int(e[1:])) for e in set(X.electrode)])
+        wants_el = set([self._ename(e) for e in set(X.electrode)])
         needs_el = wants_el.difference(has_el)
         # - Calculate the current maps for the missing electrodes:
         curr_map = p2pu.parfor(self._calcs_curr_map, needs_el,
@@ -224,7 +226,7 @@ class BaseModel(sklb.BaseEstimator):
         _, row = Xrow
         assert isinstance(row, pd.core.series.Series)
         # Calculate current map with method from derived class:
-        curr_map = self._curr_map[row['electrode']]
+        curr_map = self._curr_map[self._ename(row['electrode'])]
         if not isinstance(curr_map, np.ndarray):
             raise TypeError(("Method '_curr_map' must return a np.ndarray, "
                              "not '%s'." % type(curr_map)))

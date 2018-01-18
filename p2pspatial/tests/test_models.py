@@ -15,7 +15,7 @@ import pytest
 
 def get_dummy_data(nrows=3, img_in_shape=(10, 10), img_out_shape=(10, 10)):
     # Choose from the following electrodes
-    electrodes = ['A01', 'A2', 'A03', 'A3', 'A04']
+    electrodes = ['A01', 'A2', 'A03', 'A3', 'A04', 'B01', 'B2']
     data = []
     for _ in range(nrows):
         img = np.random.rand(np.prod(img_in_shape)).reshape(img_in_shape)
@@ -220,6 +220,10 @@ def test_ModelA():
     npt.assert_equal(model.rho, 123)
     model.fit(X, rho=987)
     npt.assert_equal(model.rho, 987)
+
+    # Some electrodes in the test set might not be in the train set:
+    X.loc[0, 'electrode'] = 'F09'
+    model.predict(X)
 
     for electrode, cm in six.iteritems(model._curr_map):
         # Current maps must be in [0, 1]
