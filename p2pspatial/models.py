@@ -157,6 +157,9 @@ class BaseModel(sklb.BaseEstimator):
                 'yrange': self.yrange,
                 'xystep': self.xystep,
                 'img_thresh': self.img_thresh,
+                'w_scale': self.w_scale,
+                'w_rot': self.w_rot,
+                'w_dice': self.w_dice,
                 'engine': self.engine,
                 'scheduler': self.scheduler,
                 'n_jobs': self.n_jobs}
