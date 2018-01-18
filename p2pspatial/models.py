@@ -273,7 +273,7 @@ class BaseModel(sklb.BaseEstimator):
 
         # Compute the scaling factor / rotation angle / dice coefficient loss:
         # The loss function expects a tupel of two DataFrame rows
-        losses = p2pu.parfor(imgproc.scale_rot_dice_loss,
+        losses = p2pu.parfor(imgproc.srd_loss,
                              zip(y.iterrows(), y_pred.iterrows()),
                              func_kwargs={'w_scale': self.w_scale,
                                           'w_rot': self.w_rot,

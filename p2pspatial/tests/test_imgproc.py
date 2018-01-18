@@ -6,6 +6,7 @@ import pytest
 import numpy.testing as npt
 
 import skimage.measure as skim
+import skimage.transform as skit
 
 from .. import imgproc
 
@@ -100,33 +101,42 @@ def test_dice_coeff():
     img1[4:6, :] = 1
     npt.assert_almost_equal(imgproc.dice_coeff(img1, img1), 1)
     npt.assert_almost_equal(imgproc.dice_coeff(img0, img1), 40 / 110.0)
+    npt.assert_almost_equal(imgproc.dice_coeff(img1, img0), 40 / 110.0)
 
 
-def test_scale_rot_dice_loss():
+def test_srd_loss():
     # `images` must be a tuple of images or rows in a pandas DataFrame:
     for images in [0, [1, 2], (1, 2), [[3, 4]], ((0, 1), (1, 2))]:
         with pytest.raises(TypeError):
-            imgproc.scale_rot_dice_loss(images)
+            imgproc.srd_loss(images)
     # Even if a DataFrame is passed, it needs to have a valid 'image' column
     # with an np.ndarray in it:
     X = pd.DataFrame([[1], [2]], columns=['image'])
     with pytest.raises(TypeError):
-        imgproc.scale_rot_dice_loss(([0, X], [1, X]))
+        imgproc.srd_loss(([0, X], [1, X]))
 
     # Two identical images have zero loss, except when they are empty:
     img = np.zeros((200, 200), dtype=np.double)
-    npt.assert_almost_equal(imgproc.scale_rot_dice_loss([img, img]), 100)
-    img[90:110, 90:110] = 1
-    npt.assert_almost_equal(imgproc.scale_rot_dice_loss([img, img]), 0)
+    npt.assert_almost_equal(imgproc.srd_loss([img, img]), 100)
+    img[90:110, 90:120] = 1
+    img[130, 140] = 1
+    npt.assert_almost_equal(imgproc.srd_loss([img, img]), 0)
 
-    # # Scale term should be symmetric around 1: scaling with 0.5 and 2.0 should
-    # # give the same error
-    # for scale in [1, 2, 4]:
-    #     print(scale)
-    #     img_small = imgproc.scale_phosphene(img, 1.0 / scale)
-    #     err_small = imgproc.scale_rot_dice_loss(
-    #         (img, img_small), w_rot=0, w_dice=0)
-    #     img_large = imgproc.scale_phosphene(img, scale)
-    #     err_large = imgproc.scale_rot_dice_loss(
-    #         (img, img_large), w_rot=0, w_dice=0)
-    #     npt.assert_almost_equal(err_small, err_large)
+    # Scale term should be symmetric around 1: scaling with 0.5 and 2.0 should
+    # give the same error
+    for scale in [1, 2, 4]:
+        img_scaled = imgproc.scale_phosphene(img, scale)
+        npt.assert_almost_equal(
+            imgproc.srd_loss((img, img_scaled), w_rot=0, w_dice=0),
+            imgproc.srd_loss((img_scaled, img), w_rot=0, w_dice=0)
+        )
+
+    # Rotation term should be symmetric around 0: rotation by +10deg and -10deg
+    # should give the same error
+    for rot in [0, 5, 10, 20]:
+        print('rot:', rot)
+        img_rot = skit.rotate(img, rot, order=3)
+        npt.assert_almost_equal(
+            imgproc.srd_loss((img, img_rot), w_scale=0, w_dice=0),
+            imgproc.srd_loss((img_rot, img), w_scale=0, w_dice=0)
+        )

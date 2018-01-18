@@ -426,7 +426,8 @@ class SpatialModelRegressor(sklb.BaseEstimator, sklb.RegressorMixin):
         y_pred = self.predict(X)
         assert np.allclose(y_pred.index, y.index)
 
-        losses = p2p.utils.parfor(imgproc.scale_rot_dice_loss,
+        # Calculate the scale-rot-dice loss
+        losses = p2p.utils.parfor(imgproc.srd_loss,
                                   zip(y.iterrows(), y_pred.iterrows()))
         loss = np.mean(losses)
         return loss

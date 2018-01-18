@@ -163,8 +163,7 @@ def dice_coeff(image0, image1):
     return 2 * np.sum(img0 * img1) / (np.sum(img0) + np.sum(img1) + 1e-12)
 
 
-def scale_rot_dice_loss(images, n_angles=73, w_scale=33, w_rot=34, w_dice=33,
-                        return_raw=False):
+def srd_loss(images, n_angles=37, w_scale=33, w_rot=34, w_dice=33):
     """Calculates new loss function"""
     # Unpack `images` into two images, which can be a bit of pain: Most common
     # used case is when zip(y_true.iterrows(), y_pred.iterrows()) is passed
@@ -214,30 +213,28 @@ def scale_rot_dice_loss(images, n_angles=73, w_scale=33, w_rot=34, w_dice=33,
         return w_scale + w_rot + w_dice
 
     img_scale = np.sqrt(area_true / area_pred)
-    print('scale:', img_scale, '1/scale:', 1 / img_scale)
     img_pred = scale_phosphene(img_pred, img_scale)
 
     # Area loss: Make symmetric around 1, so that a scaling factor of 0.5 and
     # 2 both have the same loss. Bound the error in [0, 10] first, then scale
     # to [0, 1]
-    loss_scale = np.maximum(img_scale, np.sqrt(area_pred / area_true)) - 1
-    loss_scale = np.minimum(10, loss_scale) / 10.0
+    max_scale = 10.0
+    loss_scale = np.maximum(img_scale, 1.0 / img_scale) - 1
+    loss_scale = np.minimum(max_scale, loss_scale) / max_scale
 
     # Rotation loss: Rotate the phosphene so that the dice coefficient is
-    # maximized. If multiple angles give the same dice coefficient, choose
-    # the smallest angle. Scale the loss to [0, 1]
+    # maximized (using bi-cubic interpolation):
+    max_rot = 180.0
     angles = np.linspace(-180, 180, n_angles)
-    dice = [dice_coeff(img_true, skit.rotate(img_pred, r)) for r in angles]
-    loss_rot = np.abs(angles[np.isclose(dice, np.max(dice))]).min() / 180.0
+    dice = [dice_coeff(img_true, skit.rotate(img_pred, r, order=3))
+            for r in angles]
+    # If multiple angles give the same dice coefficient, choose the smallest
+    # angle. Scale the loss to [0, 1]:
+    loss_rot = np.abs(angles[np.isclose(dice, np.max(dice))]).min() / max_rot
 
     # Dice loss: Turn the dice coefficient into a loss in [0, 1]
     loss_dice = 1 - np.max(dice)
 
-    # Now all terms are in [0, 1], but by default loss is in [0, 100]
-    loss = w_scale * loss_scale + w_rot * loss_rot + w_dice * loss_dice
-    if return_raw:
-        # Return the loss plus the individual terms
-        return loss, loss_scale, loss_rot, loss_dice
-    else:
-        # Return the loss only
-        return loss
+    # Now all terms are in [0, 1], combine with weights (by default, loss is
+    # in [0, 100]):
+    return w_scale * loss_scale + w_rot * loss_rot + w_dice * loss_dice
