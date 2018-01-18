@@ -51,24 +51,24 @@ def main():
     subject = sys.argv[2]
     assert subject in ['12-005', '51-009', '52-001']
     try:
-        longopts = ["n_folds=", "n_jobs", "amplitude",
-                    "w_scale", "w_rot", "w_dice"]
+        longopts = ["n_folds=", "n_jobs=", "amplitude=",
+                    "w_scale=", "w_rot=", "w_dice="]
         opts, args = getopt.getopt(sys.argv[3:], "", longopts=longopts)
     except getopt.GetoptError as err:
         raise RuntimeError(err)
     for o, a in opts:
         if o == "--n_folds":
-            n_folds = int(n_folds)
+            n_folds = int(a)
         elif o == "--n_jobs":
-            n_jobs = int(n_jobs)
+            n_jobs = int(a)
         elif o == "--amplitude":
-            amplitude = float(amplitude)
+            amplitude = float(a)
         elif o == "--w_scale":
-            w_scale = float(w_scale)
+            w_scale = float(a)
         elif o == "--w_rot":
-            w_rot = float(w_rot)
+            w_rot = float(a)
         elif o == "--w_dice":
-            w_dice = float(w_dice)
+            w_dice = float(a)
         else:
             raise ValueError("Unknown option '%s'='%s'" % (o, a))
 
