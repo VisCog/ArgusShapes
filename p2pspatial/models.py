@@ -131,9 +131,9 @@ class BaseModel(sklb.BaseEstimator):
         self.w_dice = 34
 
         # JobLib or Dask can be used to parallelize computations:
-        self.engine = 'serial'
+        self.engine = 'joblib'
         self.scheduler = 'threading'
-        self.n_jobs = 1
+        self.n_jobs = -1
 
         # We will store the current map for each electrode in a dict: Since we
         # are usually fitting to individual drawings, we don't want to
