@@ -400,7 +400,7 @@ class SpatialModelRegressor(sklb.BaseEstimator, sklb.RegressorMixin):
         assert isinstance(row, pd.core.series.Series)
         img = self.sim.pulse2percept(row['electrode'], row['amp'])
         img = imgproc.get_thresholded_image(img, thresh=1,
-                                            res_shape=row['img_shape'])
+                                            out_shape=row['img_shape'])
         y_pred = {'image': img}
         return y_pred
 

@@ -1,27 +1,66 @@
-import os
 import numpy as np
 import pandas as pd
+import six
+import os.path
 
+import skimage
 import skimage.io as skio
 import skimage.filters as skif
 import skimage.transform as skit
 import skimage.measure as skim
 
 
-def get_thresholded_image(img, thresh='min', res_shape=None, verbose=True):
-    if res_shape is not None:
-        img = skit.resize(img, res_shape, mode='reflect')
-    if thresh == 'min':
+def get_thresholded_image(img, thresh=0, out_shape=None, verbose=True):
+    """Thresholds an image
+
+    Parameters
+    ----------
+    image : ndarray
+        Input image.
+    thresh : int, float, or string
+        Threshold value
+    out_shape : tuple, list, or ndarray
+        Size of the generated output image (rows, cols[, ...][, dim]). If 'dim'
+        is not provided, the number of channels is preserved. In case the
+        number of input channels does not equal the number of output channels
+        a n-dimensional interpolation is applied.
+    """
+    if not isinstance(img, np.ndarray):
+        raise TypeError("'img' must be a np.ndarray.")
+    if not isinstance(thresh, (int, float, six.string_types)):
+        raise TypeError(("'thresh' must be an int, float, or a string; not "
+                         "%s." % type(thresh)))
+
+    # Rescale the image if `out_shape` is given
+    if out_shape is not None:
+        if not isinstance(out_shape, (tuple, list, np.ndarray)):
+            raise TypeError("'out_shape' must be a tuple, list, or np.ndarray")
+        img = skit.resize(img, out_shape, mode='reflect')
+
+    # Find the numerical threshold to apply, either using a known scikit-image
+    # method, or by applying the provided int, float directly:
+    if isinstance(thresh, six.string_types):
+        methods = {'otsu': skif.threshold_otsu,
+                   'li': skif.threshold_li,
+                   'min': skif.threshold_minimum,
+                   'mean': skif.threshold_mean}
+        if thresh not in methods:
+            raise ValueError(("Unknown thresholding method '%s'. Choose from: "
+                              "'%s'." % (thresh, "', '".join(methods.keys()))))
         try:
-            thresh = skif.threshold_minimum(img)
+            th = methods[thresh](img)
         except RuntimeError:
+            # If fancy thresholding fails, drop back to simple method
+            th = (img.max() - img.min()) / 2.0
             if verbose:
-                print('Runtime error with minimum threshold')
-            thresh = (img.max() - img.min()) // 2
+                print(("Runtime error with %s, choose thresh=%f "
+                       "instead." % (methods[thresh], th)))
     else:
-        assert isinstance(thresh, (int, float))
-    img_th = img > thresh
-    return img_th.astype(np.uint8) * 255
+        # Directly apply the provided int, float
+        th = thresh
+
+    # Apply threshold and convert image to 8-bit
+    return skimage.img_as_ubyte(img > th)
 
 
 def get_avg_image(X, subject, electrode, amp=None, align_center=None):
@@ -50,14 +89,14 @@ def get_avg_image(X, subject, electrode, amp=None, align_center=None):
     return avg_img
 
 
-def get_region_props(img, thresh='min', res_shape=None, return_all=False):
-    img = get_thresholded_image(img, thresh=thresh, res_shape=res_shape)
+def get_region_props(img, thresh='min', out_shape=None, return_all=False):
+    img = get_thresholded_image(img, thresh=thresh, out_shape=out_shape)
     if img is None:
         return None
 
     regions = skim.regionprops(img)
     if len(regions) == 0:
-        #print('No regions: min=%f max=%f' % (img.min(), img.max()))
+        # print('No regions: min=%f max=%f' % (img.min(), img.max()))
         return None
     elif len(regions) == 1:
         return regions[0]
@@ -97,29 +136,72 @@ def scale_phosphene(img, scale):
     return skit.warp(img, (tf_shift + (tf_scale + tf_shift_inv)).inverse)
 
 
-def dice_coeff(img0, img1):
-    """Computes dice coefficient"""
-    img0 = img0 > 0
-    img1 = img1 > 0
-    return 2 * np.sum(img0 * img1) / (np.sum(img0) + np.sum(img1))
+def dice_coeff(image0, image1):
+    """Computes dice coefficient
+
+    Parameters
+    ----------
+    image0: np.ndarray
+        First image
+    image1: np.ndarray
+        Second image
+
+    Notes
+    -----
+    Two empty images give dice coefficient 0.
+    """
+    if not isinstance(image0, np.ndarray):
+        raise TypeError("'image0' must be of type np.ndarray.")
+    if not isinstance(image1, np.ndarray):
+        raise TypeError("'image1' must be of type np.ndarray.")
+    if not np.all(image0.shape == image1.shape):
+        raise ValueError(("'image0' and 'image1' must have the same shape "
+                          "(%s) vs. (%s)" % (", ".join(image0.shape),
+                                             ", ".join(image1.shape))))
+    img0 = image0 > 0
+    img1 = image1 > 0
+    return 2 * np.sum(img0 * img1) / (np.sum(img0) + np.sum(img1) + 1e-12)
 
 
 def scale_rot_dice_loss(images, n_angles=73, w_scale=33, w_rot=34, w_dice=33,
                         return_raw=False):
     """Calculates new loss function"""
-    (_, y_true_row), (_, y_pred_row) = images
-    assert isinstance(y_true_row, pd.core.series.Series)
-    assert isinstance(y_pred_row, pd.core.series.Series)
+    # Unpack `images` into two images, which can be a bit of pain: Most common
+    # used case is when zip(y_true.iterrows(), y_pred.iterrows()) is passed
+    type_msg = ("'images' must be a tuple of either two images or two rows in "
+                "a pandas DataFrame with an 'image' column.")
+    if not isinstance(images, (list, tuple)):
+        raise TypeError(type_msg)
+    imgs = []
+    for item in images[:2]:
+        if isinstance(item, np.ndarray):
+            # `item` is an image, make sure it's of dtype double, otherwise
+            # the moment function is off
+            imgs.append(skimage.img_as_float(item))
+        elif isinstance(item, (list, tuple)):
+            # `item` is probably a row of a pandas DataFrame
+            _, row = item
+            if not isinstance(row, pd.core.series.Series):
+                raise TypeError(type_msg)
+            if (not hasattr(row, 'image') or hasattr(row, 'image') and
+                    not isinstance(row['image'], np.ndarray)):
+                raise TypeError(type_msg)
+            # Make sure image is saved with dtype double, otherwise the moment
+            # function is off
+            imgs.append(skimage.img_as_float(row['image']))
+        else:
+            raise TypeError(type_msg)
 
-    img_true = y_true_row['image']
-    img_pred = y_pred_row['image']
-    assert isinstance(img_true, np.ndarray)
-    assert isinstance(img_pred, np.ndarray)
+    img_true, img_pred = imgs
     if not np.allclose(img_true.shape, img_pred.shape):
-        print('img_true:', img_true.shape)
-        print('img_pred:', img_pred.shape)
-        assert False
+        raise ValueError(("Both images must have the same shape, img_true=(%s)"
+                          " img_pred=(%s)" % (", ".join(img_true.shape),
+                                              ", ".join(img_pred.shape))))
+    if img_true.dtype != img_pred.dtype:
+        raise ValueError(("Both images must have the same dtype, img_true=%s "
+                          "img_pred=%s" % (img_true.dtype, img_pred.dtype)))
 
+    # Center the phosphenes in the image:
     img_true = center_phosphene(img_true)
     img_pred = center_phosphene(img_pred)
 
@@ -127,14 +209,18 @@ def scale_rot_dice_loss(images, n_angles=73, w_scale=33, w_rot=34, w_dice=33,
     area_true = skim.moments(img_true, order=0)[0, 0]
     area_pred = skim.moments(img_pred, order=0)[0, 0]
     if np.isclose(area_true, 0) or np.isclose(area_pred, 0):
-        return 100
+        # If one of the images is empty, the following analysis is not
+        # meaningful, and we simply return the max loss:
+        return w_scale + w_rot + w_dice
 
-    img_pred = scale_phosphene(img_pred, area_true / area_pred)
+    img_scale = np.sqrt(area_true / area_pred)
+    print('scale:', img_scale, '1/scale:', 1 / img_scale)
+    img_pred = scale_phosphene(img_pred, img_scale)
 
     # Area loss: Make symmetric around 1, so that a scaling factor of 0.5 and
     # 2 both have the same loss. Bound the error in [0, 10] first, then scale
     # to [0, 1]
-    loss_scale = np.maximum(area_true / area_pred, area_pred / area_true) - 1
+    loss_scale = np.maximum(img_scale, np.sqrt(area_pred / area_true)) - 1
     loss_scale = np.minimum(10, loss_scale) / 10.0
 
     # Rotation loss: Rotate the phosphene so that the dice coefficient is
@@ -150,6 +236,8 @@ def scale_rot_dice_loss(images, n_angles=73, w_scale=33, w_rot=34, w_dice=33,
     # Now all terms are in [0, 1], but by default loss is in [0, 100]
     loss = w_scale * loss_scale + w_rot * loss_rot + w_dice * loss_dice
     if return_raw:
+        # Return the loss plus the individual terms
         return loss, loss_scale, loss_rot, loss_dice
     else:
+        # Return the loss only
         return loss

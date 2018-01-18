@@ -64,7 +64,7 @@ def displace(xy, eye='RE'):
 
 class CoordTrafoMixin(object):
 
-    def _build_retinal_grid(self):
+    def _builds_retinal_grid(self):
         # Build the grid from `x_range`, `y_range`:
         nx = int(np.ceil((np.diff(self.xrange) + 1) / self.xystep))
         ny = int(np.ceil((np.diff(self.yrange) + 1) / self.xystep))
@@ -81,7 +81,7 @@ class CoordTrafoMixin(object):
 
 class RetinalGridMixin(object):
 
-    def _build_retinal_grid(self):
+    def _builds_retinal_grid(self):
         # Build the grid from `x_range`, `y_range`:
         nx = int(np.ceil((np.diff(self.xrange) + 1) / self.xystep))
         ny = int(np.ceil((np.diff(self.yrange) + 1) / self.xystep))
@@ -143,8 +143,8 @@ class BaseModel(sklb.BaseEstimator):
         # This flag will be flipped once the ``fit`` method was called
         self._is_fitted = False
 
-        # Additional parameters can be set using ``_set_default_params``
-        self._set_default_params()
+        # Additional parameters can be set using ``_sets_default_params``
+        self._sets_default_params()
         self.set_params(**kwargs)
 
     def get_params(self, deep=True):
@@ -161,26 +161,30 @@ class BaseModel(sklb.BaseEstimator):
                 'scheduler': self.scheduler,
                 'n_jobs': self.n_jobs}
 
-    def _set_default_params(self):
+    def _sets_default_params(self):
         """Derived classes can set additional default parameters here"""
         pass
 
     @abc.abstractmethod
-    def _build_retinal_grid(self):
+    def _builds_retinal_grid(self):
         raise NotImplementedError
 
     @abc.abstractmethod
-    def _calc_curr_map(self, Xrow):
+    def _calcs_curr_map(self, Xrow):
         raise NotImplementedError
 
     def calc_curr_map(self, X):
         # Calculate current maps only if necessary:
-        # - Get a list of all electrodes for which we already have a curr map:
+        # - Get a list of all electrodes for which we already have a curr map,
+        #   but trim the zeros before the number, e.g. 'A01' => 'A1'
         has_el = set(self._curr_map.keys())
-        # - Compare with electrodes in `X` to find the ones we don't have:
-        needs_el = set(X.electrode).difference(has_el)
+        has_el = set(['%s%d' % (e[0], int(e[1:])) for e in has_el])
+        # - Compare with electrodes in `X` to find the ones we don't have,
+        #   but trim the zeros:
+        wants_el = set(['%s%d' % (e[0], int(e[1:])) for e in set(X.electrode)])
+        needs_el = wants_el.difference(has_el)
         # - Calculate the current maps for the missing electrodes:
-        curr_map = p2pu.parfor(self._calc_curr_map, needs_el,
+        curr_map = p2pu.parfor(self._calcs_curr_map, needs_el,
                                engine=self.engine, scheduler=self.scheduler,
                                n_jobs=self.n_jobs)
         # - Store the new current maps:
@@ -200,30 +204,37 @@ class BaseModel(sklb.BaseEstimator):
         # Instantiate implant:
         if not isinstance(self.implant_type, type):
             raise TypeError(("'implant_type' must be a type, not "
-                             "'%s'." % type(implant_type)))
+                             "'%s'." % type(self.implant_type)))
         self.implant = self.implant_type(x_center=self.implant_x,
                                          y_center=self.implant_y,
                                          rot=self.implant_rot)
         # Convert dva to retinal coordinates:
-        self._build_retinal_grid()
+        self._builds_retinal_grid()
         # Calculate current spread for every electrode in `X`:
         self.calc_curr_map(X)
         # Inform the object that is has been fitted:
         self._is_fitted = True
         return self
 
-    def _predict(self, Xrow):
+    def _predicts(self, Xrow):
         """Predicts a single data point"""
         _, row = Xrow
         assert isinstance(row, pd.core.series.Series)
-        res_shape = None
-        if 'img_shape' in row:
-            res_shape = row['img_shape']
-        elif 'image' in row:
-            res_shape = row['image'].image
+        # Calculate current map with method from derived class:
         curr_map = self._curr_map[row['electrode']]
+        if not isinstance(curr_map, np.ndarray):
+            raise TypeError(("Method '_curr_map' must return a np.ndarray, "
+                             "not '%s'." % type(curr_map)))
+        # Rescale output if specified:
+        out_shape = None
+        if hasattr(row, 'img_shape'):
+            out_shape = row['img_shape']
+        elif hasattr(row, 'image'):
+            out_shape = row['image'].shape
+        # Apply threshold to arrive at binarized image:
+        assert hasattr(self, 'img_thresh')
         img = imgproc.get_thresholded_image(curr_map, thresh=self.img_thresh,
-                                            res_shape=res_shape)
+                                            out_shape=out_shape)
         return {'image': img}
 
     def predict(self, X):
@@ -239,7 +250,7 @@ class BaseModel(sklb.BaseEstimator):
         self.calc_curr_map(X)
 
         # Predict attributes of region props (area, orientation, etc.)
-        y_pred = p2pu.parfor(self._predict, X.iterrows(),
+        y_pred = p2pu.parfor(self._predicts, X.iterrows(),
                              engine=self.engine, scheduler=self.scheduler,
                              n_jobs=self.n_jobs)
 
@@ -275,7 +286,7 @@ class BaseModel(sklb.BaseEstimator):
 class ModelA(RetinalGridMixin, BaseModel):
     """Scoreboard model"""
 
-    def _set_default_params(self):
+    def _sets_default_params(self):
         """Sets default parameters of the scoreboard model"""
         # Current spread falls off exponentially from electrode center:
         self.rho = 100
@@ -285,15 +296,13 @@ class ModelA(RetinalGridMixin, BaseModel):
         params.update(rho=self.rho)
         return params
 
-    def _calc_curr_map(self, electrode):
+    def _calcs_curr_map(self, electrode):
         """Calculates the current map for a specific electrode"""
         assert isinstance(electrode, six.string_types)
-        # Find the `implant` index by trimming zeros in the electrode name
-        ename = '%s%d' % (electrode[0], int(electrode[1:]))
-        if not self.implant[ename]:
-            raise ValueError("Electrode '%s' could not be found." % ename)
-        r2 = (self.xret - self.implant[ename].x_center) ** 2
-        r2 += (self.yret - self.implant[ename].y_center) ** 2
+        if not self.implant[electrode]:
+            raise ValueError("Electrode '%s' could not be found." % electrode)
+        r2 = (self.xret - self.implant[electrode].x_center) ** 2
+        r2 += (self.yret - self.implant[electrode].y_center) ** 2
         cm = np.exp(-r2 / (2.0 * self.rho ** 2))
         return electrode, cm
 
