@@ -30,7 +30,8 @@ def get_dummy_data(nrows=3, img_in_shape=(10, 10), img_out_shape=(10, 10)):
     return X
 
 
-class DummyModel(models.RetinalGridMixin, models.BaseModel):
+class DummyModel(models.RetinalGridMixin, models.ScaleRotateDiceLoss,
+                 models.BaseModel):
 
     def _calcs_curr_map(self, electrode):
         return electrode, np.array([[0]])
@@ -215,6 +216,10 @@ def test_ModelA():
     model = models.ModelA(implant_type=p2pi.ArgusII, engine='serial')
     npt.assert_equal(hasattr(model, 'rho'), True)
 
+    # Model A uses the SRD loss, should have `greater_is_better` set to False
+    npt.assert_equal(hasattr(model, 'greater_is_better'), True)
+    npt.assert_equal(model.greater_is_better, False)
+
     # User can set `rho`:
     model.set_params(rho=123)
     npt.assert_equal(model.rho, 123)
@@ -240,6 +245,10 @@ def test_ModelB():
     X = get_dummy_data(nrows=10)
     model = models.ModelB(implant_type=p2pi.ArgusII, engine='serial')
     npt.assert_equal(hasattr(model, 'rho'), True)
+
+    # Model B uses the SRD loss, should have `greater_is_better` set to False
+    npt.assert_equal(hasattr(model, 'greater_is_better'), True)
+    npt.assert_equal(model.greater_is_better, False)
 
     # User can set `rho`:
     model.set_params(rho=123)

@@ -93,6 +93,37 @@ class RetinalGridMixin(object):
         self.yret = p2pr.dva2ret(ydva)
 
 
+class ScaleRotateDiceLoss(object):
+    # The new scoring function is actually a loss function, so that
+    # greater values do *not* imply that the estimator is better (required
+    # for ParticleSwarmOptimizer)
+    greater_is_better = False
+
+    def score(self, X, y, sample_weight=None):
+        """Score the model using the new loss function"""
+        if not isinstance(X, pd.core.frame.DataFrame):
+            raise TypeError("'X' must be a pandas DataFrame, not %s" % type(X))
+        if not isinstance(y, pd.core.frame.DataFrame):
+            raise TypeError("'y' must be a pandas DataFrame, not %s" % type(y))
+
+        y_pred = self.predict(X)
+
+        # `y` and `y_pred` must have the same index, otherwise subtraction
+        # produces nan
+        assert np.allclose(y_pred.index, y.index)
+
+        # Compute the scaling factor / rotation angle / dice coefficient loss:
+        # The loss function expects a tupel of two DataFrame rows
+        losses = p2pu.parfor(imgproc.srd_loss,
+                             zip(y.iterrows(), y_pred.iterrows()),
+                             func_kwargs={'w_scale': self.w_scale,
+                                          'w_rot': self.w_rot,
+                                          'w_dice': self.w_dice},
+                             engine=self.engine, scheduler=self.scheduler,
+                             n_jobs=self.n_jobs)
+        return np.mean(losses)
+
+
 @six.add_metaclass(abc.ABCMeta)
 class BaseModel(sklb.BaseEstimator):
 
@@ -117,11 +148,6 @@ class BaseModel(sklb.BaseEstimator):
 
         # Current maps are thresholded to produce a binary image:
         self.img_thresh = 0.1
-
-        # The new scoring function is actually a loss function, so that
-        # greater values do *not* imply that the estimator is better (required
-        # for ParticleSwarmOptimizer)
-        self.greater_is_better = False
 
         # By default, the loss function will return values in [0, 100], scoring
         # the scaling factor, rotation angle, and dice coefficient of precition
@@ -263,32 +289,12 @@ class BaseModel(sklb.BaseEstimator):
         # subtraction in the scoring function produces nan)
         return pd.DataFrame(y_pred, index=X.index)
 
+    @abc.abstractmethod
     def score(self, X, y, sample_weight=None):
-        """Score the model using the new loss function"""
-        if not isinstance(X, pd.core.frame.DataFrame):
-            raise TypeError("'X' must be a pandas DataFrame, not %s" % type(X))
-        if not isinstance(y, pd.core.frame.DataFrame):
-            raise TypeError("'y' must be a pandas DataFrame, not %s" % type(y))
-
-        y_pred = self.predict(X)
-
-        # `y` and `y_pred` must have the same index, otherwise subtraction
-        # produces nan
-        assert np.allclose(y_pred.index, y.index)
-
-        # Compute the scaling factor / rotation angle / dice coefficient loss:
-        # The loss function expects a tupel of two DataFrame rows
-        losses = p2pu.parfor(imgproc.srd_loss,
-                             zip(y.iterrows(), y_pred.iterrows()),
-                             func_kwargs={'w_scale': self.w_scale,
-                                          'w_rot': self.w_rot,
-                                          'w_dice': self.w_dice},
-                             engine=self.engine, scheduler=self.scheduler,
-                             n_jobs=self.n_jobs)
-        return np.mean(losses)
+        raise NotImplementedError
 
 
-class ModelA(RetinalGridMixin, BaseModel):
+class ScoreboardModel(BaseModel):
     """Scoreboard model"""
 
     def _sets_default_params(self):
@@ -297,7 +303,7 @@ class ModelA(RetinalGridMixin, BaseModel):
         self.rho = 100
 
     def get_params(self, deep=True):
-        params = super(ModelA, self).get_params(deep=deep)
+        params = super(ScoreboardModel, self).get_params(deep=deep)
         params.update(rho=self.rho)
         return params
 
@@ -312,7 +318,12 @@ class ModelA(RetinalGridMixin, BaseModel):
         return electrode, cm
 
 
-class ModelB(CoordTrafoMixin, ModelA):
-    """Scoreboard model with perspective transform"""
+class ModelA(RetinalGridMixin, ScaleRotateDiceLoss, ScoreboardModel):
+    """Scoreboard model with SRD loss"""
+    pass
+
+
+class ModelB(CoordTrafoMixin, ScaleRotateDiceLoss, ScoreboardModel):
+    """Scoreboard model with perspective transform and SRD loss"""
 
     pass

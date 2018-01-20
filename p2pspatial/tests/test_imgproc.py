@@ -134,7 +134,6 @@ def test_srd_loss():
     # Rotation term should be symmetric around 0: rotation by +10deg and -10deg
     # should give the same error
     for rot in [0, 5, 10, 20]:
-        print('rot:', rot)
         img_rot = skit.rotate(img, rot, order=3)
         npt.assert_almost_equal(
             imgproc.srd_loss((img, img_rot), w_scale=0, w_dice=0),
