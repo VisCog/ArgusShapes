@@ -93,11 +93,31 @@ class RetinalGridMixin(object):
         self.yret = p2pr.dva2ret(ydva)
 
 
+class ImageMomentsLoss(object):
+    greater_is_better = False
+
+    def _predics_target_values(self, img):
+        area = 0
+        orientation = 0
+        major_axis_length = 0
+        minor_axis_length = 0
+        return {'area': area,
+                'orientation': orientation,
+                'major_axis_length': major_axis_length,
+                'minor_axis_length': minor_axis_length}
+
+    def score(self, X, y, sample_weight=None):
+        return 100
+
+
 class ScaleRotateDiceLoss(object):
     # The new scoring function is actually a loss function, so that
     # greater values do *not* imply that the estimator is better (required
     # for ParticleSwarmOptimizer)
     greater_is_better = False
+
+    def _predicts_target_values(self, img):
+        return {'image': img}
 
     def score(self, X, y, sample_weight=None):
         """Score the model using the new loss function"""
@@ -195,14 +215,17 @@ class BaseModel(sklb.BaseEstimator):
         pass
 
     def _ename(self, electrode):
+        """Returns electrode name with zeros trimmed"""
         return '%s%d' % (electrode[0], int(electrode[1:]))
 
     @abc.abstractmethod
     def _builds_retinal_grid(self):
+        """Must build `self.xret` and `self.yret`"""
         raise NotImplementedError
 
     @abc.abstractmethod
-    def _calcs_curr_map(self, Xrow):
+    def _calcs_curr_map(self, electrode):
+        """Must return a tuple (`electrode`, `current_map`)"""
         raise NotImplementedError
 
     def calc_curr_map(self, X):
@@ -247,6 +270,11 @@ class BaseModel(sklb.BaseEstimator):
         self._is_fitted = True
         return self
 
+    @abc.abstractmethod
+    def _predicts_target_values(self, img):
+        """Must return a dict of predicted values, e.g {'image': img}"""
+        raise NotImplementedError
+
     def _predicts(self, Xrow):
         """Predicts a single data point"""
         _, row = Xrow
@@ -266,7 +294,7 @@ class BaseModel(sklb.BaseEstimator):
         assert hasattr(self, 'img_thresh')
         img = imgproc.get_thresholded_image(curr_map, thresh=self.img_thresh,
                                             out_shape=out_shape)
-        return {'image': img}
+        return self._predicts_target_values(img)
 
     def predict(self, X):
         """Compute predicted drawing"""
@@ -280,7 +308,7 @@ class BaseModel(sklb.BaseEstimator):
         # Make sure we calculated the current maps for all electrodes in `X`:
         self.calc_curr_map(X)
 
-        # Predict attributes of region props (area, orientation, etc.)
+        # Predict percept
         y_pred = p2pu.parfor(self._predicts, X.iterrows(),
                              engine=self.engine, scheduler=self.scheduler,
                              n_jobs=self.n_jobs)
@@ -318,12 +346,11 @@ class ScoreboardModel(BaseModel):
         return electrode, cm
 
 
-class ModelA(RetinalGridMixin, ScaleRotateDiceLoss, ScoreboardModel):
+class ModelA(ScaleRotateDiceLoss, RetinalGridMixin, ScoreboardModel):
     """Scoreboard model with SRD loss"""
     pass
 
 
-class ModelB(CoordTrafoMixin, ScaleRotateDiceLoss, ScoreboardModel):
+class ModelB(ScaleRotateDiceLoss, CoordTrafoMixin, ScoreboardModel):
     """Scoreboard model with perspective transform and SRD loss"""
-
     pass

@@ -7,7 +7,7 @@ import sklearn.exceptions as skle
 
 import pulse2percept.implants as p2pi
 import pulse2percept.retina as p2pr
-from .. import models
+from .. import models as m
 
 import numpy.testing as npt
 import pytest
@@ -30,20 +30,22 @@ def get_dummy_data(nrows=3, img_in_shape=(10, 10), img_out_shape=(10, 10)):
     return X
 
 
-class DummyModel(models.RetinalGridMixin, models.ScaleRotateDiceLoss,
-                 models.BaseModel):
+class DummyModel(m.RetinalGridMixin, m.ScaleRotateDiceLoss, m.BaseModel):
 
     def _calcs_curr_map(self, electrode):
         return electrode, np.array([[0]])
 
+    def _predicts_target_values(self, row):
+        return row
+
     def _predicts(self, Xrow):
         """Returns the input (a DataFrame row, without its index)"""
         _, row = Xrow
-        return row
+        return self._predicts_target_values(row)
 
 
 def test_CoordTrafoMixin():
-    trafo = models.CoordTrafoMixin()
+    trafo = m.CoordTrafoMixin()
     trafo.xrange = (-2, 2)
     trafo.yrange = (-1, 1)
     trafo.xystep = 1
@@ -55,13 +57,13 @@ def test_CoordTrafoMixin():
 
     # Make sure transformation is right
     npt.assert_almost_equal(trafo.xret[1, 2],
-                            models.displace(np.array([[0, 0]]))[0],
+                            m.displace(np.array([[0, 0]]))[0],
                             decimal=2)
     npt.assert_almost_equal(trafo.yret[1, 2], 0)
 
 
 def test_RetinalGridMixin():
-    trafo = models.RetinalGridMixin()
+    trafo = m.RetinalGridMixin()
     trafo.xrange = (-2, 2)
     trafo.yrange = (-1, 1)
     trafo.xystep = 1
@@ -213,7 +215,7 @@ def test_BaseModel_score():
 def test_ModelA():
     # Model A automatically sets `rho`:
     X = get_dummy_data(nrows=10)
-    model = models.ModelA(implant_type=p2pi.ArgusII, engine='serial')
+    model = m.ModelA(implant_type=p2pi.ArgusII, engine='serial')
     npt.assert_equal(hasattr(model, 'rho'), True)
 
     # Model A uses the SRD loss, should have `greater_is_better` set to False
@@ -243,7 +245,7 @@ def test_ModelA():
 def test_ModelB():
     # Model B automatically sets `rho`:
     X = get_dummy_data(nrows=10)
-    model = models.ModelB(implant_type=p2pi.ArgusII, engine='serial')
+    model = m.ModelB(implant_type=p2pi.ArgusII, engine='serial')
     npt.assert_equal(hasattr(model, 'rho'), True)
 
     # Model B uses the SRD loss, should have `greater_is_better` set to False
