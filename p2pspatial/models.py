@@ -31,12 +31,6 @@ class BaseModel(sklb.BaseEstimator):
         self.implant_y = 0
         self.implant_rot = 0
 
-        # We will be simulating an x,y patch of the visual field (min, max) in
-        # degrees of visual angle, at a given spatial resolution (step size):
-        self.xrange = (-30, 30)  # dva
-        self.yrange = (-20, 20)  # dva
-        self.xystep = 0.1  # dva
-
         # Current maps are thresholded to produce a binary image:
         self.img_thresh = 0.1
 
@@ -226,11 +220,9 @@ class AxonMapModel(BaseModel):
         super(AxonMapModel, self)._sets_default_params()
         self.rho = 100
         self.axlambda = 1
-
-        # Set the (x,y) location of the optic disc
+        # Set the (x,y) location of the optic disc:
         self.loc_od_x = 15.5
         self.loc_od_y = 1.5
-
         # Set parameters of the Jansonius model: Number of axons and number of
         # segments per axon can be overriden by the user:
         self.n_axons = 501
@@ -246,31 +238,54 @@ class AxonMapModel(BaseModel):
         return params
 
     def build_optic_fiber_layer(self):
+        if self.implant.eye == 'LE':
+            raise NotImplementedError
         # Build the Jansonius model: Grow a number of axons in a range of phi:
         phi = np.linspace(*self._phi_range, num=self.n_axons)
-        jans_kwargs = {'n_rho': self.n_ax_segments, 'rho_range': self._rho_range,
-                       'loc_od': (self.loc_od_x, self.loc_od_y),
-                       'eye': self.implant.eye}
+        jans_kwargs = {'n_rho': self.n_ax_segments, 'eye': self.implant.eye,
+                       'rho_range': self._rho_range,
+                       'loc_od': (self.loc_od_x, self.loc_od_y)}
         self.axon_bundles = p2pu.parfor(p2pr.jansonius2009, phi,
                                         func_kwargs=jans_kwargs,
                                         engine=self.engine, n_jobs=self.n_jobs,
                                         scheduler=self.scheduler)
+        # For each grid location, find the closest axon:
+        xydva = np.column_stack((p2pr.ret2dva(self.xret.ravel()),
+                                 p2pr.ret2dva(self.yret.ravel())))
+        self.axons = p2pu.parfor(p2pr.find_closest_axon, xydva,
+                                 func_args=[self.axon_bundles],
+                                 engine=self.engine, scheduler=self.scheduler,
+                                 n_jobs=self.n_jobs)
+        # For every axon segment, calculate distance to soma. Snap axon
+        # locations to the grid -- THIS IS THE PROBLEM, DONT DO THAT, USE
+        # EXACT VALUES OR FIND A BETTER WAY
+        self.axon_dist = p2pu.parfor(p2pr.axon_dist_from_soma, self.axons,
+                                     func_args=[xydva[:, 0], xydva[:, 1]],
+                                     engine=self.engine, n_jobs=self.n_jobs,
+                                     scheduler=self.scheduler)
 
     def _calcs_el_curr_map(self, electrode):
         """Calculates the current map for a specific electrode"""
         assert isinstance(electrode, six.string_types)
         if not self.implant[electrode]:
             raise ValueError("Electrode '%s' could not be found." % electrode)
-
-        # Calculate current spread
+        # Calculate current spread:
         r2 = (self.xret - self.implant[electrode].x_center) ** 2
         r2 += (self.yret - self.implant[electrode].y_center) ** 2
         cm = np.exp(-r2 / (2.0 * self.rho ** 2))
-
-        # Calculate axonal activation
-        ecm = cm
-
-        return ecm
+        # Calculate axonal activation:
+        func_kwargs = {'sensitivity_rule': 'decay', 'contribution_rule': 'max',
+                       'decay_const': self.axlambda, 'powermean_exp': None}
+        contrib = p2pu.parfor(p2pr.axon_contribution, self.axon_dist,
+                              func_args=[cm], func_kwargs=func_kwargs,
+                              engine=self.engine, scheduler=self.scheduler,
+                              n_jobs=self.n_jobs)
+        # Unpack contrib values (REALLY NECESSARY? THIS IS SO SLOW!)
+        ecm = np.zeros_like(cm)
+        px_contrib = list(filter(None, contrib))
+        for idx, value in px_contrib:
+            ecm.ravel()[idx] = value
+        return ecm / (ecm.max() + np.finfo(float).eps) * cm.max()
 
 
 class RetinalCoordTrafo(object):
@@ -337,13 +352,27 @@ class RetinalCoordTrafo(object):
                                  indexing='xy')
 
         # Convert dva to retinal coordinates
-        xydva = np.vstack((xdva.ravel(), ydva.ravel())).T
+        xydva = np.column_stack((xdva.ravel(), ydva.ravel()))
         xret, yret = self._displaces_rgc(xydva)
         self.xret = xret.reshape(xdva.shape)
         self.yret = yret.reshape(ydva.shape)
 
 
 class RetinalGrid(object):
+
+    def _sets_default_params(self):
+        super(RetinalGrid, self)._sets_default_params()
+        # We will be simulating an x,y patch of the visual field (min, max) in
+        # degrees of visual angle, at a given spatial resolution (step size):
+        self.xrange = (-30, 30)  # dva
+        self.yrange = (-20, 20)  # dva
+        self.xystep = 0.1  # dva
+
+    def get_params(self, deep=True):
+        params = super(RetinalGrid, self).get_params(deep=deep)
+        params.update(xrange=self.xrange, yrange=self.yrange,
+                      xystep=self.xystep)
+        return params
 
     def build_ganglion_cell_layer(self):
         # Build the grid from `x_range`, `y_range`:
@@ -358,7 +387,15 @@ class RetinalGrid(object):
 
 
 class ImageMomentsLoss(object):
-    greater_is_better = False
+
+    def _sets_default_params(self):
+        super(ImageMomentsLoss, self)._sets_default_params()
+        self.greater_is_better = False
+
+    def get_params(self, deep=True):
+        params = super(ImageMomentsLoss, self).get_params(deep=deep)
+        params.update(greater_is_better=self.greater_is_better)
+        return params
 
     def _predicts_target_values(self, img):
         area = 0
@@ -385,17 +422,19 @@ class SRDLoss(object):
       between predicted and target percept
     - the dice coefficient between (adjusted) predicted and target percept
     """
-    # The new scoring function is actually a loss function, so that
-    # greater values do *not* imply that the estimator is better (required
-    # for ParticleSwarmOptimizer)
-    greater_is_better = False
 
-    # By default, the loss function will return values in [0, 100], scoring
-    # the scaling factor, rotation angle, and dice coefficient of precition
-    # vs ground truth with the following weights:
-    w_scale = 34
-    w_rot = 33
-    w_dice = 34
+    def _sets_default_params(self):
+        super(SRDLoss, self)._sets_default_params()
+        # The new scoring function is actually a loss function, so that
+        # greater values do *not* imply that the estimator is better (required
+        # for ParticleSwarmOptimizer)
+        self.greater_is_better = False
+        # By default, the loss function will return values in [0, 100], scoring
+        # the scaling factor, rotation angle, and dice coefficient of precition
+        # vs ground truth with the following weights:
+        self.w_scale = 34
+        self.w_rot = 33
+        self.w_dice = 34
 
     def get_params(self, deep=True):
         params = super(SRDLoss, self).get_params(deep=deep)
