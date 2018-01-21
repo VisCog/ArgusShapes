@@ -14,6 +14,7 @@ import pytest
 
 
 def get_dummy_data(nrows=3, img_in_shape=(10, 10), img_out_shape=(10, 10)):
+    """Helper function for test suite"""
     # Choose from the following electrodes
     electrodes = ['A01', 'A2', 'A03', 'A3', 'A04', 'B01', 'B2']
     data = []
@@ -32,7 +33,7 @@ def get_dummy_data(nrows=3, img_in_shape=(10, 10), img_out_shape=(10, 10)):
 
 class DummyModel(m.RetinalGridMixin, m.ScaleRotateDiceLoss, m.BaseModel):
 
-    def _calcs_curr_map(self, electrode):
+    def _calcs_el_curr_map(self, electrode):
         return electrode, np.array([[0]])
 
     def _predicts_target_values(self, row):
@@ -44,12 +45,60 @@ class DummyModel(m.RetinalGridMixin, m.ScaleRotateDiceLoss, m.BaseModel):
         return self._predicts_target_values(row)
 
 
-def test_CoordTrafoMixin():
+def test_CoordTrafoMixin__cart2pol():
+    trafo = m.CoordTrafoMixin()
+    npt.assert_almost_equal(trafo._cart2pol(0, 0), (0, 0))
+    npt.assert_almost_equal(trafo._cart2pol(10, 0), (0, 10))
+    npt.assert_almost_equal(trafo._cart2pol(3, 4), (np.arctan(4 / 3.0), 5))
+    npt.assert_almost_equal(trafo._cart2pol(4, 3), (np.arctan(3 / 4.0), 5))
+
+
+def test_CoordTrafoMixin__pol2cart():
+    trafo = m.CoordTrafoMixin()
+    npt.assert_almost_equal(trafo._pol2cart(0, 0), (0, 0))
+    npt.assert_almost_equal(trafo._pol2cart(0, 10), (10, 0))
+    npt.assert_almost_equal(trafo._pol2cart(np.arctan(4 / 3.0), 5), (3, 4))
+    npt.assert_almost_equal(trafo._pol2cart(np.arctan(3 / 4.0), 5), (4, 3))
+
+
+def test_CoordTrafoMixin__watson_displacement():
+    trafo = m.CoordTrafoMixin()
+    with pytest.raises(ValueError):
+        trafo._watson_displacement(0, meridian='invalid')
+    npt.assert_almost_equal(trafo._watson_displacement(0), 0.4957506)
+    npt.assert_almost_equal(trafo._watson_displacement(100), 0)
+
+    # Check the max of the displacement function for the temporal meridian:
+    radii = np.linspace(0, 30, 100)
+    all_displace = trafo._watson_displacement(radii, meridian='temporal')
+    npt.assert_almost_equal(np.max(all_displace), 2.153532)
+    npt.assert_almost_equal(radii[np.argmax(all_displace)], 1.8181818)
+
+    # Check the max of the displacement function for the nasal meridian:
+    all_displace = trafo._watson_displacement(radii, meridian='nasal')
+    npt.assert_almost_equal(np.max(all_displace), 1.9228664)
+    npt.assert_almost_equal(radii[np.argmax(all_displace)], 2.1212121)
+
+
+def test_CoordTrafoMixin__displaces_rgc():
+    trafo = m.CoordTrafoMixin()
+    for xy in [1, [1, 2], np.zeros((10, 3))]:
+        with pytest.raises(ValueError):
+            trafo._displaces_rgc(xy)
+
+    npt.assert_almost_equal(
+        trafo._displaces_rgc(np.array([0, 0]).reshape((1, 2))),
+        ([p2pr.dva2ret(trafo._watson_displacement(0))], [0]),
+        decimal=1
+    )
+
+
+def test_CoordTrafoMixin_build_retinal_grid():
     trafo = m.CoordTrafoMixin()
     trafo.xrange = (-2, 2)
     trafo.yrange = (-1, 1)
     trafo.xystep = 1
-    trafo._builds_retinal_grid()
+    trafo.build_retinal_grid()
 
     # Make sure shape is right
     npt.assert_equal(trafo.xret.shape, (3, 5))
@@ -57,7 +106,7 @@ def test_CoordTrafoMixin():
 
     # Make sure transformation is right
     npt.assert_almost_equal(trafo.xret[1, 2],
-                            m.displace(np.array([[0, 0]]))[0],
+                            trafo._displaces_rgc(np.array([[0, 0]]))[0],
                             decimal=2)
     npt.assert_almost_equal(trafo.yret[1, 2], 0)
 
@@ -67,7 +116,7 @@ def test_RetinalGridMixin():
     trafo.xrange = (-2, 2)
     trafo.yrange = (-1, 1)
     trafo.xystep = 1
-    trafo._builds_retinal_grid()
+    trafo.build_retinal_grid()
 
     # Make sure shape is right
     npt.assert_equal(trafo.xret.shape, (3, 5))
@@ -76,6 +125,14 @@ def test_RetinalGridMixin():
     # Make sure transformation is right
     npt.assert_almost_equal(trafo.xret[1, 2], 0)
     npt.assert_almost_equal(trafo.yret[1, 2], 0)
+
+
+def test_ImageMomentLoss():
+    pass
+
+
+def test_ScaleRotateDiceLoss():
+    pass
 
 
 def test_BaseModel___init__():
@@ -221,6 +278,10 @@ def test_ModelA():
     # Model A uses the SRD loss, should have `greater_is_better` set to False
     npt.assert_equal(hasattr(model, 'greater_is_better'), True)
     npt.assert_equal(model.greater_is_better, False)
+    npt.assert_equal(hasattr(model, 'w_scale'), True)
+    npt.assert_equal(hasattr(model, 'w_rot'), True)
+    npt.assert_equal(hasattr(model, 'w_dice'), True)
+    model.set_params(w_scale=34, w_rot=33, w_dice=34)
 
     # User can set `rho`:
     model.set_params(rho=123)
@@ -251,6 +312,10 @@ def test_ModelB():
     # Model B uses the SRD loss, should have `greater_is_better` set to False
     npt.assert_equal(hasattr(model, 'greater_is_better'), True)
     npt.assert_equal(model.greater_is_better, False)
+    npt.assert_equal(hasattr(model, 'w_scale'), True)
+    npt.assert_equal(hasattr(model, 'w_rot'), True)
+    npt.assert_equal(hasattr(model, 'w_dice'), True)
+    model.set_params(w_scale=34, w_rot=33, w_dice=34)
 
     # User can set `rho`:
     model.set_params(rho=123)

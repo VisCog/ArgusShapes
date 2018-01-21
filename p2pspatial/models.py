@@ -15,56 +15,62 @@ import sklearn.exceptions as skle
 from . import imgproc
 
 
-def cart2pol(x, y):
-    theta = np.arctan2(y, x)
-    rho = np.hypot(x, y)
-    return theta, rho
-
-
-def pol2cart(theta, rho):
-    x = rho * np.cos(theta)
-    y = rho * np.sin(theta)
-    return x, y
-
-
-def calc_displacement(r, meridian='temporal'):
-    alpha = np.where(meridian == 'temporal', 1.8938, 2.4607)
-    beta = np.where(meridian == 'temporal', 2.4598, 1.7463)
-    gamma = np.where(meridian == 'temporal', 0.91565, 0.77754)
-    delta = np.where(meridian == 'temporal', 14.904, 15.111)
-    mu = np.where(meridian == 'temporal', -0.09386, -0.15933)
-    scale = np.where(meridian == 'temporal', 12.0, 10.0)
-
-    rmubeta = (np.abs(r) - mu) / beta
-    numer = delta * gamma * np.exp(-rmubeta ** gamma)
-    numer *= rmubeta ** (alpha * gamma - 1)
-    denom = beta * sps.gamma.pdf(alpha, 5)
-
-    return numer / denom / scale
-
-
-def displace(xy, eye='RE'):
-    if eye == 'LE':
-        # Let's not think about eyes right now...
-        raise NotImplementedError
-
-    # Convert x, y (dva) into polar coordinates
-    theta, rho_dva = cart2pol(xy[:, 0], xy[:, 1])
-
-    # Add displacement
-    meridian = np.where(xy[:, 0] < 0, 'temporal', 'nasal')
-    rho_dva += calc_displacement(rho_dva, meridian=meridian)
-
-    # Convert back to x, y (dva)
-    x, y = pol2cart(theta, rho_dva)
-
-    # Convert to retinal coords
-    return p2pr.dva2ret(x), p2pr.dva2ret(y)
-
-
 class CoordTrafoMixin(object):
 
-    def _builds_retinal_grid(self):
+    @staticmethod
+    def _cart2pol(x, y):
+        theta = np.arctan2(y, x)
+        rho = np.hypot(x, y)
+        return theta, rho
+
+    @staticmethod
+    def _pol2cart(theta, rho):
+        x = rho * np.cos(theta)
+        y = rho * np.sin(theta)
+        return x, y
+
+    @staticmethod
+    def _watson_displacement(r, meridian='temporal'):
+        if (not isinstance(meridian, (np.ndarray, six.string_types)) or
+                not np.all([m in ['temporal', 'nasal']
+                            for m in np.array([meridian]).ravel()])):
+            print(meridian)
+            raise ValueError("'meridian' must be either 'temporal' or 'nasal'")
+        alpha = np.where(meridian == 'temporal', 1.8938, 2.4607)
+        beta = np.where(meridian == 'temporal', 2.4598, 1.7463)
+        gamma = np.where(meridian == 'temporal', 0.91565, 0.77754)
+        delta = np.where(meridian == 'temporal', 14.904, 15.111)
+        mu = np.where(meridian == 'temporal', -0.09386, -0.15933)
+        scale = np.where(meridian == 'temporal', 12.0, 10.0)
+
+        rmubeta = (np.abs(r) - mu) / beta
+        numer = delta * gamma * np.exp(-rmubeta ** gamma)
+        numer *= rmubeta ** (alpha * gamma - 1)
+        denom = beta * sps.gamma.pdf(alpha, 5)
+
+        return numer / denom / scale
+
+    def _displaces_rgc(self, xy, eye='RE'):
+        if not isinstance(xy, np.ndarray) or xy.shape[1] != 2:
+            raise ValueError("'xy' must be a Nx2 NumPy array.")
+        if eye == 'LE':
+            # Let's not think about eyes right now...
+            raise NotImplementedError
+
+        # Convert x, y (dva) into polar coordinates
+        theta, rho_dva = self._cart2pol(xy[:, 0], xy[:, 1])
+
+        # Add displacement
+        meridian = np.where(xy[:, 0] < 0, 'temporal', 'nasal')
+        rho_dva += self._watson_displacement(rho_dva, meridian=meridian)
+
+        # Convert back to x, y (dva)
+        x, y = self._pol2cart(theta, rho_dva)
+
+        # Convert to retinal coords
+        return p2pr.dva2ret(x), p2pr.dva2ret(y)
+
+    def build_retinal_grid(self):
         # Build the grid from `x_range`, `y_range`:
         nx = int(np.ceil((np.diff(self.xrange) + 1) / self.xystep))
         ny = int(np.ceil((np.diff(self.yrange) + 1) / self.xystep))
@@ -74,14 +80,14 @@ class CoordTrafoMixin(object):
 
         # Convert dva to retinal coordinates
         xydva = np.vstack((xdva.ravel(), ydva.ravel())).T
-        xret, yret = displace(xydva)
+        xret, yret = self._displaces_rgc(xydva)
         self.xret = xret.reshape(xdva.shape)
         self.yret = yret.reshape(ydva.shape)
 
 
 class RetinalGridMixin(object):
 
-    def _builds_retinal_grid(self):
+    def build_retinal_grid(self):
         # Build the grid from `x_range`, `y_range`:
         nx = int(np.ceil((np.diff(self.xrange) + 1) / self.xystep))
         ny = int(np.ceil((np.diff(self.yrange) + 1) / self.xystep))
@@ -96,7 +102,7 @@ class RetinalGridMixin(object):
 class ImageMomentsLoss(object):
     greater_is_better = False
 
-    def _predics_target_values(self, img):
+    def _predicts_target_values(self, img):
         area = 0
         orientation = 0
         major_axis_length = 0
@@ -111,10 +117,33 @@ class ImageMomentsLoss(object):
 
 
 class ScaleRotateDiceLoss(object):
+    """Scale-Rotation-Dice (SRD) loss
+
+    This class provides a ``score`` method that calculates a loss in [0, 100]
+    made of three components:
+    - the scaling factor needed to match the area of predicted and target
+      percept
+    - the rotation angle needed to achieve the greatest dice coefficient
+      between predicted and target percept
+    - the dice coefficient between (adjusted) predicted and target percept
+    """
     # The new scoring function is actually a loss function, so that
     # greater values do *not* imply that the estimator is better (required
     # for ParticleSwarmOptimizer)
     greater_is_better = False
+
+    # By default, the loss function will return values in [0, 100], scoring
+    # the scaling factor, rotation angle, and dice coefficient of precition
+    # vs ground truth with the following weights:
+    w_scale = 34
+    w_rot = 33
+    w_dice = 34
+
+    def get_params(self, deep=True):
+        params = super(ScaleRotateDiceLoss, self).get_params(deep=deep)
+        params.update(w_scale=self.w_scale, w_rot=self.w_rot,
+                      w_dice=self.w_dice)
+        return params
 
     def _predicts_target_values(self, img):
         return {'image': img}
@@ -169,13 +198,6 @@ class BaseModel(sklb.BaseEstimator):
         # Current maps are thresholded to produce a binary image:
         self.img_thresh = 0.1
 
-        # By default, the loss function will return values in [0, 100], scoring
-        # the scaling factor, rotation angle, and dice coefficient of precition
-        # vs ground truth with the following weights:
-        self.w_scale = 34
-        self.w_rot = 33
-        self.w_dice = 34
-
         # JobLib or Dask can be used to parallelize computations:
         self.engine = 'joblib'
         self.scheduler = 'threading'
@@ -219,12 +241,12 @@ class BaseModel(sklb.BaseEstimator):
         return '%s%d' % (electrode[0], int(electrode[1:]))
 
     @abc.abstractmethod
-    def _builds_retinal_grid(self):
+    def build_retinal_grid(self):
         """Must build `self.xret` and `self.yret`"""
         raise NotImplementedError
 
     @abc.abstractmethod
-    def _calcs_curr_map(self, electrode):
+    def _calcs_el_curr_map(self, electrode):
         """Must return a tuple (`electrode`, `current_map`)"""
         raise NotImplementedError
 
@@ -238,7 +260,7 @@ class BaseModel(sklb.BaseEstimator):
         wants_el = set([self._ename(e) for e in set(X.electrode)])
         needs_el = wants_el.difference(has_el)
         # - Calculate the current maps for the missing electrodes:
-        curr_map = p2pu.parfor(self._calcs_curr_map, needs_el,
+        curr_map = p2pu.parfor(self._calcs_el_curr_map, needs_el,
                                engine=self.engine, scheduler=self.scheduler,
                                n_jobs=self.n_jobs)
         # - Store the new current maps:
@@ -263,7 +285,7 @@ class BaseModel(sklb.BaseEstimator):
                                          y_center=self.implant_y,
                                          rot=self.implant_rot)
         # Convert dva to retinal coordinates:
-        self._builds_retinal_grid()
+        self.build_retinal_grid()
         # Calculate current spread for every electrode in `X`:
         self.calc_curr_map(X)
         # Inform the object that is has been fitted:
@@ -328,6 +350,7 @@ class ScoreboardModel(BaseModel):
     def _sets_default_params(self):
         """Sets default parameters of the scoreboard model"""
         # Current spread falls off exponentially from electrode center:
+        super(ScoreboardModel, self)._sets_default_params()
         self.rho = 100
 
     def get_params(self, deep=True):
@@ -335,7 +358,7 @@ class ScoreboardModel(BaseModel):
         params.update(rho=self.rho)
         return params
 
-    def _calcs_curr_map(self, electrode):
+    def _calcs_el_curr_map(self, electrode):
         """Calculates the current map for a specific electrode"""
         assert isinstance(electrode, six.string_types)
         if not self.implant[electrode]:
