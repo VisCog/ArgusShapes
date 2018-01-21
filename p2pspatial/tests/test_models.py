@@ -31,10 +31,11 @@ def get_dummy_data(nrows=3, img_in_shape=(10, 10), img_out_shape=(10, 10)):
     return X
 
 
-class DummyModel(m.RetinalGridMixin, m.ScaleRotateDiceLoss, m.BaseModel):
+class ValidBaseModel(m.SRDLoss, m.RetinalGrid, m.BaseModel):
+    """A class that implements all abstract methods of BaseModel"""
 
     def _calcs_el_curr_map(self, electrode):
-        return electrode, np.array([[0]])
+        return np.array([[0]])
 
     def _predicts_target_values(self, row):
         return row
@@ -45,24 +46,48 @@ class DummyModel(m.RetinalGridMixin, m.ScaleRotateDiceLoss, m.BaseModel):
         return self._predicts_target_values(row)
 
 
-def test_CoordTrafoMixin__cart2pol():
-    trafo = m.CoordTrafoMixin()
+class ValidScoreboardModel(m.SRDLoss, m.RetinalGrid, m.ScoreboardModel):
+    """A class that implements all abstract methods of BaseModel"""
+
+    def _predicts_target_values(self, row):
+        return row
+
+    def _predicts(self, Xrow):
+        """Returns the input (a DataFrame row, without its index)"""
+        _, row = Xrow
+        return self._predicts_target_values(row)
+
+
+class ValidAxonMapModel(m.SRDLoss, m.RetinalGrid, m.AxonMapModel):
+    """A class that implements all abstract methods of AxonMapModel"""
+
+    def _predicts_target_values(self, row):
+        return row
+
+    def _predicts(self, Xrow):
+        """Returns the input (a DataFrame row, without its index)"""
+        _, row = Xrow
+        return self._predicts_target_values(row)
+
+
+def test_RetinalCoordTrafo__cart2pol():
+    trafo = m.RetinalCoordTrafo()
     npt.assert_almost_equal(trafo._cart2pol(0, 0), (0, 0))
     npt.assert_almost_equal(trafo._cart2pol(10, 0), (0, 10))
     npt.assert_almost_equal(trafo._cart2pol(3, 4), (np.arctan(4 / 3.0), 5))
     npt.assert_almost_equal(trafo._cart2pol(4, 3), (np.arctan(3 / 4.0), 5))
 
 
-def test_CoordTrafoMixin__pol2cart():
-    trafo = m.CoordTrafoMixin()
+def test_RetinalCoordTrafo__pol2cart():
+    trafo = m.RetinalCoordTrafo()
     npt.assert_almost_equal(trafo._pol2cart(0, 0), (0, 0))
     npt.assert_almost_equal(trafo._pol2cart(0, 10), (10, 0))
     npt.assert_almost_equal(trafo._pol2cart(np.arctan(4 / 3.0), 5), (3, 4))
     npt.assert_almost_equal(trafo._pol2cart(np.arctan(3 / 4.0), 5), (4, 3))
 
 
-def test_CoordTrafoMixin__watson_displacement():
-    trafo = m.CoordTrafoMixin()
+def test_RetinalCoordTrafo__watson_displacement():
+    trafo = m.RetinalCoordTrafo()
     with pytest.raises(ValueError):
         trafo._watson_displacement(0, meridian='invalid')
     npt.assert_almost_equal(trafo._watson_displacement(0), 0.4957506)
@@ -80,8 +105,8 @@ def test_CoordTrafoMixin__watson_displacement():
     npt.assert_almost_equal(radii[np.argmax(all_displace)], 2.1212121)
 
 
-def test_CoordTrafoMixin__displaces_rgc():
-    trafo = m.CoordTrafoMixin()
+def test_RetinalCoordTrafo__displaces_rgc():
+    trafo = m.RetinalCoordTrafo()
     for xy in [1, [1, 2], np.zeros((10, 3))]:
         with pytest.raises(ValueError):
             trafo._displaces_rgc(xy)
@@ -93,30 +118,20 @@ def test_CoordTrafoMixin__displaces_rgc():
     )
 
 
-def test_CoordTrafoMixin_build_retinal_grid():
-    trafo = m.CoordTrafoMixin()
+def test_RetinalCoordTrafo_build_ganglion_cell_layer():
+    trafo = m.RetinalCoordTrafo()
     trafo.xrange = (-2, 2)
     trafo.yrange = (-1, 1)
     trafo.xystep = 1
-    trafo.build_retinal_grid()
-
-    # Make sure shape is right
-    npt.assert_equal(trafo.xret.shape, (3, 5))
-    npt.assert_equal(trafo.xret.shape, (3, 5))
-
-    # Make sure transformation is right
-    npt.assert_almost_equal(trafo.xret[1, 2],
-                            trafo._displaces_rgc(np.array([[0, 0]]))[0],
-                            decimal=2)
-    npt.assert_almost_equal(trafo.yret[1, 2], 0)
+    trafo.build_ganglion_cell_layer()
 
 
-def test_RetinalGridMixin():
-    trafo = m.RetinalGridMixin()
+def test_RetinalGrid():
+    trafo = m.RetinalGrid()
     trafo.xrange = (-2, 2)
     trafo.yrange = (-1, 1)
     trafo.xystep = 1
-    trafo.build_retinal_grid()
+    trafo.build_ganglion_cell_layer()
 
     # Make sure shape is right
     npt.assert_equal(trafo.xret.shape, (3, 5))
@@ -131,13 +146,13 @@ def test_ImageMomentLoss():
     pass
 
 
-def test_ScaleRotateDiceLoss():
+def test_SRDLoss():
     pass
 
 
 def test_BaseModel___init__():
     # We can overwrite default param values if they are in ``get_params``:
-    model = DummyModel()
+    model = ValidBaseModel()
     model_params = model.get_params()
     for key, value in six.iteritems(model_params):
         npt.assert_equal(getattr(model, key), value)
@@ -145,7 +160,7 @@ def test_BaseModel___init__():
         model.set_params(**set_param)
         npt.assert_equal(getattr(model, key), 1234)
 
-        newmodel = DummyModel(**set_param)
+        newmodel = ValidBaseModel(**set_param)
         npt.assert_equal(getattr(newmodel, key), 1234)
 
     # But setting parameters that are not in ``get_params`` is not allowed:
@@ -154,7 +169,7 @@ def test_BaseModel___init__():
         with pytest.raises(ValueError):
             model.set_params(**set_param)
         with pytest.raises(ValueError):
-            DummyModel(**set_param)
+            ValidBaseModel(**set_param)
 
 
 def test_BaseModel_fit():
@@ -162,7 +177,7 @@ def test_BaseModel_fit():
     X = get_dummy_data(nrows=3)
 
     # Model must be fitted first thing
-    model = DummyModel(engine='serial')
+    model = ValidBaseModel(engine='serial')
     npt.assert_equal(model._is_fitted, False)
     model.fit(X)
     npt.assert_equal(model._is_fitted, True)
@@ -184,18 +199,18 @@ def test_BaseModel_fit():
 
     # We must pass an implant type, not an implant instance
     with pytest.raises(TypeError):
-        model = DummyModel(engine='serial', implant_type=p2pi.ArgusII())
+        model = ValidBaseModel(engine='serial', implant_type=p2pi.ArgusII())
         model.fit(X)
     with pytest.raises(TypeError):
-        model = DummyModel(engine='serial')
+        model = ValidBaseModel(engine='serial')
         model.set_params(implant_type=p2pi.ArgusII())
         model.fit(X)
     with pytest.raises(TypeError):
-        model = DummyModel(engine='serial')
+        model = ValidBaseModel(engine='serial')
         model.fit(X, implant_type=p2pi.ArgusII())
 
     # `fit_params` must take effect
-    model = DummyModel(engine='serial')
+    model = ValidBaseModel(engine='serial')
     model_params = model.get_params()
     for key, value in six.iteritems(model_params):
         npt.assert_equal(getattr(model, key), value)
@@ -211,7 +226,7 @@ def test_BaseModel_fit():
 
 def test_BaseModel_calc_curr_map():
     X = get_dummy_data(nrows=10)
-    model = DummyModel(engine='serial')
+    model = ValidBaseModel(engine='serial')
 
     # Make sure we calculate only the current maps we need: We start with
     # nothing, but add a new current map step-by-step
@@ -237,7 +252,7 @@ def test_BaseModel_calc_curr_map():
 
 def test_BaseModel_predict():
     # Model must be fitted first
-    model = DummyModel(engine='serial')
+    model = ValidBaseModel(engine='serial')
     out_shape = (10, 18)
     X = get_dummy_data(nrows=3, img_out_shape=out_shape)
     with pytest.raises(skle.NotFittedError):
@@ -247,7 +262,7 @@ def test_BaseModel_predict():
     model.fit(X)
     y_pred = model.predict(X)
     npt.assert_equal(np.allclose(X.index, y_pred.index), True)
-    # DummyModel returns input, so that predict(X) == X
+    # ValidBaseModel returns input, so that predict(X) == X
     npt.assert_equal(y_pred.equals(X), True)
 
     # `predict` only accepts DataFrame
@@ -258,24 +273,25 @@ def test_BaseModel_predict():
 
 def test_BaseModel_score():
     # Model must be fitted first
-    model = DummyModel(engine='serial')
+    model = ValidBaseModel(engine='serial')
     X = get_dummy_data(nrows=3)
     with pytest.raises(skle.NotFittedError):
         model.score(X, X)
 
-    # But then must pass through ``score`` just fine: DummyModel returns input,
+    # But then must pass through ``score`` just fine: ValidBaseModel returns input,
     # so that predict(X) == X, and score(X, X) == 0
     model.fit(X)
     npt.assert_almost_equal(model.score(X, X), 0.0)
 
 
-def test_ModelA():
-    # Model A automatically sets `rho`:
+def test_ScoreboardModel():
+    # ScoreboardModel automatically sets `rho`:
     X = get_dummy_data(nrows=10)
-    model = m.ModelA(implant_type=p2pi.ArgusII, engine='serial')
+    model = ValidScoreboardModel(implant_type=p2pi.ArgusII, engine='serial')
     npt.assert_equal(hasattr(model, 'rho'), True)
 
-    # Model A uses the SRD loss, should have `greater_is_better` set to False
+    # ScoreboardModel uses the SRD loss, should have `greater_is_better` set to
+    # False
     npt.assert_equal(hasattr(model, 'greater_is_better'), True)
     npt.assert_equal(model.greater_is_better, False)
     npt.assert_equal(hasattr(model, 'w_scale'), True)
@@ -303,13 +319,17 @@ def test_ModelA():
         npt.assert_almost_equal(cm.ravel()[np.argmin(r2)], 1, decimal=3)
 
 
-def test_ModelB():
-    # Model B automatically sets `rho`:
+def test_AxonMapModel():
+    # AxonMapModel automatically sets a number of parameters:
     X = get_dummy_data(nrows=10)
-    model = m.ModelB(implant_type=p2pi.ArgusII, engine='serial')
-    npt.assert_equal(hasattr(model, 'rho'), True)
+    model = ValidAxonMapModel(implant_type=p2pi.ArgusII, engine='serial')
+    set_params = {'rho': 432, 'axlambda': 2, 'n_axons': 3, 'n_ax_segments': 4,
+                  'loc_od_x': 5, 'loc_od_y': 6}
+    for param in set_params:
+        npt.assert_equal(hasattr(model, param), True)
 
-    # Model B uses the SRD loss, should have `greater_is_better` set to False
+    # AxonMapModel uses the SRD loss, should have `greater_is_better` set to
+    # False
     npt.assert_equal(hasattr(model, 'greater_is_better'), True)
     npt.assert_equal(model.greater_is_better, False)
     npt.assert_equal(hasattr(model, 'w_scale'), True)
@@ -317,11 +337,14 @@ def test_ModelB():
     npt.assert_equal(hasattr(model, 'w_dice'), True)
     model.set_params(w_scale=34, w_rot=33, w_dice=34)
 
-    # User can set `rho`:
-    model.set_params(rho=123)
-    npt.assert_equal(model.rho, 123)
-    model.fit(X, rho=987)
-    npt.assert_equal(model.rho, 987)
+    # User can override default values
+    for key, value in six.iteritems(set_params):
+        model.set_params(**{key: value})
+        npt.assert_equal(getattr(model, key), value)
+    model = ValidAxonMapModel(implant_type=p2pi.ArgusII, engine='serial')
+    model.fit(X, **set_params)
+    for key, value in six.iteritems(set_params):
+        npt.assert_equal(getattr(model, key), value)
 
     # Some electrodes in the test set might not be in the train set:
     X.loc[0, 'electrode'] = 'F09'
@@ -331,7 +354,4 @@ def test_ModelB():
         # Current maps must be in [0, 1]
         npt.assert_almost_equal(cm.min(), 0, decimal=3)
         npt.assert_almost_equal(cm.max(), 1, decimal=3)
-        # All phosphenes are distorted blobs with the max under the electrode:
-        r2 = (model.xret - model.implant[electrode].x_center) ** 2
-        r2 += (model.yret - model.implant[electrode].y_center) ** 2
-        npt.assert_almost_equal(cm.ravel()[np.argmin(r2)], 1, decimal=3)
+        # Phosphenes are shaped by axonal activation

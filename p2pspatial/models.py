@@ -15,164 +15,6 @@ import sklearn.exceptions as skle
 from . import imgproc
 
 
-class CoordTrafoMixin(object):
-
-    @staticmethod
-    def _cart2pol(x, y):
-        theta = np.arctan2(y, x)
-        rho = np.hypot(x, y)
-        return theta, rho
-
-    @staticmethod
-    def _pol2cart(theta, rho):
-        x = rho * np.cos(theta)
-        y = rho * np.sin(theta)
-        return x, y
-
-    @staticmethod
-    def _watson_displacement(r, meridian='temporal'):
-        if (not isinstance(meridian, (np.ndarray, six.string_types)) or
-                not np.all([m in ['temporal', 'nasal']
-                            for m in np.array([meridian]).ravel()])):
-            print(meridian)
-            raise ValueError("'meridian' must be either 'temporal' or 'nasal'")
-        alpha = np.where(meridian == 'temporal', 1.8938, 2.4607)
-        beta = np.where(meridian == 'temporal', 2.4598, 1.7463)
-        gamma = np.where(meridian == 'temporal', 0.91565, 0.77754)
-        delta = np.where(meridian == 'temporal', 14.904, 15.111)
-        mu = np.where(meridian == 'temporal', -0.09386, -0.15933)
-        scale = np.where(meridian == 'temporal', 12.0, 10.0)
-
-        rmubeta = (np.abs(r) - mu) / beta
-        numer = delta * gamma * np.exp(-rmubeta ** gamma)
-        numer *= rmubeta ** (alpha * gamma - 1)
-        denom = beta * sps.gamma.pdf(alpha, 5)
-
-        return numer / denom / scale
-
-    def _displaces_rgc(self, xy, eye='RE'):
-        if not isinstance(xy, np.ndarray) or xy.shape[1] != 2:
-            raise ValueError("'xy' must be a Nx2 NumPy array.")
-        if eye == 'LE':
-            # Let's not think about eyes right now...
-            raise NotImplementedError
-
-        # Convert x, y (dva) into polar coordinates
-        theta, rho_dva = self._cart2pol(xy[:, 0], xy[:, 1])
-
-        # Add displacement
-        meridian = np.where(xy[:, 0] < 0, 'temporal', 'nasal')
-        rho_dva += self._watson_displacement(rho_dva, meridian=meridian)
-
-        # Convert back to x, y (dva)
-        x, y = self._pol2cart(theta, rho_dva)
-
-        # Convert to retinal coords
-        return p2pr.dva2ret(x), p2pr.dva2ret(y)
-
-    def build_retinal_grid(self):
-        # Build the grid from `x_range`, `y_range`:
-        nx = int(np.ceil((np.diff(self.xrange) + 1) / self.xystep))
-        ny = int(np.ceil((np.diff(self.yrange) + 1) / self.xystep))
-        xdva, ydva = np.meshgrid(np.linspace(*self.xrange, num=nx),
-                                 np.linspace(*self.yrange, num=ny),
-                                 indexing='xy')
-
-        # Convert dva to retinal coordinates
-        xydva = np.vstack((xdva.ravel(), ydva.ravel())).T
-        xret, yret = self._displaces_rgc(xydva)
-        self.xret = xret.reshape(xdva.shape)
-        self.yret = yret.reshape(ydva.shape)
-
-
-class RetinalGridMixin(object):
-
-    def build_retinal_grid(self):
-        # Build the grid from `x_range`, `y_range`:
-        nx = int(np.ceil((np.diff(self.xrange) + 1) / self.xystep))
-        ny = int(np.ceil((np.diff(self.yrange) + 1) / self.xystep))
-        xdva, ydva = np.meshgrid(np.linspace(*self.xrange, num=nx),
-                                 np.linspace(*self.yrange, num=ny),
-                                 indexing='xy')
-
-        self.xret = p2pr.dva2ret(xdva)
-        self.yret = p2pr.dva2ret(ydva)
-
-
-class ImageMomentsLoss(object):
-    greater_is_better = False
-
-    def _predicts_target_values(self, img):
-        area = 0
-        orientation = 0
-        major_axis_length = 0
-        minor_axis_length = 0
-        return {'area': area,
-                'orientation': orientation,
-                'major_axis_length': major_axis_length,
-                'minor_axis_length': minor_axis_length}
-
-    def score(self, X, y, sample_weight=None):
-        return 100
-
-
-class ScaleRotateDiceLoss(object):
-    """Scale-Rotation-Dice (SRD) loss
-
-    This class provides a ``score`` method that calculates a loss in [0, 100]
-    made of three components:
-    - the scaling factor needed to match the area of predicted and target
-      percept
-    - the rotation angle needed to achieve the greatest dice coefficient
-      between predicted and target percept
-    - the dice coefficient between (adjusted) predicted and target percept
-    """
-    # The new scoring function is actually a loss function, so that
-    # greater values do *not* imply that the estimator is better (required
-    # for ParticleSwarmOptimizer)
-    greater_is_better = False
-
-    # By default, the loss function will return values in [0, 100], scoring
-    # the scaling factor, rotation angle, and dice coefficient of precition
-    # vs ground truth with the following weights:
-    w_scale = 34
-    w_rot = 33
-    w_dice = 34
-
-    def get_params(self, deep=True):
-        params = super(ScaleRotateDiceLoss, self).get_params(deep=deep)
-        params.update(w_scale=self.w_scale, w_rot=self.w_rot,
-                      w_dice=self.w_dice)
-        return params
-
-    def _predicts_target_values(self, img):
-        return {'image': img}
-
-    def score(self, X, y, sample_weight=None):
-        """Score the model using the new loss function"""
-        if not isinstance(X, pd.core.frame.DataFrame):
-            raise TypeError("'X' must be a pandas DataFrame, not %s" % type(X))
-        if not isinstance(y, pd.core.frame.DataFrame):
-            raise TypeError("'y' must be a pandas DataFrame, not %s" % type(y))
-
-        y_pred = self.predict(X)
-
-        # `y` and `y_pred` must have the same index, otherwise subtraction
-        # produces nan
-        assert np.allclose(y_pred.index, y.index)
-
-        # Compute the scaling factor / rotation angle / dice coefficient loss:
-        # The loss function expects a tupel of two DataFrame rows
-        losses = p2pu.parfor(imgproc.srd_loss,
-                             zip(y.iterrows(), y_pred.iterrows()),
-                             func_kwargs={'w_scale': self.w_scale,
-                                          'w_rot': self.w_rot,
-                                          'w_dice': self.w_dice},
-                             engine=self.engine, scheduler=self.scheduler,
-                             n_jobs=self.n_jobs)
-        return np.mean(losses)
-
-
 @six.add_metaclass(abc.ABCMeta)
 class BaseModel(sklb.BaseEstimator):
 
@@ -241,13 +83,17 @@ class BaseModel(sklb.BaseEstimator):
         return '%s%d' % (electrode[0], int(electrode[1:]))
 
     @abc.abstractmethod
-    def build_retinal_grid(self):
-        """Must build `self.xret` and `self.yret`"""
+    def build_ganglion_cell_layer(self):
+        """Builds the ganglion cell layer"""
         raise NotImplementedError
+
+    def build_optic_fiber_layer(self):
+        """Builds the optic fiber layer"""
+        pass
 
     @abc.abstractmethod
     def _calcs_el_curr_map(self, electrode):
-        """Must return a tuple (`electrode`, `current_map`)"""
+        """Must return a tuple `current_map`"""
         raise NotImplementedError
 
     def calc_curr_map(self, X):
@@ -264,7 +110,7 @@ class BaseModel(sklb.BaseEstimator):
                                engine=self.engine, scheduler=self.scheduler,
                                n_jobs=self.n_jobs)
         # - Store the new current maps:
-        for key, cm in curr_map:
+        for key, cm in zip(needs_el, curr_map):
             # We should process each key only once:
             assert key not in self._curr_map
             self._curr_map[key] = cm
@@ -284,8 +130,10 @@ class BaseModel(sklb.BaseEstimator):
         self.implant = self.implant_type(x_center=self.implant_x,
                                          y_center=self.implant_y,
                                          rot=self.implant_rot)
-        # Convert dva to retinal coordinates:
-        self.build_retinal_grid()
+        # Build the ganglion cell layer:
+        self.build_ganglion_cell_layer()
+        # Build the ganglion axon layer (optional):
+        self.build_optic_fiber_layer()
         # Calculate current spread for every electrode in `X`:
         self.calc_curr_map(X)
         # Inform the object that is has been fitted:
@@ -341,6 +189,7 @@ class BaseModel(sklb.BaseEstimator):
 
     @abc.abstractmethod
     def score(self, X, y, sample_weight=None):
+        """Scores the model"""
         raise NotImplementedError
 
 
@@ -366,14 +215,237 @@ class ScoreboardModel(BaseModel):
         r2 = (self.xret - self.implant[electrode].x_center) ** 2
         r2 += (self.yret - self.implant[electrode].y_center) ** 2
         cm = np.exp(-r2 / (2.0 * self.rho ** 2))
-        return electrode, cm
+        return cm
 
 
-class ModelA(ScaleRotateDiceLoss, RetinalGridMixin, ScoreboardModel):
+class AxonMapModel(BaseModel):
+    """Axon map model"""
+
+    def _sets_default_params(self):
+        """Sets default parameters of the axon map model"""
+        super(AxonMapModel, self)._sets_default_params()
+        self.rho = 100
+        self.axlambda = 1
+
+        # Set the (x,y) location of the optic disc
+        self.loc_od_x = 15.5
+        self.loc_od_y = 1.5
+
+        # Set parameters of the Jansonius model: Number of axons and number of
+        # segments per axon can be overriden by the user:
+        self.n_axons = 501
+        self.n_ax_segments = 801
+        self._phi_range = (-180, 180)
+        self._rho_range = (3, 45)
+
+    def get_params(self, deep=True):
+        params = super(AxonMapModel, self).get_params(deep=deep)
+        params.update(rho=self.rho, axlambda=self.axlambda,
+                      n_axons=self.n_axons, n_ax_segments=self.n_ax_segments,
+                      loc_od_x=self.loc_od_x, loc_od_y=self.loc_od_y)
+        return params
+
+    def build_optic_fiber_layer(self):
+        # Build the Jansonius model: Grow a number of axons in a range of phi:
+        phi = np.linspace(*self._phi_range, num=self.n_axons)
+        jans_kwargs = {'n_rho': self.n_ax_segments, 'rho_range': self._rho_range,
+                       'loc_od': (self.loc_od_x, self.loc_od_y),
+                       'eye': self.implant.eye}
+        self.axon_bundles = p2pu.parfor(p2pr.jansonius2009, phi,
+                                        func_kwargs=jans_kwargs,
+                                        engine=self.engine, n_jobs=self.n_jobs,
+                                        scheduler=self.scheduler)
+
+    def _calcs_el_curr_map(self, electrode):
+        """Calculates the current map for a specific electrode"""
+        assert isinstance(electrode, six.string_types)
+        if not self.implant[electrode]:
+            raise ValueError("Electrode '%s' could not be found." % electrode)
+
+        # Calculate current spread
+        r2 = (self.xret - self.implant[electrode].x_center) ** 2
+        r2 += (self.yret - self.implant[electrode].y_center) ** 2
+        cm = np.exp(-r2 / (2.0 * self.rho ** 2))
+
+        # Calculate axonal activation
+        ecm = cm
+
+        return ecm
+
+
+class RetinalCoordTrafo(object):
+
+    @staticmethod
+    def _cart2pol(x, y):
+        theta = np.arctan2(y, x)
+        rho = np.hypot(x, y)
+        return theta, rho
+
+    @staticmethod
+    def _pol2cart(theta, rho):
+        x = rho * np.cos(theta)
+        y = rho * np.sin(theta)
+        return x, y
+
+    @staticmethod
+    def _watson_displacement(r, meridian='temporal'):
+        if (not isinstance(meridian, (np.ndarray, six.string_types)) or
+                not np.all([m in ['temporal', 'nasal']
+                            for m in np.array([meridian]).ravel()])):
+            print(meridian)
+            raise ValueError("'meridian' must be either 'temporal' or 'nasal'")
+        alpha = np.where(meridian == 'temporal', 1.8938, 2.4607)
+        beta = np.where(meridian == 'temporal', 2.4598, 1.7463)
+        gamma = np.where(meridian == 'temporal', 0.91565, 0.77754)
+        delta = np.where(meridian == 'temporal', 14.904, 15.111)
+        mu = np.where(meridian == 'temporal', -0.09386, -0.15933)
+        scale = np.where(meridian == 'temporal', 12.0, 10.0)
+
+        rmubeta = (np.abs(r) - mu) / beta
+        numer = delta * gamma * np.exp(-rmubeta ** gamma)
+        numer *= rmubeta ** (alpha * gamma - 1)
+        denom = beta * sps.gamma.pdf(alpha, 5)
+
+        return numer / denom / scale
+
+    def _displaces_rgc(self, xy, eye='RE'):
+        if not isinstance(xy, np.ndarray) or xy.shape[1] != 2:
+            raise ValueError("'xy' must be a Nx2 NumPy array.")
+        if eye == 'LE':
+            # Let's not think about eyes right now...
+            raise NotImplementedError
+
+        # Convert x, y (dva) into polar coordinates
+        theta, rho_dva = self._cart2pol(xy[:, 0], xy[:, 1])
+
+        # Add displacement
+        meridian = np.where(xy[:, 0] < 0, 'temporal', 'nasal')
+        rho_dva += self._watson_displacement(rho_dva, meridian=meridian)
+
+        # Convert back to x, y (dva)
+        x, y = self._pol2cart(theta, rho_dva)
+
+        # Convert to retinal coords
+        return p2pr.dva2ret(x), p2pr.dva2ret(y)
+
+    def build_ganglion_cell_layer(self):
+        # Build the grid from `x_range`, `y_range`:
+        nx = int(np.ceil((np.diff(self.xrange) + 1) / self.xystep))
+        ny = int(np.ceil((np.diff(self.yrange) + 1) / self.xystep))
+        xdva, ydva = np.meshgrid(np.linspace(*self.xrange, num=nx),
+                                 np.linspace(*self.yrange, num=ny),
+                                 indexing='xy')
+
+        # Convert dva to retinal coordinates
+        xydva = np.vstack((xdva.ravel(), ydva.ravel())).T
+        xret, yret = self._displaces_rgc(xydva)
+        self.xret = xret.reshape(xdva.shape)
+        self.yret = yret.reshape(ydva.shape)
+
+
+class RetinalGrid(object):
+
+    def build_ganglion_cell_layer(self):
+        # Build the grid from `x_range`, `y_range`:
+        nx = int(np.ceil((np.diff(self.xrange) + 1) / self.xystep))
+        ny = int(np.ceil((np.diff(self.yrange) + 1) / self.xystep))
+        xdva, ydva = np.meshgrid(np.linspace(*self.xrange, num=nx),
+                                 np.linspace(*self.yrange, num=ny),
+                                 indexing='xy')
+
+        self.xret = p2pr.dva2ret(xdva)
+        self.yret = p2pr.dva2ret(ydva)
+
+
+class ImageMomentsLoss(object):
+    greater_is_better = False
+
+    def _predicts_target_values(self, img):
+        area = 0
+        orientation = 0
+        major_axis_length = 0
+        minor_axis_length = 0
+        return {'area': area,
+                'orientation': orientation,
+                'major_axis_length': major_axis_length,
+                'minor_axis_length': minor_axis_length}
+
+    def score(self, X, y, sample_weight=None):
+        return 100
+
+
+class SRDLoss(object):
+    """Scale-Rotation-Dice (SRD) loss
+
+    This class provides a ``score`` method that calculates a loss in [0, 100]
+    made of three components:
+    - the scaling factor needed to match the area of predicted and target
+      percept
+    - the rotation angle needed to achieve the greatest dice coefficient
+      between predicted and target percept
+    - the dice coefficient between (adjusted) predicted and target percept
+    """
+    # The new scoring function is actually a loss function, so that
+    # greater values do *not* imply that the estimator is better (required
+    # for ParticleSwarmOptimizer)
+    greater_is_better = False
+
+    # By default, the loss function will return values in [0, 100], scoring
+    # the scaling factor, rotation angle, and dice coefficient of precition
+    # vs ground truth with the following weights:
+    w_scale = 34
+    w_rot = 33
+    w_dice = 34
+
+    def get_params(self, deep=True):
+        params = super(SRDLoss, self).get_params(deep=deep)
+        params.update(w_scale=self.w_scale, w_rot=self.w_rot,
+                      w_dice=self.w_dice)
+        return params
+
+    def _predicts_target_values(self, img):
+        return {'image': img}
+
+    def score(self, X, y, sample_weight=None):
+        """Score the model using the new loss function"""
+        if not isinstance(X, pd.core.frame.DataFrame):
+            raise TypeError("'X' must be a pandas DataFrame, not %s" % type(X))
+        if not isinstance(y, pd.core.frame.DataFrame):
+            raise TypeError("'y' must be a pandas DataFrame, not %s" % type(y))
+
+        y_pred = self.predict(X)
+
+        # `y` and `y_pred` must have the same index, otherwise subtraction
+        # produces nan
+        assert np.allclose(y_pred.index, y.index)
+
+        # Compute the scaling factor / rotation angle / dice coefficient loss:
+        # The loss function expects a tupel of two DataFrame rows
+        losses = p2pu.parfor(imgproc.srd_loss,
+                             zip(y.iterrows(), y_pred.iterrows()),
+                             func_kwargs={'w_scale': self.w_scale,
+                                          'w_rot': self.w_rot,
+                                          'w_dice': self.w_dice},
+                             engine=self.engine, scheduler=self.scheduler,
+                             n_jobs=self.n_jobs)
+        return np.mean(losses)
+
+
+class ModelA(SRDLoss, RetinalGrid, ScoreboardModel):
     """Scoreboard model with SRD loss"""
     pass
 
 
-class ModelB(ScaleRotateDiceLoss, CoordTrafoMixin, ScoreboardModel):
+class ModelB(SRDLoss, RetinalCoordTrafo, ScoreboardModel):
     """Scoreboard model with perspective transform and SRD loss"""
+    pass
+
+
+class ModelC(SRDLoss, RetinalGrid, AxonMapModel):
+    """Axon map model with SRD loss"""
+    pass
+
+
+class ModelD(SRDLoss, RetinalCoordTrafo, AxonMapModel):
+    """Axon map model with perspective transform and SRD loss"""
     pass
