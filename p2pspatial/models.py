@@ -57,13 +57,7 @@ class BaseModel(sklb.BaseEstimator):
                 'implant_x': self.implant_x,
                 'implant_y': self.implant_y,
                 'implant_rot': self.implant_rot,
-                'xrange': self.xrange,
-                'yrange': self.yrange,
-                'xystep': self.xystep,
                 'img_thresh': self.img_thresh,
-                'w_scale': self.w_scale,
-                'w_rot': self.w_rot,
-                'w_dice': self.w_dice,
                 'engine': self.engine,
                 'scheduler': self.scheduler,
                 'n_jobs': self.n_jobs}
@@ -288,7 +282,21 @@ class AxonMapModel(BaseModel):
         return ecm / (ecm.max() + np.finfo(float).eps) * cm.max()
 
 
-class RetinalCoordTrafo(object):
+class RetinalCoordTrafo(BaseModel):
+
+    def _sets_default_params(self):
+        super(RetinalCoordTrafo, self)._sets_default_params()
+        # We will be simulating an x,y patch of the visual field (min, max) in
+        # degrees of visual angle, at a given spatial resolution (step size):
+        self.xrange = (-30, 30)  # dva
+        self.yrange = (-20, 20)  # dva
+        self.xystep = 0.1  # dva
+
+    def get_params(self, deep=True):
+        params = super(RetinalCoordTrafo, self).get_params(deep=deep)
+        params.update(xrange=self.xrange, yrange=self.yrange,
+                      xystep=self.xystep)
+        return params
 
     @staticmethod
     def _cart2pol(x, y):
@@ -358,7 +366,7 @@ class RetinalCoordTrafo(object):
         self.yret = yret.reshape(ydva.shape)
 
 
-class RetinalGrid(object):
+class RetinalGrid(BaseModel):
 
     def _sets_default_params(self):
         super(RetinalGrid, self)._sets_default_params()
@@ -386,7 +394,7 @@ class RetinalGrid(object):
         self.yret = p2pr.dva2ret(ydva)
 
 
-class ImageMomentsLoss(object):
+class ImageMomentsLoss(BaseModel):
 
     def _sets_default_params(self):
         super(ImageMomentsLoss, self)._sets_default_params()
@@ -411,7 +419,7 @@ class ImageMomentsLoss(object):
         return 100
 
 
-class SRDLoss(object):
+class SRDLoss(BaseModel):
     """Scale-Rotation-Dice (SRD) loss
 
     This class provides a ``score`` method that calculates a loss in [0, 100]
@@ -438,7 +446,8 @@ class SRDLoss(object):
 
     def get_params(self, deep=True):
         params = super(SRDLoss, self).get_params(deep=deep)
-        params.update(w_scale=self.w_scale, w_rot=self.w_rot,
+        params.update(greater_is_better=self.greater_is_better,
+                      w_scale=self.w_scale, w_rot=self.w_rot,
                       w_dice=self.w_dice)
         return params
 

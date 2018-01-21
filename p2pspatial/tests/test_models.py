@@ -31,7 +31,7 @@ def get_dummy_data(nrows=3, img_in_shape=(10, 10), img_out_shape=(10, 10)):
     return X
 
 
-class ValidBaseModel(m.SRDLoss, m.RetinalGrid, m.BaseModel):
+class ValidBaseModel(m.BaseModel):
     """A class that implements all abstract methods of BaseModel"""
 
     def _calcs_el_curr_map(self, electrode):
@@ -44,6 +44,18 @@ class ValidBaseModel(m.SRDLoss, m.RetinalGrid, m.BaseModel):
         """Returns the input (a DataFrame row, without its index)"""
         _, row = Xrow
         return self._predicts_target_values(row)
+
+    def build_ganglion_cell_layer(self):
+        self.xret = [[0]]
+        self.yret = [[0]]
+
+    def score(self, X, y, sample_weight=None):
+        if not isinstance(X, pd.core.frame.DataFrame):
+            raise TypeError("'X' must be a pandas DataFrame, not %s" % type(X))
+        if not isinstance(y, pd.core.frame.DataFrame):
+            raise TypeError("'y' must be a pandas DataFrame, not %s" % type(y))
+        y_pred = self.predict(X)
+        return 0
 
 
 class ValidScoreboardModel(m.SRDLoss, m.RetinalGrid, m.ScoreboardModel):
@@ -73,8 +85,84 @@ class ValidAxonMapModel(m.SRDLoss, m.RetinalGrid, m.AxonMapModel):
         return self._predicts_target_values(row)
 
 
+class ValidRetinalCoordTrafo(m.SRDLoss, m.RetinalCoordTrafo):
+    """A class that implements all abstract methods of BaseModel"""
+
+    def _calcs_el_curr_map(self, electrode):
+        return np.array([[0]])
+
+    def _predicts_target_values(self, row):
+        return row
+
+    def _predicts(self, Xrow):
+        """Returns the input (a DataFrame row, without its index)"""
+        _, row = Xrow
+        return self._predicts_target_values(row)
+
+
+class ValidRetinalGrid(m.SRDLoss, m.RetinalGrid):
+    """A class that implements all abstract methods of BaseModel"""
+
+    def _calcs_el_curr_map(self, electrode):
+        return np.array([[0]])
+
+    def _predicts_target_values(self, row):
+        return row
+
+    def _predicts(self, Xrow):
+        """Returns the input (a DataFrame row, without its index)"""
+        _, row = Xrow
+        return self._predicts_target_values(row)
+
+
+class ValidImageMomentsLoss(m.ImageMomentsLoss, m.RetinalGrid):
+    """A class that implements all abstract methods of BaseModel"""
+
+    def _calcs_el_curr_map(self, electrode):
+        return np.array([[0]])
+
+    def _predicts_target_values(self, row):
+        return row
+
+    def _predicts(self, Xrow):
+        """Returns the input (a DataFrame row, without its index)"""
+        _, row = Xrow
+        return self._predicts_target_values(row)
+
+
+class ValidSRDLoss(m.SRDLoss, m.RetinalGrid):
+    """A class that implements all abstract methods of BaseModel"""
+
+    def _calcs_el_curr_map(self, electrode):
+        return np.array([[0]])
+
+    def _predicts_target_values(self, row):
+        return row
+
+    def _predicts(self, Xrow):
+        """Returns the input (a DataFrame row, without its index)"""
+        _, row = Xrow
+        return self._predicts_target_values(row)
+
+
+def test_RetinalCoordTrafo():
+    params = {'xrange': (-2, 2), 'yrange': (-1, 1), 'xystep': 1}
+    trafo = ValidRetinalCoordTrafo()
+    print(trafo.get_params())
+    for p in params:
+        npt.assert_equal(hasattr(trafo, p), True)
+
+    # Two different ways to set the parameters:
+    trafo.set_params(**params)
+    for k, v in six.iteritems(params):
+        npt.assert_equal(getattr(trafo, k), v)
+    trafo = ValidRetinalCoordTrafo(**params)
+    for k, v in six.iteritems(params):
+        npt.assert_equal(getattr(trafo, k), v)
+
+
 def test_RetinalCoordTrafo__cart2pol():
-    trafo = m.RetinalCoordTrafo()
+    trafo = ValidRetinalCoordTrafo()
     npt.assert_almost_equal(trafo._cart2pol(0, 0), (0, 0))
     npt.assert_almost_equal(trafo._cart2pol(10, 0), (0, 10))
     npt.assert_almost_equal(trafo._cart2pol(3, 4), (np.arctan(4 / 3.0), 5))
@@ -82,7 +170,7 @@ def test_RetinalCoordTrafo__cart2pol():
 
 
 def test_RetinalCoordTrafo__pol2cart():
-    trafo = m.RetinalCoordTrafo()
+    trafo = ValidRetinalCoordTrafo()
     npt.assert_almost_equal(trafo._pol2cart(0, 0), (0, 0))
     npt.assert_almost_equal(trafo._pol2cart(0, 10), (10, 0))
     npt.assert_almost_equal(trafo._pol2cart(np.arctan(4 / 3.0), 5), (3, 4))
@@ -90,7 +178,7 @@ def test_RetinalCoordTrafo__pol2cart():
 
 
 def test_RetinalCoordTrafo__watson_displacement():
-    trafo = m.RetinalCoordTrafo()
+    trafo = ValidRetinalCoordTrafo()
     with pytest.raises(ValueError):
         trafo._watson_displacement(0, meridian='invalid')
     npt.assert_almost_equal(trafo._watson_displacement(0), 0.4957506)
@@ -109,7 +197,7 @@ def test_RetinalCoordTrafo__watson_displacement():
 
 
 def test_RetinalCoordTrafo__displaces_rgc():
-    trafo = m.RetinalCoordTrafo()
+    trafo = ValidRetinalCoordTrafo()
     for xy in [1, [1, 2], np.zeros((10, 3))]:
         with pytest.raises(ValueError):
             trafo._displaces_rgc(xy)
@@ -122,7 +210,7 @@ def test_RetinalCoordTrafo__displaces_rgc():
 
 
 def test_RetinalCoordTrafo_build_ganglion_cell_layer():
-    trafo = m.RetinalCoordTrafo()
+    trafo = ValidRetinalCoordTrafo()
     trafo.xrange = (-2, 2)
     trafo.yrange = (-1, 1)
     trafo.xystep = 1
@@ -130,10 +218,19 @@ def test_RetinalCoordTrafo_build_ganglion_cell_layer():
 
 
 def test_RetinalGrid():
-    trafo = m.RetinalGrid()
-    trafo.xrange = (-2, 2)
-    trafo.yrange = (-1, 1)
-    trafo.xystep = 1
+    params = {'xrange': (-2, 2), 'yrange': (-1, 1), 'xystep': 1}
+    trafo = ValidRetinalGrid()
+    for p in params:
+        npt.assert_equal(hasattr(trafo, p), True)
+
+    # Two different ways to set the parameters:
+    trafo.set_params(**params)
+    for k, v in six.iteritems(params):
+        npt.assert_equal(getattr(trafo, k), v)
+    trafo = ValidRetinalGrid(**params)
+    for k, v in six.iteritems(params):
+        npt.assert_equal(getattr(trafo, k), v)
+
     trafo.build_ganglion_cell_layer()
 
     # Make sure shape is right
@@ -146,11 +243,34 @@ def test_RetinalGrid():
 
 
 def test_ImageMomentLoss():
-    pass
+    params = {'greater_is_better': True}
+    trafo = ValidImageMomentsLoss()
+    for p in params:
+        npt.assert_equal(hasattr(trafo, p), True)
+
+    # Two different ways to set the parameters:
+    trafo.set_params(**params)
+    for k, v in six.iteritems(params):
+        npt.assert_equal(getattr(trafo, k), v)
+    trafo = ValidImageMomentsLoss(**params)
+    for k, v in six.iteritems(params):
+        npt.assert_equal(getattr(trafo, k), v)
 
 
 def test_SRDLoss():
-    pass
+    params = {'greater_is_better': True, 'w_scale': 1, 'w_rot': 2,
+              'w_dice': 3}
+    trafo = ValidSRDLoss()
+    for p in params:
+        npt.assert_equal(hasattr(trafo, p), True)
+
+    # Two different ways to set the parameters:
+    trafo.set_params(**params)
+    for k, v in six.iteritems(params):
+        npt.assert_equal(getattr(trafo, k), v)
+    trafo = ValidSRDLoss(**params)
+    for k, v in six.iteritems(params):
+        npt.assert_equal(getattr(trafo, k), v)
 
 
 def test_BaseModel___init__():
@@ -167,7 +287,9 @@ def test_BaseModel___init__():
         npt.assert_equal(getattr(newmodel, key), 1234)
 
     # But setting parameters that are not in ``get_params`` is not allowed:
-    for forbidden_key in ['_is_fitted', 'greater_is_better', 'invalid']:
+    for forbidden_key in ['_is_fitted', 'greater_is_better', 'invalid',
+                          'xrange', 'w_scale']:
+        print(forbidden_key)
         set_param = {forbidden_key: 1234}
         with pytest.raises(ValueError):
             model.set_params(**set_param)
