@@ -21,7 +21,7 @@ def test_get_thresholded_image():
             imgproc.get_thresholded_image(invalid_img)
 
     # `thresh` must be an int, float, or a string
-    for invalid_thresh in [{'a': 0}, [0, 1]]:
+    for invalid_thresh in [{'a': 0}, [0, 1], None]:
         with pytest.raises(TypeError):
             imgproc.get_thresholded_image(img, thresh=invalid_thresh)
     # If `thresh` is a string, must be a known method
@@ -33,11 +33,12 @@ def test_get_thresholded_image():
     # `thresh` is out of range:
     for th, out, exp_uniq in zip([0.1, 'min', -1, 2],
                                  [in_shape, (16, 10), (20, 21), None],
-                                 [[0, 255], [0, 255], 255, 0]):
+                                 [[0, 1], [0, 1], 1, 0]):
         th_img = imgproc.get_thresholded_image(img, thresh=th, out_shape=out)
         npt.assert_equal(th_img.shape, in_shape if out is None else out)
         npt.assert_equal(np.unique(th_img.ravel()), exp_uniq)
-        npt.assert_equal(th_img.dtype, np.uint8)
+        npt.assert_equal((th_img.dtype == np.float32 or
+                          th_img.dtype == np.float64), True)
 
 
 def test_get_region_props():

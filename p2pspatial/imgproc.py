@@ -27,15 +27,16 @@ def get_thresholded_image(img, thresh=0, out_shape=None, verbose=True):
     """
     if not isinstance(img, np.ndarray):
         raise TypeError("'img' must be a np.ndarray.")
-    if not isinstance(thresh, (int, float, six.string_types)):
-        raise TypeError(("'thresh' must be an int, float, or a string; not "
-                         "%s." % type(thresh)))
 
     # Rescale the image if `out_shape` is given
     if out_shape is not None:
         if not isinstance(out_shape, (tuple, list, np.ndarray)):
             raise TypeError("'out_shape' must be a tuple, list, or np.ndarray")
         img = skit.resize(img, out_shape, mode='reflect')
+
+    if not isinstance(thresh, (int, float, six.string_types)):
+        raise TypeError(("'thresh' must be an int, float, a string, or None; "
+                         "not %s." % type(thresh)))
 
     # Find the numerical threshold to apply, either using a known scikit-image
     # method, or by applying the provided int, float directly:
@@ -59,8 +60,8 @@ def get_thresholded_image(img, thresh=0, out_shape=None, verbose=True):
         # Directly apply the provided int, float
         th = thresh
 
-    # Apply threshold and convert image to 8-bit
-    return skimage.img_as_ubyte(img > th)
+    # Apply threshold and convert image to [0, 1]
+    return skimage.img_as_float(img > th)
 
 
 def get_avg_image(X, subject, electrode, amp=None, align_center=None):
@@ -89,12 +90,12 @@ def get_avg_image(X, subject, electrode, amp=None, align_center=None):
     return avg_img
 
 
-def get_region_props(img, thresh='min', out_shape=None, return_all=False):
+def get_region_props(img, thresh=0, out_shape=None, return_all=False):
     img = get_thresholded_image(img, thresh=thresh, out_shape=out_shape)
     if img is None:
         return None
 
-    regions = skim.regionprops(img)
+    regions = skim.regionprops(img.astype(np.int32))
     if len(regions) == 0:
         # print('No regions: min=%f max=%f' % (img.min(), img.max()))
         return None
@@ -163,7 +164,8 @@ def dice_coeff(image0, image1):
     return 2 * np.sum(img0 * img1) / (np.sum(img0) + np.sum(img1) + 1e-12)
 
 
-def srd_loss(images, n_angles=37, w_scale=33, w_rot=34, w_dice=33):
+def srd_loss(images, n_angles=37, w_scale=33, w_rot=34, w_dice=33,
+             return_raw=False):
     """Calculates new loss function"""
     # Unpack `images` into two images, which can be a bit of pain: Most common
     # used case is when zip(y_true.iterrows(), y_pred.iterrows()) is passed
@@ -230,11 +232,19 @@ def srd_loss(images, n_angles=37, w_scale=33, w_rot=34, w_dice=33):
             for r in angles]
     # If multiple angles give the same dice coefficient, choose the smallest
     # angle. Scale the loss to [0, 1]:
-    loss_rot = np.abs(angles[np.isclose(dice, np.max(dice))]).min() / max_rot
+    img_angle = angles[np.isclose(dice, np.max(dice))]
+    loss_rot = np.abs(img_angle).min() / max_rot
 
     # Dice loss: Turn the dice coefficient into a loss in [0, 1]
     loss_dice = 1 - np.max(dice)
 
     # Now all terms are in [0, 1], combine with weights (by default, loss is
     # in [0, 100]):
-    return w_scale * loss_scale + w_rot * loss_rot + w_dice * loss_dice
+    loss = w_scale * loss_scale + w_rot * loss_rot + w_dice * loss_dice
+    if return_raw:
+        loss_terms = {'loss_scale': loss_scale, 'loss_rot': loss_rot,
+                      'loss_dice': loss_dice}
+        params = {'scale': img_scale, 'angle': img_angle, 'dice': np.max(dice)}
+        return loss, loss_terms, params
+    else:
+        return loss
