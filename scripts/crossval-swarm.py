@@ -16,7 +16,9 @@ models = {
     'A': p2pspatial.models.ModelA,
     'B': p2pspatial.models.ModelB,
     'C': p2pspatial.models.ModelC,
-    'D': p2pspatial.models.ModelD
+    'D': p2pspatial.models.ModelD,
+    'E': p2pspatial.models.ModelC,
+    'F': p2pspatial.models.ModelD,
 }
 
 # All search parameters for each individual model:
@@ -46,6 +48,26 @@ models_search_params = {
         'axlambda': (20, 1000),
         'implant_x': (-2000, 1000),
         'implant_y': (-2000, 2000),
+        'implant_rot': (np.deg2rad(-45), 0)
+    },
+    # Model E: Axon map model + loc_od:
+    'E': {
+        'rho': (20, 1000),
+        'axlambda': (20, 1000),
+        'implant_x': (-2000, 1000),
+        'implant_y': (-2000, 2000),
+        'loc_od_x': (13.5, 17.5),
+        'loc_od_y': (0, 3),
+        'implant_rot': (np.deg2rad(-45), 0)
+    },
+    # Model F: Axon map model with perspective transform + loc_od:
+    'F': {
+        'rho': (20, 1000),
+        'axlambda': (20, 1000),
+        'implant_x': (-2000, 1000),
+        'implant_y': (-2000, 2000),
+        'loc_od_x': (13.5, 17.5),
+        'loc_od_y': (0, 3),
         'implant_rot': (np.deg2rad(-45), 0)
     },
 }
