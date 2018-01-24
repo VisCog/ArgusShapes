@@ -13,10 +13,11 @@ import scipy.stats as sps
 
 import pulse2percept as p2p
 
+import skimage
 import skimage.io as skio
 import skimage.filters as skif
+import skimage.morphology as skim
 import skimage.transform as skit
-import skimage.measure as skim
 
 import sklearn.base as sklb
 import sklearn.metrics as sklm
@@ -27,8 +28,7 @@ from . import imgproc
 
 p2p.console.setLevel(logging.ERROR)
 
-__all__ = ["load_data", "average_data",
-           "SpatialSimulation"]
+__all__ = ["load_data", "transform_mean_images", "SpatialSimulation"]
 
 
 # Use duecredit (duecredit.org) to provide a citation to relevant work to
@@ -38,6 +38,75 @@ due.cite(Doi("10.1167/13.9.30"),
          description="Template project for small scientific Python projects",
          tags=["reference-implementation"],
          path='p2pspatial')
+
+
+def _loads_data_row(df_row, subject, electrodes, amplitude, date, single_stim):
+    _, row = df_row
+
+    # Split the data strings to extract subject, electrode, etc.
+    fname = row['Filename']
+    date = fname.split('_')[0]
+    params = row['Params'].split(' ')
+    stim = params[0].split('_')
+    if len(params) < 2 or len(stim) < 2:
+        return None
+    # Subject string mismatch:
+    if subject is not None and stim[0] != subject:
+        return None
+    # Electrode string mismatch:
+    if electrodes is not None:
+        if params[1] not in electrodes:
+            return None
+    # Date string mismatch:
+    if date is not None and date != date:
+        return None
+    # Multiple electrodes mentioned:
+    if single_stim and '_' in params[1]:
+        return None
+    # Stimulus class mismatch:
+    if single_stim and stim[1] != 'SingleElectrode':
+        return None
+
+    # Find the current amplitude in the folder name
+    # It could have any of the following formats: '/3xTh', '_2.5xTh',
+    # ' 2xTh'. Idea: Find the string 'xTh', then walk backwards to
+    # find the last occurrence of '_', ' ', or '/'
+    idx_end = row['Folder'].find('xTh')
+    if idx_end == -1:
+        return None
+    idx_start = np.max([row['Folder'].rfind('_', 0, idx_end),
+                        row['Folder'].rfind(' ', 0, idx_end),
+                        row['Folder'].rfind(os.sep, 0, idx_end)])
+    if idx_start == -1:
+        return None
+    amp = float(row['Folder'][idx_start + 1:idx_end])
+    if amplitude is not None:
+        if not np.isclose(amp, amplitude):
+            return None
+
+    # Load image
+    if not os.path.isfile(os.path.join(row['Folder'], row['Filename'])):
+        return None
+    img = skio.imread(os.path.join(row['Folder'], row['Filename']),
+                      as_grey=True)
+    props = imgproc.get_region_props(img, thresh=0)
+
+    # Assemble all feature values in a dict
+    feat = {'filename': fname,
+            'folder': row['Folder'],
+            'param_str': row['Params'],
+            'subject': stim[0],
+            'electrode': params[1],
+            'stim_class': stim[1],
+            'amp': amp,
+            'date': date,
+            'img_shape': img.shape}
+    target = {'image': img,
+              'area': props.area,
+              'orientation': props.orientation,
+              'major_axis_length': props.major_axis_length,
+              'minor_axis_length': props.minor_axis_length}
+    return feat, target
 
 
 def load_data(folder, subject=None, electrodes=None, amplitude=None,
@@ -63,76 +132,123 @@ def load_data(folder, subject=None, electrodes=None, amplitude=None,
     if random_state is not None:
         df = sklu.shuffle(df, random_state=random_state)
 
-    features = []
-    targets = []
-    for _, row in df.iterrows():
-        # Split the data strings to extract subject, electrode, etc.
-        fname = row['Filename']
-        date = fname.split('_')[0]
-        params = row['Params'].split(' ')
-        stim = params[0].split('_')
-        if len(params) < 2 or len(stim) < 2:
-            if verbose:
-                print('Could not parse row:', row['Filename'],
-                      row['Params'])
-            continue
-        if subject is not None and stim[0] != subject:
-            continue
-        if electrodes is not None:
-            if params[1] not in electrodes:
-                continue
-        if date is not None and date != date:
-            continue
-        if single_stim and '_' in params[1]:
-            continue
+    # Process rows of the data frame in parallel:
+    feat_target = p2p.utils.parfor(_loads_data_row, df.iterrows(),
+                                   func_args=[subject, electrodes, amplitude,
+                                              date, single_stim])
+    # Invalid rows are returned as None, filter them out:
+    feat_target = list(filter(None, feat_target))
+    # For all other rows, a tuple (X, y) is returned:
+    features = [ft[0] for ft in feat_target]
+    targets = [ft[1] for ft in feat_target]
 
-        # Find the current amplitude in the folder name
-        # It could have any of the following formats: '/3xTh', '_2.5xTh',
-        # ' 2xTh'. Idea: Find the string 'xTh', then walk backwards to
-        # find the last occurrence of '_', ' ', or '/'
-        idx_end = row['Folder'].find('xTh')
-        if idx_end == -1:
-            if verbose:
-                print('Could not find "xTh" in row:', row['Folder'])
-            continue
-        idx_start = np.max([row['Folder'].rfind('_', 0, idx_end),
-                            row['Folder'].rfind(' ', 0, idx_end),
-                            row['Folder'].rfind(os.sep, 0, idx_end)])
-        if idx_start == -1:
-            if verbose:
-                print('Could not find amplitude in row:', row['Folder'])
-            continue
-        amp = float(row['Folder'][idx_start + 1:idx_end])
-        if amplitude is not None:
-            if not np.isclose(amp, amplitude):
-                continue
-
-        # Load image
-        if not os.path.isfile(os.path.join(row['Folder'], row['Filename'])):
-            if verbose:
-                print('Could not find file:', row['Folder'], row['Filename'])
-            continue
-        img = skio.imread(os.path.join(row['Folder'], row['Filename']),
-                          as_grey=True)
-
-        # Assemble all feature values in a dict
-        feat = {'filename': fname,
-                'folder': row['Folder'],
-                'param_str': row['Params'],
-                'subject': stim[0],
-                'electrode': params[1],
-                'stim_class': stim[1],
-                'amp': amp,
-                'date': date,
-                'img_shape': img.shape}
-        features.append(feat)
-        target = {'image': img}
-        targets.append(target)
     if verbose:
         print('Found %d samples: %d feature values, %d target values' % (
             len(features), len(features[0]), len(targets[0]))
         )
     return pd.DataFrame(features), pd.DataFrame(targets)
+
+
+def _transforms_electrode_images(Xel):
+    """Takes all trial images (given electrode) and computes mean image"""
+    assert len(Xel.subject.unique()) == 1
+    subject = Xel.subject.unique()[0]
+    assert len(Xel.amp.unique()) == 1
+    amplitude = Xel.amp.unique()[0]
+    assert len(Xel.electrode.unique()) == 1
+    electrode = Xel.electrode.unique()[0]
+
+    imgs = []
+    areas = []
+    orientations = []
+    for Xrow in Xel.iterrows():
+        _, row = Xrow
+        img = skio.imread(os.path.join(row['folder'],
+                                       row['filename']),
+                          as_grey=True)
+        img = skimage.img_as_float(img)
+        img = imgproc.center_phosphene(img)
+        props = imgproc.get_region_props(img, thresh=0)
+        assert not np.isnan(props.area)
+        assert not np.isnan(props.orientation)
+        areas.append(props.area)
+        orientations.append(props.orientation)
+        imgs.append(img)
+
+    assert len(imgs) > 0
+    if len(imgs) == 1:
+        # Only one image found, save this one
+        img_avg_th = imgproc.get_thresholded_image(img, thresh=0)
+    else:
+        # More than one image found: Save the first image as seed image to
+        # which all other images will be compared:
+        img_seed = imgs[0]
+        img_avg = np.zeros_like(img_seed)
+        for img in imgs[1:]:
+            _, _, params = imgproc.srd_loss((img_seed, img),
+                                            return_raw=True)
+            img = imgproc.scale_phosphene(img, params['scale'])
+            # There might be more than one optimal angle, choose the smallest:
+            angle = params['angle'][np.argmin(np.abs(params['angle']))]
+            img = skit.rotate(img, angle, order=3)
+            img_avg += img
+
+        # Binarize the average image:
+        img_avg_th = imgproc.get_thresholded_image(img_avg,
+                                                   thresh='otsu')
+        assert np.isclose(img_avg_th.min(), 0)
+        assert np.isclose(img_avg_th.max(), 1)
+        # Remove "pepper" (fill small holes):
+        # img_avg_morph = skim.binary_closing(img_avg_th, selem=skim.square(19))
+        # Remove "salt" (remove small bright spots):
+        # img_avg_morph = skim.binary_opening(img_avg_morph,
+        #                                     selem=skim.square(9))
+        # if not np.allclose(img_avg_morph, np.zeros_like(img_avg_morph)):
+        #     img_avg_th = img_avg_morph
+        # Rotate the binarized image to have the same orientation as
+        # the mean trial image:
+        props = imgproc.get_region_props(img_avg_th, thresh=0)
+        angle_rad = np.mean(orientations) - props.orientation
+        img_avg_th = skit.rotate(img_avg_th, np.rad2deg(angle_rad),
+                                 order=3)
+        # Scale the binarized image to have the same area as the mean
+        # trial image:
+        props = imgproc.get_region_props(img_avg_th, thresh=0)
+        scale = np.sqrt(np.mean(areas) / props.area)
+        img_avg_th = imgproc.scale_phosphene(img_avg_th, scale)
+
+    # The result is an image that has the exact same area and
+    # orientation as all trial images averaged. This is what we
+    # save:
+    target = {'image': img_avg_th}
+
+    # Remove ambiguous (trial-related) parameters:
+    feat = {'subject': subject, 'amplitude': amplitude,
+            'electrode': electrode, 'img_shape': img_avg_th.shape}
+
+    return feat, target
+
+
+def transform_mean_images(Xraw, yraw):
+    subjects = Xraw.subject.unique()
+    Xout = []
+    yout = []
+
+    for subject in subjects:
+        X = Xraw[Xraw.subject == subject]
+        amplitudes = X.amp.unique()
+
+        for amp in amplitudes:
+            Xamp = X[X.amp == amp]
+            electrodes = Xamp.electrode.unique()
+
+            Xel = [Xamp[Xamp.electrode == e] for e in electrodes]
+            feat_target = p2p.utils.parfor(_transforms_electrode_images, Xel)
+            Xout += [ft[0] for ft in feat_target]
+            yout += [ft[1] for ft in feat_target]
+
+    # Return feature matrix and target values as DataFrames
+    return pd.DataFrame(Xout), pd.DataFrame(yout)
 
 
 def average_data(Xold, yold):
