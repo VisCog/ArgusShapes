@@ -2,17 +2,26 @@ import numpy as np
 import pandas as pd
 import abc
 import six
+import time
 
 import pulse2percept.retina as p2pr
 import pulse2percept.implants as p2pi
 import pulse2percept.utils as p2pu
 
-import scipy.stats as sps
+import scipy.stats as spst
+import scipy.spatial as spsp
 
 import sklearn.base as sklb
 import sklearn.exceptions as skle
 
 from . import imgproc
+
+try:
+    # Python 2
+    reduce(lambda x, y: x + y, [1, 2, 3])
+except NameError:
+    # Python 3
+    from functools import reduce
 
 
 @six.add_metaclass(abc.ABCMeta)
@@ -119,11 +128,20 @@ class BaseModel(sklb.BaseEstimator):
                                          y_center=self.implant_y,
                                          rot=self.implant_rot)
         # Build the ganglion cell layer:
+        print("build GCL")
+        t0 = time.time()
         self.build_ganglion_cell_layer()
+        print("- Took", time.time() - t0)
         # Build the ganglion axon layer (optional):
+        print("build OFL")
+        t0 = time.time()
         self.build_optic_fiber_layer()
+        print("- Took", time.time() - t0)
         # Calculate current spread for every electrode in `X`:
+        print("build curr map")
+        t0 = time.time()
         self.calc_curr_map(X)
+        print("- Took", time.time() - t0)
         # Inform the object that is has been fitted:
         self._is_fitted = True
         return self
@@ -219,10 +237,10 @@ class AxonMapModel(BaseModel):
         self.loc_od_y = 1.5
         # Set parameters of the Jansonius model: Number of axons and number of
         # segments per axon can be overriden by the user:
-        self.n_axons = 501
-        self.n_ax_segments = 801
+        self.n_axons = 301
+        self.n_ax_segments = 71
         self._phi_range = (-180, 180)
-        self._rho_range = (3, 45)
+        self._rho_range = (3, 50)
 
     def get_params(self, deep=True):
         params = super(AxonMapModel, self).get_params(deep=deep)
@@ -231,32 +249,76 @@ class AxonMapModel(BaseModel):
                       loc_od_x=self.loc_od_x, loc_od_y=self.loc_od_y)
         return params
 
-    def build_optic_fiber_layer(self):
-        if self.implant.eye == 'LE':
-            raise NotImplementedError
-        # Build the Jansonius model: Grow a number of axons in a range of phi:
+    def _grows_axon_bundles(self):
+        # Build the Jansonius model: Grow a number of axon bundles in all dirs:
         phi = np.linspace(*self._phi_range, num=self.n_axons)
         jans_kwargs = {'n_rho': self.n_ax_segments, 'eye': self.implant.eye,
                        'rho_range': self._rho_range,
                        'loc_od': (self.loc_od_x, self.loc_od_y)}
-        self.axon_bundles = p2pu.parfor(p2pr.jansonius2009, phi,
-                                        func_kwargs=jans_kwargs,
-                                        engine=self.engine, n_jobs=self.n_jobs,
-                                        scheduler=self.scheduler)
-        # For each grid location, find the closest axon:
+        bundles = p2pu.parfor(p2pr.jansonius2009, phi, func_kwargs=jans_kwargs,
+                              engine=self.engine, n_jobs=self.n_jobs,
+                              scheduler=self.scheduler)
+        print('bundles:', len(bundles))
+        # Remove axon bundles outside the simulated area:
+        bundles = list(filter(lambda x: (np.max(x[:, 0]) >= self.xrange[0] and
+                                         np.min(x[:, 0]) <= self.xrange[1] and
+                                         np.max(x[:, 1]) >= self.yrange[0] and
+                                         np.min(x[:, 1]) <= self.yrange[1]),
+                              bundles))
+        print('removed far away:', len(bundles))
+        # Remove short axon bundles:
+        bundles = list(filter(lambda x: len(x) > 10, bundles))
+        print('removed short:', len(bundles))
+        return bundles
+
+    def _finds_closest_axons(self, bundles):
+        # Build a KDTree from all axon segment locations: This allows for a
+        # quick nearest-neighbor lookup. Need to store the axon ID for every
+        # segment:
+        axon_idx = [idx * np.ones(len(ax)) for idx, ax in enumerate(bundles)]
+        axon_idx = reduce(lambda x, y: np.concatenate((x, y)), axon_idx)
+        axon_idx = np.array(axon_idx, dtype=np.int32)
+        # Then build the KDTree with all axon segment locations:
+        tree = spsp.cKDTree(reduce(lambda x, y: np.vstack((x, y)), bundles))
+        # Find the closest axon segment for every grid location:
         xydva = np.column_stack((p2pr.ret2dva(self.xret.ravel()),
                                  p2pr.ret2dva(self.yret.ravel())))
-        self.axons = p2pu.parfor(p2pr.find_closest_axon, xydva,
-                                 func_args=[self.axon_bundles],
-                                 engine=self.engine, scheduler=self.scheduler,
-                                 n_jobs=self.n_jobs)
-        # For every axon segment, calculate distance to soma. Snap axon
-        # locations to the grid -- THIS IS THE PROBLEM, DONT DO THAT, USE
-        # EXACT VALUES OR FIND A BETTER WAY
-        self.axon_dist = p2pu.parfor(p2pr.axon_dist_from_soma, self.axons,
-                                     func_args=[xydva[:, 0], xydva[:, 1]],
-                                     engine=self.engine, n_jobs=self.n_jobs,
-                                     scheduler=self.scheduler)
+        nearest_segment = [tree.query(xy)[1] for xy in xydva]
+        # Look up the axon ID for every axon segment:
+        nearest_axon = axon_idx[nearest_segment]
+        axons = []
+        for xy, n in zip(xydva, nearest_axon):
+            bundle = bundles[n]
+            ax_tree = spsp.cKDTree(bundle)
+            _, idx = ax_tree.query(xy)
+            # Cut off the part of the fiber that goes beyond the soma:
+            axon = bundle[idx:0:-1, :]
+            # Add the exact location of the soma:
+            axon = np.insert(axon, 0, xy, axis=0)
+            # For every axon segment, calculate distance from soma by summing
+            # up the individual distances between neighboring axon segments
+            # (by "walking along the axon"):
+            xdiff = np.diff(axon[:, 0])
+            ydiff = np.diff(axon[:, 1])
+            dist = np.sqrt(np.cumsum(xdiff ** 2 + ydiff ** 2))
+            dist = np.insert(dist, 0, 0, axis=0)
+            axons.append(np.column_stack((axon, dist)))
+        return axons
+
+    def build_optic_fiber_layer(self):
+        if self.implant.eye == 'LE':
+            raise NotImplementedError
+        # Build the Jansonius model: Grow a number of axon bundles in all dirs:
+        print("- grow %d axon bundles with %d segments" % (self.n_axons,
+                                                           self.n_ax_segments))
+        t0 = time.time()
+        bundles = self._grows_axon_bundles()
+        print("- took", time.time() - t0, "s")
+
+        print('- find closest axons')
+        t0 = time.time()
+        xydva, axons, axon_dist = self._finds_closest_axons(bundles)
+        print("- took", time.time() - t0, "s")
 
     def _calcs_el_curr_map(self, electrode):
         """Calculates the current map for a specific electrode"""
@@ -267,6 +329,8 @@ class AxonMapModel(BaseModel):
         r2 = (self.xret - self.implant[electrode].x_center) ** 2
         r2 += (self.yret - self.implant[electrode].y_center) ** 2
         cm = np.exp(-r2 / (2.0 * self.rho ** 2))
+        return cm
+
         # Calculate axonal activation:
         func_kwargs = {'sensitivity_rule': 'decay', 'contribution_rule': 'max',
                        'decay_const': self.axlambda, 'powermean_exp': None}
@@ -290,7 +354,7 @@ class RetinalCoordTrafo(BaseModel):
         # degrees of visual angle, at a given spatial resolution (step size):
         self.xrange = (-30, 30)  # dva
         self.yrange = (-20, 20)  # dva
-        self.xystep = 0.1  # dva
+        self.xystep = 0.2  # dva
 
     def get_params(self, deep=True):
         params = super(RetinalCoordTrafo, self).get_params(deep=deep)
@@ -327,7 +391,7 @@ class RetinalCoordTrafo(BaseModel):
         rmubeta = (np.abs(r) - mu) / beta
         numer = delta * gamma * np.exp(-rmubeta ** gamma)
         numer *= rmubeta ** (alpha * gamma - 1)
-        denom = beta * sps.gamma.pdf(alpha, 5)
+        denom = beta * spst.gamma.pdf(alpha, 5)
 
         return numer / denom / scale
 
@@ -374,7 +438,7 @@ class RetinalGrid(BaseModel):
         # degrees of visual angle, at a given spatial resolution (step size):
         self.xrange = (-30, 30)  # dva
         self.yrange = (-20, 20)  # dva
-        self.xystep = 0.1  # dva
+        self.xystep = 0.2  # dva
 
     def get_params(self, deep=True):
         params = super(RetinalGrid, self).get_params(deep=deep)
