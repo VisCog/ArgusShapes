@@ -15,8 +15,8 @@ import p2pspatial
 models = {
     'A': p2pspatial.models.ModelA,
     'B': p2pspatial.models.ModelB,
-    # 'C': p2pspatial.models.ModelC,
-    # 'D': p2pspatial.models.ModelD
+    'C': p2pspatial.models.ModelC,
+    'D': p2pspatial.models.ModelD
 }
 
 # All search parameters for each individual model:
@@ -32,7 +32,24 @@ models_search_params = {
         'implant_y': (-2000, 2000),
         'implant_rot': (np.deg2rad(-45), 0)
     },
+    # Model C: Axon map model:
+    'C': {
+        'rho': (20, 1000),
+        'axlambda': (20, 1000),
+        'implant_x': (-2000, 1000),
+        'implant_y': (-2000, 2000),
+        'implant_rot': (np.deg2rad(-45), 0)
+    },
+    # Model D: Axon map model with perspective transform:
+    'D': {
+        'rho': (20, 1000),
+        'axlambda': (20, 1000),
+        'implant_x': (-2000, 1000),
+        'implant_y': (-2000, 2000),
+        'implant_rot': (np.deg2rad(-45), 0)
+    },
 }
+
 
 
 def main():
@@ -96,6 +113,7 @@ def main():
 
     # Instantiate model
     model_params = {'engine': 'joblib', 'scheduler': 'threading',
+                    'xystep': 0.5,
                     'n_jobs': n_jobs,
                     'w_scale': w_scale, 'w_rot': w_rot, 'w_dice': w_dice}
     regressor = models[modelname](**model_params)
