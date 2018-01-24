@@ -128,20 +128,11 @@ class BaseModel(sklb.BaseEstimator):
                                          y_center=self.implant_y,
                                          rot=self.implant_rot)
         # Build the ganglion cell layer:
-        print("build GCL")
-        t0 = time.time()
         self.build_ganglion_cell_layer()
-        print("- Took", time.time() - t0)
         # Build the ganglion axon layer (optional):
-        print("build OFL")
-        t0 = time.time()
         self.build_optic_fiber_layer()
-        print("- Took", time.time() - t0)
         # Calculate current spread for every electrode in `X`:
-        print("build curr map")
-        t0 = time.time()
         self.calc_curr_map(X)
-        print("- Took", time.time() - t0)
         # Inform the object that is has been fitted:
         self._is_fitted = True
         return self
@@ -231,7 +222,7 @@ class AxonMapModel(BaseModel):
         """Sets default parameters of the axon map model"""
         super(AxonMapModel, self)._sets_default_params()
         self.rho = 100
-        self.axlambda = 1
+        self.axlambda = 100
         # Set the (x,y) location of the optic disc:
         self.loc_od_x = 15.5
         self.loc_od_y = 1.5
@@ -258,17 +249,16 @@ class AxonMapModel(BaseModel):
         bundles = p2pu.parfor(p2pr.jansonius2009, phi, func_kwargs=jans_kwargs,
                               engine=self.engine, n_jobs=self.n_jobs,
                               scheduler=self.scheduler)
-        print('bundles:', len(bundles))
         # Remove axon bundles outside the simulated area:
         bundles = list(filter(lambda x: (np.max(x[:, 0]) >= self.xrange[0] and
                                          np.min(x[:, 0]) <= self.xrange[1] and
                                          np.max(x[:, 1]) >= self.yrange[0] and
                                          np.min(x[:, 1]) <= self.yrange[1]),
                               bundles))
-        print('removed far away:', len(bundles))
         # Remove short axon bundles:
         bundles = list(filter(lambda x: len(x) > 10, bundles))
-        print('removed short:', len(bundles))
+        # Convert to um:
+        bundles = [p2pr.dva2ret(b) for b in bundles]
         return bundles
 
     def _finds_closest_axons(self, bundles):
@@ -281,13 +271,12 @@ class AxonMapModel(BaseModel):
         # Then build the KDTree with all axon segment locations:
         tree = spsp.cKDTree(reduce(lambda x, y: np.vstack((x, y)), bundles))
         # Find the closest axon segment for every grid location:
-        xydva = np.column_stack((p2pr.ret2dva(self.xret.ravel()),
-                                 p2pr.ret2dva(self.yret.ravel())))
-        nearest_segment = [tree.query(xy)[1] for xy in xydva]
+        xyret = np.column_stack((self.xret.ravel(), self.yret.ravel()))
+        nearest_segment = [tree.query(xy)[1] for xy in xyret]
         # Look up the axon ID for every axon segment:
         nearest_axon = axon_idx[nearest_segment]
         axons = []
-        for xy, n in zip(xydva, nearest_axon):
+        for xy, n in zip(xyret, nearest_axon):
             bundle = bundles[n]
             ax_tree = spsp.cKDTree(bundle)
             _, idx = ax_tree.query(xy)
@@ -298,52 +287,34 @@ class AxonMapModel(BaseModel):
             # For every axon segment, calculate distance from soma by summing
             # up the individual distances between neighboring axon segments
             # (by "walking along the axon"):
-            xdiff = np.diff(axon[:, 0])
-            ydiff = np.diff(axon[:, 1])
-            dist = np.sqrt(np.cumsum(xdiff ** 2 + ydiff ** 2))
-            dist = np.insert(dist, 0, 0, axis=0)
-            axons.append(np.column_stack((axon, dist)))
+            d2 = np.cumsum(np.diff(axon[:, 0]) ** 2 + np.diff(axon[:, 1]) ** 2)
+            sensitivity = np.exp(-d2 / (2.0 * self.axlambda ** 2))
+            axons.append(np.column_stack((axon[1:, :], sensitivity)))
         return axons
 
     def build_optic_fiber_layer(self):
         if self.implant.eye == 'LE':
             raise NotImplementedError
         # Build the Jansonius model: Grow a number of axon bundles in all dirs:
-        print("- grow %d axon bundles with %d segments" % (self.n_axons,
-                                                           self.n_ax_segments))
-        t0 = time.time()
         bundles = self._grows_axon_bundles()
-        print("- took", time.time() - t0, "s")
-
-        print('- find closest axons')
-        t0 = time.time()
-        xydva, axons, axon_dist = self._finds_closest_axons(bundles)
-        print("- took", time.time() - t0, "s")
+        self.axons = self._finds_closest_axons(bundles)
 
     def _calcs_el_curr_map(self, electrode):
         """Calculates the current map for a specific electrode"""
         assert isinstance(electrode, six.string_types)
         if not self.implant[electrode]:
             raise ValueError("Electrode '%s' could not be found." % electrode)
-        # Calculate current spread:
-        r2 = (self.xret - self.implant[electrode].x_center) ** 2
-        r2 += (self.yret - self.implant[electrode].y_center) ** 2
-        cm = np.exp(-r2 / (2.0 * self.rho ** 2))
-        return cm
-
-        # Calculate axonal activation:
-        func_kwargs = {'sensitivity_rule': 'decay', 'contribution_rule': 'max',
-                       'decay_const': self.axlambda, 'powermean_exp': None}
-        contrib = p2pu.parfor(p2pr.axon_contribution, self.axon_dist,
-                              func_args=[cm], func_kwargs=func_kwargs,
-                              engine=self.engine, scheduler=self.scheduler,
-                              n_jobs=self.n_jobs)
-        # Unpack contrib values (REALLY NECESSARY? THIS IS SO SLOW!)
-        ecm = np.zeros_like(cm)
-        px_contrib = list(filter(None, contrib))
-        for idx, value in px_contrib:
-            ecm.ravel()[idx] = value
-        return ecm / (ecm.max() + np.finfo(float).eps) * cm.max()
+        ecm = []
+        for ax in self.axons:
+            if ax.shape[0] == 0:
+                ecm.append(0)
+                continue
+            r2 = (ax[:, 0] - self.implant[electrode].x_center) ** 2
+            r2 += (ax[:, 1] - self.implant[electrode].y_center) ** 2
+            curr = np.exp(-r2 / (2.0 * self.rho ** 2))
+            act = np.multiply(curr, ax[:, 2])
+            ecm.append(np.max(act))
+        return np.array(ecm, dtype=float).reshape(self.xret.shape)
 
 
 class RetinalCoordTrafo(BaseModel):
