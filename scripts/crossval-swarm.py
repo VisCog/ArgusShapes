@@ -8,7 +8,7 @@ import pickle
 from time import time
 from datetime import datetime
 
-import pulse2percept as p2p
+import pulse2percept.implants as p2pi
 import p2pspatial
 
 # All available models with their corresponding objects to call:
@@ -25,7 +25,7 @@ models = {
 models_search_params = {
     # Model A: Scoreboard model:
     'A': {
-        'rho': (20, 1000)
+        'rho': (20, 1000),
     },
     # Model B: Scoreboard model with perspective transform:
     'B': {
@@ -88,7 +88,7 @@ def main():
     modelname = sys.argv[1]
     assert modelname in models
     subject = sys.argv[2]
-    assert subject in ['12-005', '51-009', '52-001']
+    assert subject in ['12-005', '51-009', '52-001', 'TB']
     try:
         longopts = ["n_folds=", "n_jobs=", "amplitude=",
                     "w_scale=", "w_rot=", "w_dice="]
@@ -134,8 +134,12 @@ def main():
         raise ValueError('No data found. Abort.')
 
     # Instantiate model
+    if subject == 'TB':
+        implant_type = p2pi.ArgusI
+    else:
+        implant_type = p2pi.ArgusII
     model_params = {'engine': 'joblib', 'scheduler': 'threading',
-                    'xystep': 0.5,
+                    'xystep': 0.5, 'implant_type': implant_type,
                     'n_jobs': n_jobs,
                     'w_scale': w_scale, 'w_rot': w_rot, 'w_dice': w_dice}
     regressor = models[modelname](**model_params)
