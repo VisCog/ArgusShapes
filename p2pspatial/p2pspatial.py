@@ -28,7 +28,8 @@ from . import imgproc
 
 p2p.console.setLevel(logging.ERROR)
 
-__all__ = ["load_data", "transform_mean_images", "SpatialSimulation"]
+__all__ = ["load_data", "average_data", "transform_mean_images",
+           "SpatialSimulation"]
 
 
 # Use duecredit (duecredit.org) to provide a citation to relevant work to

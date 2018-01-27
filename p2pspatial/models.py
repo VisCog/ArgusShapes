@@ -229,24 +229,129 @@ class AxonMapModel(BaseModel):
         # Set parameters of the Jansonius model: Number of axons and number of
         # segments per axon can be overriden by the user:
         self.n_axons = 301
-        self.n_ax_segments = 71
         self._phi_range = (-180, 180)
-        self._rho_range = (3, 50)
+        # Number of sampling points along the radial axis(polar coordinates):
+        self.n_ax_segments = 71
+        # Lower and upper bounds for the radial position values(polar
+        # coordinates):
+        self.rho_range = (3, 50)
 
     def get_params(self, deep=True):
         params = super(AxonMapModel, self).get_params(deep=deep)
         params.update(rho=self.rho, axlambda=self.axlambda,
                       n_axons=self.n_axons, n_ax_segments=self.n_ax_segments,
+                      rho_range=self.rho_range,
                       loc_od_x=self.loc_od_x, loc_od_y=self.loc_od_y)
         return params
+
+    def _jansonius2009(self, phi0, beta_sup=-1.9, beta_inf=0.5, eye='RE'):
+        """Grows a single axon bundle based on the model by Jansonius (2009)
+
+        This function generates the trajectory of a single nerve fiber bundle
+        based on the mathematical model described in [1]_.
+
+        Parameters
+        ----------
+        phi0: float
+            Angular position of the axon at its starting point(polar
+            coordinates, degrees). Must be within[-180, 180].
+        beta_sup: float, optional, default: -1.9
+            Scalar value for the superior retina(see Eq. 5, `\beta_s` in the
+            paper).
+        beta_inf: float, optional, default: 0.5
+            Scalar value for the inferior retina(see Eq. 6, `\beta_i` in the
+            paper.)
+
+        Returns
+        -------
+        ax_pos: Nx2 array
+            Returns a two - dimensional array of axonal positions, where
+            ax_pos[0, :] contains the(x, y) coordinates of the axon segment
+            closest to the optic disc, and aubsequent row indices move the axon
+            away from the optic disc. Number of rows is at most `n_rho`, but
+            might be smaller if the axon crosses the meridian.
+
+        Notes
+        -----
+        The study did not include axons with phi0 in [-60, 60] deg.
+
+        .. [1] N. M. Jansionus, J. Nevalainen, B. Selig, L.M. Zangwill, P.A.
+               Sample, W. M. Budde, J. B. Jonas, W. A. Lagrèze, P. J.
+               Airaksinen, R. Vonthein, L. A. Levin, J. Paetzold, and U.
+               Schieferd, "A mathematical description of nerve fiber bundle
+               trajectories and their variability in the human retina. Vision
+               Research 49:2157-2163, 2009.
+        """
+        # Check for the location of the optic disc:
+        loc_od = (self.loc_od_x, self.loc_od_y)
+        if eye.upper() not in ['LE', 'RE']:
+            e_s = "Unknown eye string '%s': Choose from 'LE', 'RE'." % eye
+            raise ValueError(e_s)
+        if eye.upper() == 'LE':
+            # The Jansonius model doesn't know about left eyes: We invert the x
+            # coordinate of the optic disc here, run the model, and then invert
+            # all x coordinates of all axon fibers back.
+            loc_od = (-loc_od[0], loc_od[1])
+        if np.abs(phi0) > 180.0:
+            raise ValueError('phi0 must be within [-180, 180].')
+        if self.n_ax_segments < 1:
+            raise ValueError('Number of radial sampling points must be >= 1.')
+        if np.any(np.array(self.rho_range) < 0):
+            raise ValueError('rho cannot be negative.')
+        if self.rho_range[0] > self.rho_range[1]:
+            raise ValueError('Lower bound on rho cannot be larger than the '
+                             ' upper bound.')
+        is_superior = phi0 > 0
+        rho = np.linspace(*self.rho_range, num=self.n_ax_segments)
+
+        if is_superior:
+            # Axon is in superior retina, compute `b` (real number) from Eq. 5:
+            b = np.exp(beta_sup + 3.9 * np.tanh(-(phi0 - 121.0) / 14.0))
+            # Equation 3, `c` a positive real number:
+            c = 1.9 + 1.4 * np.tanh((phi0 - 121.0) / 14.0)
+        else:
+            # Axon is in inferior retina: compute `b` (real number) from Eq. 6:
+            b = -np.exp(beta_inf + 1.5 * np.tanh(-(-phi0 - 90.0) / 25.0))
+            # Equation 4, `c` a positive real number:
+            c = 1.0 + 0.5 * np.tanh((-phi0 - 90.0) / 25.0)
+
+        # Spiral as a function of `rho`:
+        phi = phi0 + b * (rho - rho.min()) ** c
+        # Convert to Cartesian coordinates:
+        xprime = rho * np.cos(np.deg2rad(phi))
+        yprime = rho * np.sin(np.deg2rad(phi))
+        # Find the array elements where the axon crosses the meridian:
+        if is_superior:
+            # Find elements in inferior retina
+            idx = np.where(yprime < 0)[0]
+        else:
+            # Find elements in superior retina
+            idx = np.where(yprime > 0)[0]
+        if idx.size:
+            # Keep only up to first occurrence
+            xprime = xprime[:idx[0]]
+            yprime = yprime[:idx[0]]
+        # Adjust coordinate system, having fovea=[0, 0] instead of
+        # `loc_od`=[0, 0]:
+        xmodel = xprime + loc_od[0]
+        ymodel = yprime
+        if loc_od[0] > 0:
+            # If x-coordinate of optic disc is positive, use Appendix A
+            idx = xprime > -loc_od[0]
+        else:
+            # Else we need to flip the sign
+            idx = xprime < -loc_od[0]
+        ymodel[idx] = yprime[idx] + loc_od[1] * (xmodel[idx] / loc_od[0]) ** 2
+        # In a left eye, need to flip back x coordinates:
+        if eye.upper() == 'LE':
+            xmodel *= -1
+        # Return as Nx2 array:
+        return np.vstack((xmodel, ymodel)).T
 
     def _grows_axon_bundles(self):
         # Build the Jansonius model: Grow a number of axon bundles in all dirs:
         phi = np.linspace(*self._phi_range, num=self.n_axons)
-        jans_kwargs = {'n_rho': self.n_ax_segments, 'eye': self.implant.eye,
-                       'rho_range': self._rho_range,
-                       'loc_od': (self.loc_od_x, self.loc_od_y)}
-        bundles = p2pu.parfor(p2pr.jansonius2009, phi, func_kwargs=jans_kwargs,
+        bundles = p2pu.parfor(self._jansonius2009, phi,
                               engine=self.engine, n_jobs=self.n_jobs,
                               scheduler=self.scheduler)
         # Remove axon bundles outside the simulated area:

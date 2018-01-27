@@ -74,7 +74,7 @@ class ValidAxonMapModel(m.SRDLoss, m.RetinalGrid, m.AxonMapModel):
     """A class that implements all abstract methods of AxonMapModel"""
 
     def build_optic_fiber_layer(self):
-        self.axon_dist = [([0], np.array([0, 0]))]
+        self.axons = [np.zeros((1, 3))] * int(np.prod(self.xret.shape))
 
     def _predicts_target_values(self, row):
         return row
@@ -480,3 +480,52 @@ def test_AxonMapModel():
         npt.assert_almost_equal(cm.min(), 0, decimal=3)
         npt.assert_almost_equal(cm.max(), 0, decimal=3)  # FIXME
         # Phosphenes are shaped by axonal activation
+
+
+def test_AxonMapModel__jansonius2009():
+    # With `rho` starting at 0, all axons should originate in the optic disc
+    # center
+    for loc_od in [(15.0, 2.0), (-15.0, 2.0), (-4.2, -6.66)]:
+        model = ValidAxonMapModel(loc_od_x=loc_od[0], loc_od_y=loc_od[1],
+                                  rho_range=(0, 45), n_ax_segments=100)
+        for phi0 in [-135.0, 66.0, 128.0]:
+            ax_pos = model._jansonius2009(phi0)
+            npt.assert_almost_equal(ax_pos[0, 0], loc_od[0])
+            npt.assert_almost_equal(ax_pos[0, 1], loc_od[1])
+
+    # These axons should all end at the meridian
+    for sign in [-1.0, 1.0]:
+        for phi0 in [110.0, 135.0, 160.0]:
+            model = ValidAxonMapModel(loc_od_x=15, loc_od_y=2,
+                                      n_ax_segments=801, rho_range=(0, 45))
+            ax_pos = model._jansonius2009(sign * phi0)
+            print(ax_pos[-1, :])
+            npt.assert_almost_equal(ax_pos[-1, 1], 0.0, decimal=1)
+
+    # `phi0` must be within [-180, 180]
+    for phi0 in [-200.0, 181.0]:
+        with pytest.raises(ValueError):
+            ValidAxonMapModel()._jansonius2009(phi0)
+
+    # `n_rho` must be >= 1
+    for n_rho in [-1, 0]:
+        with pytest.raises(ValueError):
+            ValidAxonMapModel(n_ax_segments=n_rho)._jansonius2009(0.0)
+
+    # `rho_range` must have min <= max
+    for lorho in [-200.0, 90.0]:
+        with pytest.raises(ValueError):
+            ValidAxonMapModel(rho_range=(lorho, 45))._jansonius2009(0)
+    for hirho in [-200.0, 40.0]:
+        with pytest.raises(ValueError):
+            ValidAxonMapModel(rho_range=(45, hirho))._jansonius2009(0)
+
+    # A single axon fiber with `phi0`=0 should return a single pixel location
+    # that corresponds to the optic disc
+    for eye in ['LE', 'RE']:
+        for loc_od in [(15.5, 1.5), (7.0, 3.0), (-2.0, -2.0)]:
+            model = ValidAxonMapModel(loc_od_x=loc_od[0], loc_od_y=loc_od[1],
+                                      rho_range=(0, 0), n_ax_segments=1)
+            single_fiber = model._jansonius2009(0)
+            npt.assert_equal(len(single_fiber), 1)
+            npt.assert_almost_equal(single_fiber[0], loc_od)
