@@ -447,7 +447,8 @@ def test_ScoreboardModel():
 def test_AxonMapModel():
     # AxonMapModel automatically sets a number of parameters:
     X = get_dummy_data(nrows=10)
-    model = ValidAxonMapModel(implant_type=p2pi.ArgusII, engine='serial')
+    model = ValidAxonMapModel(implant_type=p2pi.ArgusII, xystep=2,
+                              engine='serial')
     set_params = {'rho': 432, 'axlambda': 2, 'n_axons': 3, 'n_ax_segments': 4,
                   'loc_od_x': 5, 'loc_od_y': 6}
     for param in set_params:
@@ -466,7 +467,8 @@ def test_AxonMapModel():
     for key, value in six.iteritems(set_params):
         model.set_params(**{key: value})
         npt.assert_equal(getattr(model, key), value)
-    model = ValidAxonMapModel(implant_type=p2pi.ArgusII, engine='serial')
+    model = ValidAxonMapModel(implant_type=p2pi.ArgusII, xystep=2,
+                              engine='serial')
     model.fit(X, **set_params)
     for key, value in six.iteritems(set_params):
         npt.assert_equal(getattr(model, key), value)
@@ -487,7 +489,8 @@ def test_AxonMapModel__jansonius2009():
     # center
     for loc_od in [(15.0, 2.0), (-15.0, 2.0), (-4.2, -6.66)]:
         model = ValidAxonMapModel(loc_od_x=loc_od[0], loc_od_y=loc_od[1],
-                                  rho_range=(0, 45), n_ax_segments=100)
+                                  xystep=2, engine='serial', rho_range=(0, 45),
+                                  n_ax_segments=100)
         for phi0 in [-135.0, 66.0, 128.0]:
             ax_pos = model._jansonius2009(phi0)
             npt.assert_almost_equal(ax_pos[0, 0], loc_od[0])
@@ -497,6 +500,7 @@ def test_AxonMapModel__jansonius2009():
     for sign in [-1.0, 1.0]:
         for phi0 in [110.0, 135.0, 160.0]:
             model = ValidAxonMapModel(loc_od_x=15, loc_od_y=2,
+                                      xystep=2, engine='serial',
                                       n_ax_segments=801, rho_range=(0, 45))
             ax_pos = model._jansonius2009(sign * phi0)
             print(ax_pos[-1, :])
@@ -505,26 +509,33 @@ def test_AxonMapModel__jansonius2009():
     # `phi0` must be within [-180, 180]
     for phi0 in [-200.0, 181.0]:
         with pytest.raises(ValueError):
-            ValidAxonMapModel()._jansonius2009(phi0)
+            ValidAxonMapModel(xystep=2, engine='serial')._jansonius2009(phi0)
 
     # `n_rho` must be >= 1
     for n_rho in [-1, 0]:
         with pytest.raises(ValueError):
-            ValidAxonMapModel(n_ax_segments=n_rho)._jansonius2009(0.0)
+            model = ValidAxonMapModel(n_ax_segments=n_rho, xystep=2,
+                                      engine='serial')
+            model._jansonius2009(0.0)
 
     # `rho_range` must have min <= max
     for lorho in [-200.0, 90.0]:
         with pytest.raises(ValueError):
-            ValidAxonMapModel(rho_range=(lorho, 45))._jansonius2009(0)
+            model = ValidAxonMapModel(rho_range=(lorho, 45), xystep=2,
+                                      engine='serial')
+            model._jansonius2009(0)
     for hirho in [-200.0, 40.0]:
         with pytest.raises(ValueError):
-            ValidAxonMapModel(rho_range=(45, hirho))._jansonius2009(0)
+            model = ValidAxonMapModel(rho_range=(45, hirho), xystep=2,
+                                      engine='serial')
+            model._jansonius2009(0)
 
     # A single axon fiber with `phi0`=0 should return a single pixel location
     # that corresponds to the optic disc
     for eye in ['LE', 'RE']:
         for loc_od in [(15.5, 1.5), (7.0, 3.0), (-2.0, -2.0)]:
             model = ValidAxonMapModel(loc_od_x=loc_od[0], loc_od_y=loc_od[1],
+                                      xystep=2, engine='serial',
                                       rho_range=(0, 0), n_ax_segments=1)
             single_fiber = model._jansonius2009(0)
             npt.assert_equal(len(single_fiber), 1)
