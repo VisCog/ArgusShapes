@@ -74,7 +74,7 @@ class ValidAxonMapModel(m.SRDLoss, m.RetinalGrid, m.AxonMapModel):
     """A class that implements all abstract methods of AxonMapModel"""
 
     def build_optic_fiber_layer(self):
-        self.axons = [np.zeros((1, 3))] * int(np.prod(self.xret.shape))
+        self.axon_contrib = [np.zeros((1, 3))] * int(np.prod(self.xret.shape))
 
     def _predicts_target_values(self, row):
         return row
@@ -489,7 +489,8 @@ def test_AxonMapModel__jansonius2009():
     # center
     for loc_od in [(15.0, 2.0), (-15.0, 2.0), (-4.2, -6.66)]:
         model = ValidAxonMapModel(loc_od_x=loc_od[0], loc_od_y=loc_od[1],
-                                  xystep=2, engine='serial', rho_range=(0, 45),
+                                  xystep=2, engine='serial',
+                                  ax_segments_range=(0, 45),
                                   n_ax_segments=100)
         for phi0 in [-135.0, 66.0, 128.0]:
             ax_pos = model._jansonius2009(phi0)
@@ -501,7 +502,8 @@ def test_AxonMapModel__jansonius2009():
         for phi0 in [110.0, 135.0, 160.0]:
             model = ValidAxonMapModel(loc_od_x=15, loc_od_y=2,
                                       xystep=2, engine='serial',
-                                      n_ax_segments=801, rho_range=(0, 45))
+                                      n_ax_segments=801,
+                                      ax_segments_range=(0, 45))
             ax_pos = model._jansonius2009(sign * phi0)
             print(ax_pos[-1, :])
             npt.assert_almost_equal(ax_pos[-1, 1], 0.0, decimal=1)
@@ -518,15 +520,15 @@ def test_AxonMapModel__jansonius2009():
                                       engine='serial')
             model._jansonius2009(0.0)
 
-    # `rho_range` must have min <= max
+    # `ax_segments_range` must have min <= max
     for lorho in [-200.0, 90.0]:
         with pytest.raises(ValueError):
-            model = ValidAxonMapModel(rho_range=(lorho, 45), xystep=2,
+            model = ValidAxonMapModel(ax_segments_range=(lorho, 45), xystep=2,
                                       engine='serial')
             model._jansonius2009(0)
     for hirho in [-200.0, 40.0]:
         with pytest.raises(ValueError):
-            model = ValidAxonMapModel(rho_range=(45, hirho), xystep=2,
+            model = ValidAxonMapModel(ax_segments_range=(45, hirho), xystep=2,
                                       engine='serial')
             model._jansonius2009(0)
 
@@ -536,7 +538,49 @@ def test_AxonMapModel__jansonius2009():
         for loc_od in [(15.5, 1.5), (7.0, 3.0), (-2.0, -2.0)]:
             model = ValidAxonMapModel(loc_od_x=loc_od[0], loc_od_y=loc_od[1],
                                       xystep=2, engine='serial',
-                                      rho_range=(0, 0), n_ax_segments=1)
+                                      ax_segments_range=(0, 0),
+                                      n_ax_segments=1)
             single_fiber = model._jansonius2009(0)
             npt.assert_equal(len(single_fiber), 1)
             npt.assert_almost_equal(single_fiber[0], loc_od)
+
+
+def test_AxonMapModel__grows_axon_bundles():
+    for n_axons in [1, 2, 3, 5, 10]:
+        model = ValidAxonMapModel(xystep=2, engine='serial', n_axons=n_axons,
+                                  axons_range=(-20, 20))
+        model.build_ganglion_cell_layer()
+        bundles = model._grows_axon_bundles()
+        npt.assert_equal(len(bundles), n_axons)
+
+
+def test_AxonMapModel__finds_closest_axons():
+    model = ValidAxonMapModel(xystep=1, engine='serial', n_axons=5,
+                              axons_range=(-45, 45))
+    model.build_ganglion_cell_layer()
+
+    # Pretend there is an axon close to each point on the grid:
+    bundles = [np.array([x + 0.001, y - 0.001]).reshape((1, 2))
+               for x, y in zip(model.xret.ravel(), model.yret.ravel())]
+    closest = model._finds_closest_axons(bundles)
+    for ax1, ax2 in zip(bundles, closest):
+        npt.assert_almost_equal(ax1[0, 0], ax2[0, 0])
+        npt.assert_almost_equal(ax1[0, 1], ax2[0, 1])
+
+
+def test_AxonMapModel__calcs_axon_contribution():
+    model = ValidAxonMapModel(xystep=2, engine='serial', n_axons=10,
+                              axons_range=(-30, 30))
+    model.build_ganglion_cell_layer()
+    xyret = np.column_stack((model.xret.ravel(), model.yret.ravel()))
+    bundles = model._grows_axon_bundles()
+    axons = model._finds_closest_axons(bundles)
+    contrib = model._calcs_axon_contribution(axons)
+
+    # Check lambda math:
+    for ax, xy in zip(contrib, xyret):
+        axon = np.insert(ax, 0, list(xy) + [0], axis=0)
+        d2 = np.cumsum(np.diff(axon[:, 0], axis=0) ** 2 +
+                       np.diff(axon[:, 1], axis=0) ** 2)
+        sensitivity = np.exp(-d2 / (2.0 * model.axlambda ** 2))
+        npt.assert_almost_equal(sensitivity, ax[:, 2])

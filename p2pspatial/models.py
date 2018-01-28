@@ -4,16 +4,15 @@ import abc
 import six
 import time
 
-import pulse2percept.retina as p2pr
 import pulse2percept.implants as p2pi
 import pulse2percept.utils as p2pu
 
 import scipy.stats as spst
-import scipy.spatial as spsp
 
 import sklearn.base as sklb
 import sklearn.exceptions as skle
 
+from .p2pspatial import *
 from . import imgproc
 
 try:
@@ -229,18 +228,19 @@ class AxonMapModel(BaseModel):
         # Set parameters of the Jansonius model: Number of axons and number of
         # segments per axon can be overriden by the user:
         self.n_axons = 301
-        self._phi_range = (-180, 180)
+        self.axons_range = (-180, 180)
         # Number of sampling points along the radial axis(polar coordinates):
         self.n_ax_segments = 71
         # Lower and upper bounds for the radial position values(polar
         # coordinates):
-        self.rho_range = (3, 50)
+        self.ax_segments_range = (3, 50)
 
     def get_params(self, deep=True):
         params = super(AxonMapModel, self).get_params(deep=deep)
         params.update(rho=self.rho, axlambda=self.axlambda,
-                      n_axons=self.n_axons, n_ax_segments=self.n_ax_segments,
-                      rho_range=self.rho_range,
+                      n_axons=self.n_axons, axons_range=self.axons_range,
+                      n_ax_segments=self.n_ax_segments,
+                      ax_segments_range=self.ax_segments_range,
                       loc_od_x=self.loc_od_x, loc_od_y=self.loc_od_y)
         return params
 
@@ -296,13 +296,13 @@ class AxonMapModel(BaseModel):
             raise ValueError('phi0 must be within [-180, 180].')
         if self.n_ax_segments < 1:
             raise ValueError('Number of radial sampling points must be >= 1.')
-        if np.any(np.array(self.rho_range) < 0):
-            raise ValueError('rho cannot be negative.')
-        if self.rho_range[0] > self.rho_range[1]:
+        if np.any(np.array(self.ax_segments_range) < 0):
+            raise ValueError('ax_segments_range cannot be negative.')
+        if self.ax_segments_range[0] > self.ax_segments_range[1]:
             raise ValueError('Lower bound on rho cannot be larger than the '
                              ' upper bound.')
         is_superior = phi0 > 0
-        rho = np.linspace(*self.rho_range, num=self.n_ax_segments)
+        rho = np.linspace(*self.ax_segments_range, num=self.n_ax_segments)
 
         if is_superior:
             # Axon is in superior retina, compute `b` (real number) from Eq. 5:
@@ -350,10 +350,11 @@ class AxonMapModel(BaseModel):
 
     def _grows_axon_bundles(self):
         # Build the Jansonius model: Grow a number of axon bundles in all dirs:
-        phi = np.linspace(*self._phi_range, num=self.n_axons)
+        phi = np.linspace(*self.axons_range, num=self.n_axons)
         bundles = p2pu.parfor(self._jansonius2009, phi,
                               engine=self.engine, n_jobs=self.n_jobs,
                               scheduler=self.scheduler)
+        assert len(bundles) == self.n_axons
         # Remove axon bundles outside the simulated area:
         bundles = list(filter(lambda x: (np.max(x[:, 0]) >= self.xrange[0] and
                                          np.min(x[:, 0]) <= self.xrange[1] and
@@ -363,46 +364,51 @@ class AxonMapModel(BaseModel):
         # Remove short axon bundles:
         bundles = list(filter(lambda x: len(x) > 10, bundles))
         # Convert to um:
-        bundles = [p2pr.dva2ret(b) for b in bundles]
+        bundles = [dva2ret(b) for b in bundles]
         return bundles
 
     def _finds_closest_axons(self, bundles):
-        # Build a KDTree from all axon segment locations: This allows for a
-        # quick nearest-neighbor lookup. Need to store the axon ID for every
-        # segment:
-        axon_idx = [idx * np.ones(len(ax)) for idx, ax in enumerate(bundles)]
-        axon_idx = reduce(lambda x, y: np.concatenate((x, y)), axon_idx)
+        # For every axon segment, store the corresponding axon ID:
+        axon_idx = [[idx] * len(ax) for idx, ax in enumerate(bundles)]
+        axon_idx = [item for sublist in axon_idx for item in sublist]
         axon_idx = np.array(axon_idx, dtype=np.int32)
-        # Then build the KDTree with all axon segment locations:
-        tree = spsp.cKDTree(reduce(lambda x, y: np.vstack((x, y)), bundles))
-        # Find the closest axon segment for every grid location:
-        xyret = np.column_stack((self.xret.ravel(), self.yret.ravel()))
-        nearest_segment = [tree.query(xy)[1] for xy in xyret]
+        # Build a long list of all axon segments - their corresponding axon IDs
+        # is given by `axon_idx` above:
+        flat_bundles = np.concatenate(bundles)
+        # For every pixel on the grid, find the closest axon segment:
+        closest_seg = [np.argmin((flat_bundles[:, 0] - x) ** 2 +
+                                 (flat_bundles[:, 1] - y) ** 2)
+                       for x, y in zip(self.xret.ravel(), self.yret.ravel())]
         # Look up the axon ID for every axon segment:
-        nearest_axon = axon_idx[nearest_segment]
-        axons = []
-        for xy, n in zip(xyret, nearest_axon):
-            bundle = bundles[n]
-            ax_tree = spsp.cKDTree(bundle)
-            _, idx = ax_tree.query(xy)
+        closest_axon = axon_idx[closest_seg]
+        return [bundles[n] for n in closest_axon]
+
+    def _calcs_axon_contribution(self, axons):
+        xyret = np.column_stack((self.xret.ravel(), self.yret.ravel()))
+        axon_contrib = []
+        for xy, bundle in zip(xyret, axons):
+            idx = np.argmin((bundle[:, 0] - xy[0]) ** 2 +
+                            (bundle[:, 1] - xy[1]) ** 2)
             # Cut off the part of the fiber that goes beyond the soma:
-            axon = bundle[idx:0:-1, :]
+            axon = np.flipud(bundle[0: idx + 1, :])
             # Add the exact location of the soma:
             axon = np.insert(axon, 0, xy, axis=0)
             # For every axon segment, calculate distance from soma by summing
             # up the individual distances between neighboring axon segments
             # (by "walking along the axon"):
-            d2 = np.cumsum(np.diff(axon[:, 0]) ** 2 + np.diff(axon[:, 1]) ** 2)
+            d2 = np.cumsum(np.diff(axon[:, 0], axis=0) ** 2 +
+                           np.diff(axon[:, 1], axis=0) ** 2)
             sensitivity = np.exp(-d2 / (2.0 * self.axlambda ** 2))
-            axons.append(np.column_stack((axon[1:, :], sensitivity)))
-        return axons
+            axon_contrib.append(np.column_stack((axon[1:, :], sensitivity)))
+        return axon_contrib
 
     def build_optic_fiber_layer(self):
         if self.implant.eye == 'LE':
             raise NotImplementedError
         # Build the Jansonius model: Grow a number of axon bundles in all dirs:
         bundles = self._grows_axon_bundles()
-        self.axons = self._finds_closest_axons(bundles)
+        axons = self._finds_closest_axons(bundles)
+        self.axon_contrib = self._calcs_axon_contribution(axons)
 
     def _calcs_el_curr_map(self, electrode):
         """Calculates the current map for a specific electrode"""
@@ -410,7 +416,7 @@ class AxonMapModel(BaseModel):
         if not self.implant[electrode]:
             raise ValueError("Electrode '%s' could not be found." % electrode)
         ecm = []
-        for ax in self.axons:
+        for ax in self.axon_contrib:
             if ax.shape[0] == 0:
                 ecm.append(0)
                 continue
@@ -489,7 +495,7 @@ class RetinalCoordTrafo(BaseModel):
         x, y = self._pol2cart(theta, rho_dva)
 
         # Convert to retinal coords
-        return p2pr.dva2ret(x), p2pr.dva2ret(y)
+        return dva2ret(x), dva2ret(y)
 
     def build_ganglion_cell_layer(self):
         # Build the grid from `x_range`, `y_range`:
@@ -530,8 +536,8 @@ class RetinalGrid(BaseModel):
                                  np.linspace(*self.yrange, num=ny),
                                  indexing='xy')
 
-        self.xret = p2pr.dva2ret(xdva)
-        self.yret = p2pr.dva2ret(ydva)
+        self.xret = dva2ret(xdva)
+        self.yret = dva2ret(ydva)
 
 
 class ImageMomentsLoss(BaseModel):
