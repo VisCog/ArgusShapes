@@ -73,7 +73,6 @@ models_search_params = {
 }
 
 
-
 def main():
     # Default values
     amplitude = 2.0
@@ -82,6 +81,7 @@ def main():
     w_scale = 34
     w_rot = 33
     w_dice = 34
+    avg_img = False
 
     # Parse input arguments
     assert len(sys.argv) >= 3
@@ -91,7 +91,7 @@ def main():
     assert subject in ['12-005', '51-009', '52-001', 'TB']
     try:
         longopts = ["n_folds=", "n_jobs=", "amplitude=",
-                    "w_scale=", "w_rot=", "w_dice="]
+                    "w_scale=", "w_rot=", "w_dice=", "avg_img"]
         opts, args = getopt.getopt(sys.argv[3:], "", longopts=longopts)
     except getopt.GetoptError as err:
         raise RuntimeError(err)
@@ -108,6 +108,8 @@ def main():
             w_rot = float(a)
         elif o == "--w_dice":
             w_dice = float(a)
+        elif o == "--avg_img":
+            avg_img = True
         else:
             raise ValueError("Unknown option '%s'='%s'" % (o, a))
 
@@ -121,7 +123,10 @@ def main():
     print("Subject: %s" % subject)
     print("Model: %s" % modelname)
     print("Amplitude: %.2fx Th" % amplitude)
-    print("%d-fold cross-validation (n_jobs=%d)" % (n_folds, n_jobs))
+    if n_folds == -1:
+        print("Leave-one-out cross-validation (n_jobs=%d)" % n_jobs)
+    else:
+        print("%d-fold cross-validation (n_jobs=%d)" % (n_folds, n_jobs))
     print("w_scale=%.2f w_rot=%.2f w_dice=%.2f" % (w_scale, w_rot, w_dice))
 
     # Load data
@@ -132,6 +137,13 @@ def main():
     print('Data loaded:', X.shape, y.shape)
     if len(X) == 0:
         raise ValueError('No data found. Abort.')
+    if avg_img:
+        X, y = p2pspatial.transform_mean_images(X, y)
+        print('Data transformed:', X.shape, y.shape)
+
+    if n_folds == -1:
+        n_folds = len(X)
+        print('Leave-one-out cross-validation: n_folds=%d' % n_folds)
 
     # Instantiate model
     if subject == 'TB':
