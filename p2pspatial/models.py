@@ -1,8 +1,11 @@
-import numpy as np
-import pandas as pd
+import os
 import abc
 import six
 import time
+import pickle
+
+import numpy as np
+import pandas as pd
 
 import pulse2percept.implants as p2pi
 import pulse2percept.utils as p2pu
@@ -405,10 +408,26 @@ class AxonMapMixin(BaseModel):
     def build_optic_fiber_layer(self):
         if self.implant.eye == 'LE':
             raise NotImplementedError
+        need_axons = True
+        # Check if math for Jansonius model has been done before:
+        if os.path.isfile('axons.pickle'):
+            params, axons = pickle.load(open('axons.pickle', 'rb'))
+            for key, value in six.iteritems(params):
+                if getattr(self, key) != value:
+                    break
+            need_axons = False
         # Build the Jansonius model: Grow a number of axon bundles in all dirs:
-        bundles = self._grows_axon_bundles()
-        axons = self._finds_closest_axons(bundles)
+        if need_axons:
+            bundles = self._grows_axon_bundles()
+            axons = self._finds_closest_axons(bundles)
+        # Calculate axon contributions (depends on axlambda):
         self.axon_contrib = self._calcs_axon_contribution(axons)
+        # Pickle axons:
+        params = {'loc_od_x': self.loc_od_x, 'loc_od_y': self.loc_od_y,
+                  'n_axons': self.n_axons, 'axons_range': self.axons_range,
+                  'n_ax_segments': self.n_ax_segments,
+                  'ax_segments_range': self.ax_segments_range}
+        pickle.dump((params, axons), open('axons.pickle', 'wb'))
 
     def _calcs_el_curr_map(self, electrode):
         """Calculates the current map for a specific electrode"""
