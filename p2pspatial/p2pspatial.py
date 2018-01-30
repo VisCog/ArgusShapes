@@ -114,17 +114,19 @@ def load_data(folder, subject=None, electrodes=None, amplitude=None,
               date=None, verbose=False, random_state=None, single_stim=True):
     # Recursive search for all files whose name contains the string
     # '_rawDataFileList_': These contain the paths to the raw bmp images
-    search_pattern = os.path.join(folder, '**', '*_rawDataFileList_*')
+    search_patterns = [os.path.join(folder, '**', '*_rawDataFileList_*'),
+                       os.path.join(folder, '*', 'VIDFileListNew_*')]
     dfs = []
     n_samples = 0
-    for fname in glob.iglob(search_pattern, recursive=True):
-        tmp = pd.read_csv(fname)
-        tmp['Folder'] = os.path.dirname(fname)
-        n_samples += len(tmp)
-        if verbose:
-            print('Found %d samples in %s' % (len(tmp),
-                                              tmp['Folder'].values[0]))
-        dfs.append(tmp)
+    for search_pattern in search_patterns:
+        for fname in glob.iglob(search_pattern, recursive=True):
+            tmp = pd.read_csv(fname)
+            tmp['Folder'] = os.path.dirname(fname)
+            n_samples += len(tmp)
+            if verbose:
+                print('Found %d samples in %s' % (len(tmp),
+                                                  tmp['Folder'].values[0]))
+            dfs.append(tmp)
     if n_samples == 0:
         print('No data found in %s' % folder)
         return pd.DataFrame([]), pd.DataFrame([])
@@ -183,9 +185,12 @@ def _transforms_electrode_images(Xel):
     else:
         # More than one image found: Save the first image as seed image to
         # which all other images will be compared:
-        img_seed = imgs[0]
+        img_seed = skim.dilation(imgs[0], skim.disk(5))
         img_avg = np.zeros_like(img_seed)
         for img in imgs[1:]:
+            # Dilate images slightly so matching is easier for streaks
+            # (will be eroded later):
+            img = skim.dilation(img, skim.disk(5))
             _, _, params = imgproc.srd_loss((img_seed, img),
                                             return_raw=True)
             img = imgproc.scale_phosphene(img, params['scale'])
@@ -200,7 +205,9 @@ def _transforms_electrode_images(Xel):
         assert np.isclose(img_avg_th.min(), 0)
         assert np.isclose(img_avg_th.max(), 1)
         # Remove "pepper" (fill small holes):
-        # img_avg_morph = skim.binary_closing(img_avg_th, selem=skim.square(19))
+        img_avg_th = skim.binary_closing(img_avg_th, selem=skim.disk(11))
+        # Erode back down
+        img_avg_th = skim.erosion(img_avg_th, skim.disk(5))
         # Remove "salt" (remove small bright spots):
         # img_avg_morph = skim.binary_opening(img_avg_morph,
         #                                     selem=skim.square(9))
