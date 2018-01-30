@@ -8,7 +8,7 @@ import pickle
 from time import time
 from datetime import datetime
 
-import pulse2percept as p2p
+import pulse2percept.implants as p2pi
 import p2pspatial
 
 # All available models with their corresponding objects to call:
@@ -16,14 +16,16 @@ models = {
     'A': p2pspatial.models.ModelA,
     'B': p2pspatial.models.ModelB,
     'C': p2pspatial.models.ModelC,
-    'D': p2pspatial.models.ModelD
+    'D': p2pspatial.models.ModelD,
+    'E': p2pspatial.models.ModelC,
+    'F': p2pspatial.models.ModelD,
 }
 
 # All search parameters for each individual model:
 models_search_params = {
     # Model A: Scoreboard model:
     'A': {
-        'rho': (20, 1000)
+        'rho': (20, 1000),
     },
     # Model B: Scoreboard model with perspective transform:
     'B': {
@@ -48,8 +50,27 @@ models_search_params = {
         'implant_y': (-2000, 2000),
         'implant_rot': (np.deg2rad(-45), 0)
     },
+    # Model E: Axon map model + loc_od:
+    'E': {
+        'rho': (20, 1000),
+        'axlambda': (20, 1000),
+        'implant_x': (-2000, 1000),
+        'implant_y': (-2000, 2000),
+        'loc_od_x': (13.5, 17.5),
+        'loc_od_y': (0, 3),
+        'implant_rot': (np.deg2rad(-45), 0)
+    },
+    # Model F: Axon map model with perspective transform + loc_od:
+    'F': {
+        'rho': (20, 1000),
+        'axlambda': (20, 1000),
+        'implant_x': (-2000, 1000),
+        'implant_y': (-2000, 2000),
+        'loc_od_x': (13.5, 17.5),
+        'loc_od_y': (0, 3),
+        'implant_rot': (np.deg2rad(-45), 0)
+    },
 }
-
 
 
 def main():
@@ -60,16 +81,17 @@ def main():
     w_scale = 34
     w_rot = 33
     w_dice = 34
+    avg_img = False
 
     # Parse input arguments
     assert len(sys.argv) >= 3
     modelname = sys.argv[1]
     assert modelname in models
     subject = sys.argv[2]
-    assert subject in ['12-005', '51-009', '52-001']
+    assert subject in ['12-005', '51-009', '52-001', 'TB']
     try:
         longopts = ["n_folds=", "n_jobs=", "amplitude=",
-                    "w_scale=", "w_rot=", "w_dice="]
+                    "w_scale=", "w_rot=", "w_dice=", "avg_img"]
         opts, args = getopt.getopt(sys.argv[3:], "", longopts=longopts)
     except getopt.GetoptError as err:
         raise RuntimeError(err)
@@ -86,6 +108,8 @@ def main():
             w_rot = float(a)
         elif o == "--w_dice":
             w_dice = float(a)
+        elif o == "--avg_img":
+            avg_img = True
         else:
             raise ValueError("Unknown option '%s'='%s'" % (o, a))
 
@@ -99,7 +123,10 @@ def main():
     print("Subject: %s" % subject)
     print("Model: %s" % modelname)
     print("Amplitude: %.2fx Th" % amplitude)
-    print("%d-fold cross-validation (n_jobs=%d)" % (n_folds, n_jobs))
+    if n_folds == -1:
+        print("Leave-one-out cross-validation (n_jobs=%d)" % n_jobs)
+    else:
+        print("%d-fold cross-validation (n_jobs=%d)" % (n_folds, n_jobs))
     print("w_scale=%.2f w_rot=%.2f w_dice=%.2f" % (w_scale, w_rot, w_dice))
 
     # Load data
@@ -110,10 +137,21 @@ def main():
     print('Data loaded:', X.shape, y.shape)
     if len(X) == 0:
         raise ValueError('No data found. Abort.')
+    if avg_img:
+        X, y = p2pspatial.transform_mean_images(X, y)
+        print('Data transformed:', X.shape, y.shape)
+
+    if n_folds == -1:
+        n_folds = len(X)
+        print('Leave-one-out cross-validation: n_folds=%d' % n_folds)
 
     # Instantiate model
+    if subject == 'TB':
+        implant_type = p2pi.ArgusI
+    else:
+        implant_type = p2pi.ArgusII
     model_params = {'engine': 'joblib', 'scheduler': 'threading',
-                    'xystep': 0.5,
+                    'xystep': 0.5, 'implant_type': implant_type,
                     'n_jobs': n_jobs,
                     'w_scale': w_scale, 'w_rot': w_rot, 'w_dice': w_dice}
     regressor = models[modelname](**model_params)
