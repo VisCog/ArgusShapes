@@ -169,7 +169,8 @@ def main():
     y_test, y_pred, best_params = p2pspatial.model_selection.crossval_predict(
         pso, X, y, fit_params=fit_params, n_folds=n_folds)
 
-    print("Done in %.3fs" % (time() - t_start))
+    t_end = time()
+    print("Done in %.3fs" % (t_end - t_start))
 
     # Store results
     specifics = {'subject': subject,
@@ -186,6 +187,7 @@ def main():
                  'search_params': search_params,
                  'fit_params': fit_params,
                  'now': now,
+                 'exetime': t_end - t_start,
                  'random_state': 42}
     pickle.dump((y_test, y_pred, best_params, specifics), open(filename, 'wb'))
     print('Dumped data to %s' % filename)
