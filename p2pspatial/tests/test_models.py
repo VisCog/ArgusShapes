@@ -58,7 +58,8 @@ class ValidBaseModel(m.BaseModel):
         return 0
 
 
-class ValidScoreboardModel(m.SRDLoss, m.RetinalGrid, m.ScoreboardModel):
+class ValidScoreboardModel(m.SRDLossMixin, m.RetinalGridMixin,
+                           m.ScoreboardMixin):
     """A class that implements all abstract methods of BaseModel"""
 
     def _predicts_target_values(self, row):
@@ -70,7 +71,7 @@ class ValidScoreboardModel(m.SRDLoss, m.RetinalGrid, m.ScoreboardModel):
         return self._predicts_target_values(row)
 
 
-class ValidAxonMapModel(m.SRDLoss, m.RetinalGrid, m.AxonMapModel):
+class ValidAxonMapModel(m.SRDLossMixin, m.RetinalGridMixin, m.AxonMapMixin):
     """A class that implements all abstract methods of AxonMapModel"""
 
     def build_optic_fiber_layer(self):
@@ -85,7 +86,7 @@ class ValidAxonMapModel(m.SRDLoss, m.RetinalGrid, m.AxonMapModel):
         return self._predicts_target_values(row)
 
 
-class ValidRetinalCoordTrafo(m.SRDLoss, m.RetinalCoordTrafo):
+class ValidRetinalCoordTrafo(m.SRDLossMixin, m.RetinalCoordTrafoMixin):
     """A class that implements all abstract methods of BaseModel"""
 
     def _calcs_el_curr_map(self, electrode):
@@ -100,7 +101,7 @@ class ValidRetinalCoordTrafo(m.SRDLoss, m.RetinalCoordTrafo):
         return self._predicts_target_values(row)
 
 
-class ValidRetinalGrid(m.SRDLoss, m.RetinalGrid):
+class ValidRetinalGrid(m.SRDLossMixin, m.RetinalGridMixin):
     """A class that implements all abstract methods of BaseModel"""
 
     def _calcs_el_curr_map(self, electrode):
@@ -115,7 +116,7 @@ class ValidRetinalGrid(m.SRDLoss, m.RetinalGrid):
         return self._predicts_target_values(row)
 
 
-class ValidImageMomentsLoss(m.ImageMomentsLoss, m.RetinalGrid):
+class ValidImageMomentsLoss(m.ImageMomentsLossMixin, m.RetinalGridMixin):
     """A class that implements all abstract methods of BaseModel"""
 
     def _calcs_el_curr_map(self, electrode):
@@ -130,7 +131,7 @@ class ValidImageMomentsLoss(m.ImageMomentsLoss, m.RetinalGrid):
         return self._predicts_target_values(row)
 
 
-class ValidSRDLoss(m.SRDLoss, m.RetinalGrid):
+class ValidSRDLoss(m.SRDLossMixin, m.RetinalGridMixin):
     """A class that implements all abstract methods of BaseModel"""
 
     def _calcs_el_curr_map(self, electrode):

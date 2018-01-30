@@ -189,17 +189,17 @@ class BaseModel(sklb.BaseEstimator):
         raise NotImplementedError
 
 
-class ScoreboardModel(BaseModel):
+class ScoreboardMixin(BaseModel):
     """Scoreboard model"""
 
     def _sets_default_params(self):
         """Sets default parameters of the scoreboard model"""
         # Current spread falls off exponentially from electrode center:
-        super(ScoreboardModel, self)._sets_default_params()
+        super(ScoreboardMixin, self)._sets_default_params()
         self.rho = 100
 
     def get_params(self, deep=True):
-        params = super(ScoreboardModel, self).get_params(deep=deep)
+        params = super(ScoreboardMixin, self).get_params(deep=deep)
         params.update(rho=self.rho)
         return params
 
@@ -214,12 +214,12 @@ class ScoreboardModel(BaseModel):
         return cm
 
 
-class AxonMapModel(BaseModel):
+class AxonMapMixin(BaseModel):
     """Axon map model"""
 
     def _sets_default_params(self):
         """Sets default parameters of the axon map model"""
-        super(AxonMapModel, self)._sets_default_params()
+        super(AxonMapMixin, self)._sets_default_params()
         self.rho = 100
         self.axlambda = 100
         # Set the (x,y) location of the optic disc:
@@ -236,7 +236,7 @@ class AxonMapModel(BaseModel):
         self.ax_segments_range = (3, 50)
 
     def get_params(self, deep=True):
-        params = super(AxonMapModel, self).get_params(deep=deep)
+        params = super(AxonMapMixin, self).get_params(deep=deep)
         params.update(rho=self.rho, axlambda=self.axlambda,
                       n_axons=self.n_axons, axons_range=self.axons_range,
                       n_ax_segments=self.n_ax_segments,
@@ -428,10 +428,10 @@ class AxonMapModel(BaseModel):
         return np.array(ecm, dtype=float).reshape(self.xret.shape)
 
 
-class RetinalCoordTrafo(BaseModel):
+class RetinalCoordTrafoMixin(BaseModel):
 
     def _sets_default_params(self):
-        super(RetinalCoordTrafo, self)._sets_default_params()
+        super(RetinalCoordTrafoMixin, self)._sets_default_params()
         # We will be simulating an x,y patch of the visual field (min, max) in
         # degrees of visual angle, at a given spatial resolution (step size):
         self.xrange = (-30, 30)  # dva
@@ -439,7 +439,7 @@ class RetinalCoordTrafo(BaseModel):
         self.xystep = 0.2  # dva
 
     def get_params(self, deep=True):
-        params = super(RetinalCoordTrafo, self).get_params(deep=deep)
+        params = super(RetinalCoordTrafoMixin, self).get_params(deep=deep)
         params.update(xrange=self.xrange, yrange=self.yrange,
                       xystep=self.xystep)
         return params
@@ -512,10 +512,10 @@ class RetinalCoordTrafo(BaseModel):
         self.yret = yret.reshape(ydva.shape)
 
 
-class RetinalGrid(BaseModel):
+class RetinalGridMixin(BaseModel):
 
     def _sets_default_params(self):
-        super(RetinalGrid, self)._sets_default_params()
+        super(RetinalGridMixin, self)._sets_default_params()
         # We will be simulating an x,y patch of the visual field (min, max) in
         # degrees of visual angle, at a given spatial resolution (step size):
         self.xrange = (-30, 30)  # dva
@@ -523,7 +523,7 @@ class RetinalGrid(BaseModel):
         self.xystep = 0.2  # dva
 
     def get_params(self, deep=True):
-        params = super(RetinalGrid, self).get_params(deep=deep)
+        params = super(RetinalGridMixin, self).get_params(deep=deep)
         params.update(xrange=self.xrange, yrange=self.yrange,
                       xystep=self.xystep)
         return params
@@ -540,14 +540,14 @@ class RetinalGrid(BaseModel):
         self.yret = dva2ret(ydva)
 
 
-class ImageMomentsLoss(BaseModel):
+class ImageMomentsLossMixin(BaseModel):
 
     def _sets_default_params(self):
-        super(ImageMomentsLoss, self)._sets_default_params()
+        super(ImageMomentsLossMixin, self)._sets_default_params()
         self.greater_is_better = False
 
     def get_params(self, deep=True):
-        params = super(ImageMomentsLoss, self).get_params(deep=deep)
+        params = super(ImageMomentsLossMixin, self).get_params(deep=deep)
         params.update(greater_is_better=self.greater_is_better)
         return params
 
@@ -565,7 +565,7 @@ class ImageMomentsLoss(BaseModel):
         return 100
 
 
-class SRDLoss(BaseModel):
+class SRDLossMixin(BaseModel):
     """Scale-Rotation-Dice (SRD) loss
 
     This class provides a ``score`` method that calculates a loss in [0, 100]
@@ -578,7 +578,7 @@ class SRDLoss(BaseModel):
     """
 
     def _sets_default_params(self):
-        super(SRDLoss, self)._sets_default_params()
+        super(SRDLossMixin, self)._sets_default_params()
         # The new scoring function is actually a loss function, so that
         # greater values do *not* imply that the estimator is better (required
         # for ParticleSwarmOptimizer)
@@ -591,7 +591,7 @@ class SRDLoss(BaseModel):
         self.w_dice = 34
 
     def get_params(self, deep=True):
-        params = super(SRDLoss, self).get_params(deep=deep)
+        params = super(SRDLossMixin, self).get_params(deep=deep)
         params.update(greater_is_better=self.greater_is_better,
                       w_scale=self.w_scale, w_rot=self.w_rot,
                       w_dice=self.w_dice)
@@ -625,21 +625,21 @@ class SRDLoss(BaseModel):
         return np.mean(losses)
 
 
-class ModelA(SRDLoss, RetinalGrid, ScoreboardModel):
+class ModelA(SRDLossMixin, RetinalGridMixin, ScoreboardMixin):
     """Scoreboard model with SRD loss"""
     pass
 
 
-class ModelB(SRDLoss, RetinalCoordTrafo, ScoreboardModel):
+class ModelB(SRDLossMixin, RetinalCoordTrafoMixin, ScoreboardMixin):
     """Scoreboard model with perspective transform and SRD loss"""
     pass
 
 
-class ModelC(SRDLoss, RetinalGrid, AxonMapModel):
+class ModelC(SRDLossMixin, RetinalGridMixin, AxonMapMixin):
     """Axon map model with SRD loss"""
     pass
 
 
-class ModelD(SRDLoss, RetinalCoordTrafo, AxonMapModel):
+class ModelD(SRDLossMixin, RetinalCoordTrafoMixin, AxonMapMixin):
     """Axon map model with perspective transform and SRD loss"""
     pass
