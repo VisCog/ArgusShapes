@@ -11,65 +11,65 @@ from datetime import datetime
 import pulse2percept.implants as p2pi
 import p2pspatial
 
-# All available models with their corresponding objects to call:
+# All available models with their corresponding function calls, search
+# parameters and model parameters
 models = {
-    'A': p2pspatial.models.ModelA,
-    'B': p2pspatial.models.ModelB,
-    'C': p2pspatial.models.ModelC,
-    'D': p2pspatial.models.ModelD,
-    'E': p2pspatial.models.ModelC,
-    'F': p2pspatial.models.ModelD,
+    'A': {  # Scoreboard model
+        'object': p2pspatial.models.ModelA,
+        'search_params': ['rho'],
+        'subject_params': ['implant_type', 'implant_x', 'implant_y',
+                           'implant_rot']
+    },
+    'B': {  # Scoreboard model with perspective transform
+        'object': p2pspatial.models.ModelB,
+        'search_params': ['rho'],
+        'subject_params': ['implant_type', 'implant_x', 'implant_y',
+                           'implant_rot']
+    },
+    'C': {  # Axon map model
+        'object': p2pspatial.models.ModelC,
+        'search_params': ['rho', 'axlambda'],
+        'subject_params': ['implant_type', 'implant_x', 'implant_y',
+                           'implant_rot', 'loc_od_x', 'loc_od_y']
+    },
+    'D': {  # Axon map model with perspective transform
+        'object': p2pspatial.models.ModelD,
+        'search_params': ['rho', 'axlambda'],
+        'subject_params': ['implant_type', 'implant_x', 'implant_y',
+                           'implant_rot', 'loc_od_x', 'loc_od_y']
+    }
 }
 
-# All search parameters for each individual model:
-models_search_params = {
-    # Model A: Scoreboard model:
-    'A': {
-        'rho': (20, 1000),
+search_param_ranges = {
+    'rho': (10, 3000),
+    'axlambda': (10, 3000)
+}
+
+subject_params = {
+    '12-005': {
+        'implant_type': p2pi.ArgusII,
+        'implant_x': -1344.36597,
+        'implant_y': 537.7463881,  # or should this be minus?
+        'implant_rot': -0.664813628,
+        'loc_od_x': 15.5,
+        'loc_od_y': 1.2
     },
-    # Model B: Scoreboard model with perspective transform:
-    'B': {
-        'rho': (20, 1000),
-        'implant_x': (-2000, 1000),
-        'implant_y': (-2000, 2000),
-        'implant_rot': (np.deg2rad(-45), 0)
+    '51-009': {
+        'implant_type': p2pi.ArgusII,
+        'implant_x': 398.514982,
+        'implant_y': -540.8417613,
+        'implant_rot': -0.526951314,
+        'loc_od_x': 14.8,
+        'loc_od_y': 4.7
     },
-    # Model C: Axon map model:
-    'C': {
-        'rho': (20, 1000),
-        'axlambda': (20, 1000),
-        'implant_x': (-2000, 1000),
-        'implant_y': (-2000, 2000),
-        'implant_rot': (np.deg2rad(-45), 0)
-    },
-    # Model D: Axon map model with perspective transform:
-    'D': {
-        'rho': (20, 1000),
-        'axlambda': (20, 1000),
-        'implant_x': (-2000, 1000),
-        'implant_y': (-2000, 2000),
-        'implant_rot': (np.deg2rad(-45), 0)
-    },
-    # Model E: Axon map model + loc_od:
-    'E': {
-        'rho': (20, 1000),
-        'axlambda': (20, 1000),
-        'implant_x': (-2000, 1000),
-        'implant_y': (-2000, 2000),
-        'loc_od_x': (13.5, 17.5),
-        'loc_od_y': (0, 3),
-        'implant_rot': (np.deg2rad(-45), 0)
-    },
-    # Model F: Axon map model with perspective transform + loc_od:
-    'F': {
-        'rho': (20, 1000),
-        'axlambda': (20, 1000),
-        'implant_x': (-2000, 1000),
-        'implant_y': (-2000, 2000),
-        'loc_od_x': (13.5, 17.5),
-        'loc_od_y': (0, 3),
-        'implant_rot': (np.deg2rad(-45), 0)
-    },
+    '52-001': {
+        'implant_type': p2pi.ArgusII,
+        'implant_x': -1147.132944,
+        'implant_y': -369.1922119,
+        'implant_rot': -0.342307766,
+        'loc_od_x': 14.9,
+        'loc_od_y': 4.3
+    }
 }
 
 
@@ -88,7 +88,7 @@ def main():
     modelname = sys.argv[1]
     assert modelname in models
     subject = sys.argv[2]
-    assert subject in ['12-005', '51-009', '52-001', 'TB']
+    assert subject in subject_params
     try:
         longopts = ["n_folds=", "n_jobs=", "amplitude=",
                     "w_scale=", "w_rot=", "w_dice=", "avg_img"]
@@ -146,18 +146,20 @@ def main():
         print('Leave-one-out cross-validation: n_folds=%d' % n_folds)
 
     # Instantiate model
-    if subject == 'TB':
-        implant_type = p2pi.ArgusI
-    else:
-        implant_type = p2pi.ArgusII
+    model = models[modelname]
     model_params = {'engine': 'joblib', 'scheduler': 'threading',
-                    'xystep': 0.5, 'implant_type': implant_type,
-                    'n_jobs': n_jobs,
+                    'n_jobs': n_jobs, 'xystep': 0.5,
                     'w_scale': w_scale, 'w_rot': w_rot, 'w_dice': w_dice}
-    regressor = models[modelname](**model_params)
+    for key in model['subject_params']:
+        model_params.update({key: subject_params[subject][key]})
+    regressor = model['object'](**model_params)
+    print('regressor:', regressor)
 
     # Set up particle swarm
-    search_params = models_search_params[modelname]
+    search_params = {}
+    for key in model['search_params']:
+        search_params.update({key: search_param_ranges[key]})
+    print('search_params:', search_params)
     pso_options = {'max_iter': 100,
                    'min_func': 0.1}
     pso = p2pspatial.model_selection.ParticleSwarmOptimizer(
