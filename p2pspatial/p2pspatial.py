@@ -103,6 +103,9 @@ def _loads_data_row(df_row, subject, electrodes, amplitude, date, single_stim):
             'date': date,
             'img_shape': img.shape}
     target = {'image': img,
+              'electrode': params[1],
+              'x_center': props.centroid[1],
+              'y_center': props.centroid[0],
               'area': props.area,
               'orientation': props.orientation,
               'major_axis_length': props.major_axis_length,
