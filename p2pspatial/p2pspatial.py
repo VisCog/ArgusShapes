@@ -231,7 +231,7 @@ def _transforms_electrode_images(Xel):
     # The result is an image that has the exact same area and
     # orientation as all trial images averaged. This is what we
     # save:
-    target = {'image': img_avg_th}
+    target = {'electrode': electrode, 'image': img_avg_th}
 
     # Remove ambiguous (trial-related) parameters:
     feat = {'subject': subject, 'amplitude': amplitude,
