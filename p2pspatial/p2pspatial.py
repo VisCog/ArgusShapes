@@ -42,6 +42,17 @@ due.cite(Doi("10.1167/13.9.30"),
 
 
 def _loads_data_row_a16(row):
+    # Electrodes have legacy names in datafiles:
+    old_names = names = ['L6', 'L2', 'M8', 'M4', 'L5', 'L1', 'M7', 'M3',
+                         'L8', 'L4', 'M6', 'M2', 'L7', 'L3', 'M5', 'M1']
+    # In newer papers, they go by A-D: A1, B1, C1, D1, A1, B2, ..., D4
+    # Shortcut: Use `chr` to go from int to char
+    new_names = [chr(i) + str(j) for j in range(1, 5)
+                 for i in range(65, 69)]
+    electrodes = row['electrode'].split('_')
+    electrodes = [new_names[old_names.index(e)] for e in electrodes]
+    electrodes = '_'.join(electrodes)
+
     # Date in folder name should match date in filename:
     date = row['exp_file'].split('_')[1].replace(".xls", "")
     if date != os.path.basename(row['exp_folder']):
@@ -64,7 +75,7 @@ def _loads_data_row_a16(row):
     feat = {'filename': row['filename'],
             'folder': os.path.join(row['exp_folder'], row['foldername']),
             'subject': subject,
-            'electrode': row['electrode'],
+            'electrode': electrodes,
             'param_str': row['notes'],
             'stim_class': stim_class,
             'amp': amp,
@@ -180,8 +191,8 @@ def load_data(folder, subject=None, electrodes=None, amplitude=None,
             tmp['exp_file'] = os.path.basename(fname)
             n_samples += len(tmp)
             if verbose:
-                print('Found %d samples in %s' % (len(tmp),
-                                                  tmp['exp_folder'].values[0]))
+                print('Found %d files in %s' % (len(tmp),
+                                                tmp['exp_folder'].values[0]))
             dfs.append(tmp)
     if n_samples == 0:
         print('No data found in %s' % folder)
@@ -189,9 +200,13 @@ def load_data(folder, subject=None, electrodes=None, amplitude=None,
 
     df = pd.concat(dfs)
     if random_state is not None:
+        if verbose:
+            print('Shuffling data')
         df = sklu.shuffle(df, random_state=random_state)
 
     # Process rows of the data frame in parallel:
+    if verbose:
+        print('Parsing data')
     feat_target = p2p.utils.parfor(_loads_data_row, df.iterrows(),
                                    func_args=[subject, electrodes, amplitude,
                                               date, single_stim],
