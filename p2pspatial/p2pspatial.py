@@ -41,9 +41,38 @@ due.cite(Doi("10.1167/13.9.30"),
          path='p2pspatial')
 
 
-def _loads_data_row(df_row, subject, electrodes, amplitude, date, single_stim):
-    _, row = df_row
+def _loads_data_row_a16(row):
+    # Date in folder name should match date in filename:
+    date = row['exp_file'].split('_')[1].replace(".xls", "")
+    if date != os.path.basename(row['exp_folder']):
+        raise ValueError(("Inconsistent date: %s vs "
+                          "%s.") % (date,
+                                    os.path.basename(row['exp_folder'])))
 
+    # Subject is in path name:
+    subject = os.path.basename(os.path.dirname(row['exp_folder']))
+
+    # Amp is followed by '_' as in '1.5_'. Multiple amps are like '1.5_2_':
+    amp = [float(a) for a in row['amplitude'].split('_') if a != '']
+    if len(amp) == 1:
+        stim_class = "SingleElectrode"
+        amp = amp[0]
+    else:
+        stim_class = "MultiElectrode"
+
+    # Assemble all feature values in a dict
+    feat = {'filename': row['filename'],
+            'folder': os.path.join(row['exp_folder'], row['foldername']),
+            'subject': subject,
+            'electrode': row['electrode'],
+            'param_str': row['notes'],
+            'stim_class': stim_class,
+            'amp': amp,
+            'date': date}
+    return feat
+
+
+def _loads_data_row_a60(row):
     # Split the data strings to extract subject, electrode, etc.
     fname = row['Filename']
     date = fname.split('_')[0]
@@ -51,28 +80,12 @@ def _loads_data_row(df_row, subject, electrodes, amplitude, date, single_stim):
     stim = params[0].split('_')
     if len(params) < 2 or len(stim) < 2:
         return None
-    # Subject string mismatch:
-    if subject is not None and stim[0] != subject:
-        return None
-    # Electrode string mismatch:
-    if electrodes is not None:
-        if params[1] not in electrodes:
-            return None
-    # Date string mismatch:
-    if date is not None and date != date:
-        return None
-    # Multiple electrodes mentioned:
-    if single_stim and '_' in params[1]:
-        return None
-    # Stimulus class mismatch:
-    if single_stim and stim[1] != 'SingleElectrode':
-        return None
 
     # Find the current amplitude in the folder name
     # It could have any of the following formats: '/3xTh', '_2.5xTh',
     # ' 2xTh'. Idea: Find the string 'xTh', then walk backwards to
     # find the last occurrence of '_', ' ', or '/'
-    idx_end = row['Folder'].find('xTh')
+    idx_end = row['exp_folder'].find('xTh')
     if idx_end == -1:
         return None
     idx_start = np.max([row['Folder'].rfind('_', 0, idx_end),
@@ -80,30 +93,63 @@ def _loads_data_row(df_row, subject, electrodes, amplitude, date, single_stim):
                         row['Folder'].rfind(os.sep, 0, idx_end)])
     if idx_start == -1:
         return None
-    amp = float(row['Folder'][idx_start + 1:idx_end])
-    if amplitude is not None:
-        if not np.isclose(amp, amplitude):
-            return None
-
-    # Load image
-    if not os.path.isfile(os.path.join(row['Folder'], row['Filename'])):
-        return None
-    img = skio.imread(os.path.join(row['Folder'], row['Filename']),
-                      as_grey=True)
-    props = imgproc.get_region_props(img, thresh=0)
+    amp = float(row['exp_folder'][idx_start + 1:idx_end])
 
     # Assemble all feature values in a dict
     feat = {'filename': fname,
-            'folder': row['Folder'],
-            'param_str': row['Params'],
+            'folder': row['exp_folder'],
             'subject': stim[0],
+            'param_str': row['Params'],
             'electrode': params[1],
             'stim_class': stim[1],
             'amp': amp,
-            'date': date,
-            'img_shape': img.shape}
+            'date': date}
+    return feat
+
+
+def _loads_data_row(df_row, subject, electrodes, amplitude, date, single_stim):
+    _, row = df_row
+
+    if np.all([c in row for c in ['Filename', 'Params']]):
+        # Found all relevant Argus II fields:
+        feat = _loads_data_row_a60(row)
+    elif np.all([c in row for c in ['filename', 'notes']]):
+        # Found all relevant Argus I fields:
+        feat = _loads_data_row_a16(row)
+    else:
+        raise ValueError("row is neither Argus I or Argus II data.")
+
+    if feat is None:
+        return None
+
+    # Subject string mismatch:
+    if subject is not None and feat['subject'] != subject:
+        return None
+    # Electrode string mismatch:
+    if electrodes is not None and feat['electrode'] not in electrodes:
+        return None
+    # Date string mismatch:
+    if date is not None and feat['date'] != date:
+        return None
+    # Multiple electrodes mentioned:
+    if single_stim and '_' in feat['stim_class']:
+        return None
+    # Stimulus class mismatch:
+    if single_stim and feat['stim_class'] != 'SingleElectrode':
+        return None
+    if amplitude is not None and not np.isclose(feat['amp'], amplitude):
+        return None
+
+    # Load image
+    if not os.path.isfile(os.path.join(feat['folder'], feat['filename'])):
+        return None
+    img = skio.imread(os.path.join(feat['folder'], feat['filename']),
+                      as_grey=True)
+    props = imgproc.get_region_props(img, thresh=0)
+    feat.update(img_shape=img.shape)
+
     target = {'image': img,
-              'electrode': params[1],
+              'electrode': feat['electrode'],
               'x_center': props.centroid[1],
               'y_center': props.centroid[0],
               'area': props.area,
@@ -114,7 +160,8 @@ def _loads_data_row(df_row, subject, electrodes, amplitude, date, single_stim):
 
 
 def load_data(folder, subject=None, electrodes=None, amplitude=None,
-              date=None, verbose=False, random_state=None, single_stim=True):
+              date=None, verbose=False, random_state=None, single_stim=True,
+              engine='joblib', scheduler='threading', n_jobs=-1):
     # Recursive search for all files whose name contains the string
     # '_rawDataFileList_': These contain the paths to the raw bmp images
     search_patterns = [os.path.join(folder, '**', '*_rawDataFileList_*'),
@@ -123,12 +170,18 @@ def load_data(folder, subject=None, electrodes=None, amplitude=None,
     n_samples = 0
     for search_pattern in search_patterns:
         for fname in glob.iglob(search_pattern, recursive=True):
-            tmp = pd.read_csv(fname)
-            tmp['Folder'] = os.path.dirname(fname)
+            if fname.endswith('.csv'):
+                tmp = pd.read_csv(fname)
+            elif fname.endswith('.xls'):
+                tmp = pd.read_excel(fname)
+            else:
+                raise TypeError("Unknown file type for file '%s'." % fname)
+            tmp['exp_folder'] = os.path.dirname(fname)
+            tmp['exp_file'] = os.path.basename(fname)
             n_samples += len(tmp)
             if verbose:
                 print('Found %d samples in %s' % (len(tmp),
-                                                  tmp['Folder'].values[0]))
+                                                  tmp['exp_folder'].values[0]))
             dfs.append(tmp)
     if n_samples == 0:
         print('No data found in %s' % folder)
@@ -141,7 +194,9 @@ def load_data(folder, subject=None, electrodes=None, amplitude=None,
     # Process rows of the data frame in parallel:
     feat_target = p2p.utils.parfor(_loads_data_row, df.iterrows(),
                                    func_args=[subject, electrodes, amplitude,
-                                              date, single_stim])
+                                              date, single_stim],
+                                   engine=engine, scheduler=scheduler,
+                                   n_jobs=n_jobs)
     # Invalid rows are returned as None, filter them out:
     feat_target = list(filter(None, feat_target))
     # For all other rows, a tuple (X, y) is returned:
