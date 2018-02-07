@@ -99,9 +99,9 @@ def _loads_data_row_a60(row):
     idx_end = row['exp_folder'].find('xTh')
     if idx_end == -1:
         return None
-    idx_start = np.max([row['Folder'].rfind('_', 0, idx_end),
-                        row['Folder'].rfind(' ', 0, idx_end),
-                        row['Folder'].rfind(os.sep, 0, idx_end)])
+    idx_start = np.max([row['exp_folder'].rfind('_', 0, idx_end),
+                        row['exp_folder'].rfind(' ', 0, idx_end),
+                        row['exp_folder'].rfind(os.sep, 0, idx_end)])
     if idx_start == -1:
         return None
     amp = float(row['exp_folder'][idx_start + 1:idx_end])
@@ -123,6 +123,7 @@ def _loads_data_row(df_row, subject, electrodes, amplitude, date, single_stim):
 
     if np.all([c in row for c in ['Filename', 'Params']]):
         # Found all relevant Argus II fields:
+        print(row)
         feat = _loads_data_row_a60(row)
     elif np.all([c in row for c in ['filename', 'notes']]):
         # Found all relevant Argus I fields:

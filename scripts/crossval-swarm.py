@@ -46,6 +46,14 @@ search_param_ranges = {
 }
 
 subject_params = {
+    'TB': {
+        'implant_type': p2pi.ArgusI,
+        'implant_x': -700,
+        'implant_y': 0,
+        'implant_rot': -0.700177748,
+        'loc_od_x': 15.6,
+        'loc_od_y': 0.6
+    },
     '12-005': {
         'implant_type': p2pi.ArgusII,
         'implant_x': -1344.36597,
@@ -130,7 +138,8 @@ def main():
     print("w_scale=%.2f w_rot=%.2f w_dice=%.2f" % (w_scale, w_rot, w_dice))
 
     # Load data
-    rootfolder = os.path.join(os.environ['SECOND_SIGHT_DATA'], 'shape')
+    rootfolder = os.path.join(os.environ['SECOND_SIGHT_DATA'], 'shape',
+                              subject)
     X, y = p2pspatial.load_data(rootfolder, subject=subject, electrodes=None,
                                 amplitude=amplitude, random_state=42,
                                 single_stim=True, verbose=False)
