@@ -123,7 +123,6 @@ def _loads_data_row(df_row, subject, electrodes, amplitude, date, single_stim):
 
     if np.all([c in row for c in ['Filename', 'Params']]):
         # Found all relevant Argus II fields:
-        print(row)
         feat = _loads_data_row_a60(row)
     elif np.all([c in row for c in ['filename', 'notes']]):
         # Found all relevant Argus I fields:
