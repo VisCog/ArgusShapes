@@ -106,9 +106,16 @@ def crossval_predict(estimator, X, y, fit_params={}, n_folds=5):
         Target relative to `X` for classification or regression
     n_folds : int, optional, default: 2
         Number of cross-validation folds.
+
+    Returns
+    -------
+    y_true : list
+    y_pred : list
+    best_params = dict
     """
     assert isinstance(X, pd.core.frame.DataFrame)
     assert isinstance(y, pd.core.frame.DataFrame)
+    assert n_folds > 1
     # Manual partitioning of X
     all_idx = np.arange(len(X))
     groups = np.array_split(all_idx, n_folds)
@@ -120,12 +127,12 @@ def crossval_predict(estimator, X, y, fit_params={}, n_folds=5):
         print('Fold %d / %d' % (i + 1, n_folds))
         train_idx = np.delete(all_idx, test_idx)
         est = sklb.clone(estimator)
-        est.fit(X.iloc[train_idx, :], y.iloc[train_idx], fit_params=fit_params)
+        est.fit(X.iloc[train_idx, :], y.iloc[train_idx, :], fit_params=fit_params)
         if hasattr(est, 'best_params_'):
             best_params.append(est.best_params_)
         else:
             best_params.append(None)
-        y_true.append(y.iloc[test_idx])
+        y_true.append(y.iloc[test_idx, :])
         y_pred.append(est.predict(X.iloc[test_idx, :]))
     return y_true, y_pred, best_params
 

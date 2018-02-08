@@ -135,7 +135,9 @@ def main():
     # Generate filename
     t_start = time()
     now = datetime.now().strftime('%Y-%m-%d_%H-%M-%S')
-    filename = '%s-crossval-swarm_%s_%s.pickle' % (modelname, subject, now)
+    filename = '%s-%s-swarm_%s_%s.pickle' % (
+        modelname, ("crossval" if n_folds > 1 else "fit"), subject, now
+    )
     print("")
     print(filename)
     print("------------------------------------------------------------------")
@@ -144,6 +146,8 @@ def main():
     print("Amplitude: %.2fx Th" % amplitude)
     if n_folds == -1:
         print("Leave-one-out cross-validation (n_jobs=%d)" % n_jobs)
+    elif n_folds == 1:
+        print("Fit all data (n_jobs=%d)" % n_jobs)
     else:
         print("%d-fold cross-validation (n_jobs=%d)" % (n_folds, n_jobs))
     print("w_scale=%.2f w_rot=%.2f w_dice=%.2f" % (w_scale, w_rot, w_dice))
@@ -189,8 +193,16 @@ def main():
 
     # Launch cross-validation
     fit_params = {}
-    y_test, y_pred, best_params = p2pspatial.model_selection.crossval_predict(
-        pso, X, y, fit_params=fit_params, n_folds=n_folds)
+    if n_folds > 1:
+        result = p2pspatial.model_selection.crossval_predict(
+            pso, X, y, fit_params=fit_params, n_folds=n_folds
+        )
+        y_test, y_pred, best_params = result
+    else:
+        pso.fit(X, y, fit_params=fit_params)
+        best_params = pso.best_params_
+        y_pred = []
+        y_test = []
 
     t_end = time()
     print("Done in %.3fs" % (t_end - t_start))
