@@ -43,6 +43,18 @@ models = {
         'search_params': ['rho', 'axlambda', 'loc_od_x', 'loc_od_y',
                           'implant_x', 'implant_y', 'implant_rot'],
         'subject_params': ['implant_type']
+    },
+    'E2': {  # Axon map model with perspective transform
+        'object': p2pspatial.models.ModelE,
+        'search_params': ['rho', 'axlambda', 'loc_od_x', 'loc_od_y',
+                          'implant_x', 'implant_y', 'implant_rot'],
+        'subject_params': ['implant_type']
+    },
+    'F2': {  # Axon map model with perspective transform
+        'object': p2pspatial.models.ModelF,
+        'search_params': ['rho', 'axlambda', 'loc_od_x', 'loc_od_y',
+                          'implant_x', 'implant_y', 'implant_rot'],
+        'subject_params': ['implant_type']
     }
 }
 
