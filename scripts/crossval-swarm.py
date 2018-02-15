@@ -185,8 +185,8 @@ def main():
     model = models[modelname]
     model_params = {'engine': 'joblib', 'scheduler': 'threading',
                     'n_jobs': n_jobs,
-                    'xystep': 0.5, 'img_thresh': 1.0 / np.sqrt(np.e),
-                    'w_scale': w_scale, 'w_rot': w_rot, 'w_dice': w_dice}
+                    'xystep': 0.5, 'img_thresh': 1.0 / np.sqrt(np.e)}
+    # 'w_scale': w_scale, 'w_rot': w_rot, 'w_dice': w_dice}
     for key in model['subject_params']:
         model_params.update({key: subject_params[subject][key]})
     regressor = model['object'](**model_params)
