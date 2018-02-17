@@ -43,6 +43,18 @@ models = {
         'search_params': ['rho', 'axlambda', 'loc_od_x', 'loc_od_y',
                           'implant_x', 'implant_y', 'implant_rot'],
         'subject_params': ['implant_type']
+    },
+    'E2': {  # Axon map model with perspective transform
+        'object': p2pspatial.models.ModelE,
+        'search_params': ['rho', 'axlambda', 'loc_od_x', 'loc_od_y',
+                          'implant_x', 'implant_y', 'implant_rot'],
+        'subject_params': ['implant_type']
+    },
+    'F2': {  # Axon map model with perspective transform
+        'object': p2pspatial.models.ModelF,
+        'search_params': ['rho', 'axlambda', 'loc_od_x', 'loc_od_y',
+                          'implant_x', 'implant_y', 'implant_rot'],
+        'subject_params': ['implant_type']
     }
 }
 
@@ -173,8 +185,8 @@ def main():
     model = models[modelname]
     model_params = {'engine': 'joblib', 'scheduler': 'threading',
                     'n_jobs': n_jobs,
-                    'xystep': 0.5, 'img_thresh': 1.0 / np.sqrt(np.e),
-                    'w_scale': w_scale, 'w_rot': w_rot, 'w_dice': w_dice}
+                    'xystep': 0.5, 'img_thresh': 1.0 / np.sqrt(np.e)}
+    # 'w_scale': w_scale, 'w_rot': w_rot, 'w_dice': w_dice}
     for key in model['subject_params']:
         model_params.update({key: subject_params[subject][key]})
     regressor = model['object'](**model_params)

@@ -570,18 +570,49 @@ class ImageMomentsLossMixin(BaseModel):
         params.update(greater_is_better=self.greater_is_better)
         return params
 
-    def _predicts_target_values(self, img):
-        area = 0
-        orientation = 0
-        major_axis_length = 0
-        minor_axis_length = 0
-        return {'area': area,
-                'orientation': orientation,
-                'major_axis_length': major_axis_length,
-                'minor_axis_length': minor_axis_length}
+    def _predicts_target_values(self, ytyp, w_area=0.001, w_orient=1):
+        (_, yt), (_, yp) = ytyp
+        if not isinstance(yt, pd.core.series.Series):
+            raise TypeError("`yt` must be a pandas Series")
+        if not isinstance(yp, pd.core.series.Series):
+            raise TypeError("`yp` must be a pandas Series")
+
+        img_yt = imgproc.center_phosphene(skimage.image_as_float(yt['image']))
+        img_yp = imgproc.center_phosphene(skimage.image_as_float(yp['image']))
+
+        props_yt = imgproc.get_region_props(img_yt, thresh=0.5)
+        props_yp = imgproc.get_region_props(img_yp, thresh=self.img_thresh)
+
+        err_area = (props_yt.area - props_yp.area) ** 2
+
+        err_orient = np.abs(props_yt.orientation - props_yp.orientation)
+        err_orient = np.rad2deg(err_orient)
+        if err_orient > 180:
+            err_orient = 360 - err_orient
+        err_orient = err_orient ** 2
+
+        return w_area * err_area + w_orient * err_orient
 
     def score(self, X, y, sample_weight=None):
-        return 100
+        """Score the model using the new loss function"""
+        if not isinstance(X, pd.core.frame.DataFrame):
+            raise TypeError("'X' must be a pandas DataFrame, not %s" % type(X))
+        if not isinstance(y, pd.core.frame.DataFrame):
+            raise TypeError("'y' must be a pandas DataFrame, not %s" % type(y))
+
+        y_pred = self.predict(X)
+
+        # `y` and `y_pred` must have the same index, otherwise subtraction
+        # produces nan
+        assert np.allclose(y_pred.index, y.index)
+
+        # Compute the scaling factor / rotation angle / dice coefficient loss:
+        # The loss function expects a tupel of two DataFrame rows
+        losses = p2pu.parfor(self._predicts_target_values,
+                             zip(y.iterrows(), y_pred.iterrows()),
+                             engine=self.engine, scheduler=self.scheduler,
+                             n_jobs=self.n_jobs)
+        return np.mean(losses)
 
 
 class SRDLossMixin(BaseModel):
@@ -660,5 +691,15 @@ class ModelC(SRDLossMixin, RetinalGridMixin, AxonMapMixin):
 
 
 class ModelD(SRDLossMixin, RetinalCoordTrafoMixin, AxonMapMixin):
+    """Axon map model with perspective transform and SRD loss"""
+    pass
+
+
+class ModelE(ImageMomentsLossMixin, RetinalGridMixin, AxonMapMixin):
+    """Axon map model with SRD loss"""
+    pass
+
+
+class ModelF(ImageMomentsLossMixin, RetinalCoordTrafoMixin, AxonMapMixin):
     """Axon map model with perspective transform and SRD loss"""
     pass
