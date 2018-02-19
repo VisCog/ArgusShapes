@@ -32,25 +32,31 @@ models = {
         'subject_params': ['implant_type', 'implant_x', 'implant_y',
                            'implant_rot', 'loc_od_x', 'loc_od_y']
     },
+    'C2': {  # Axon map model: search OD location
+        'object': p2pspatial.models.ModelD,
+        'search_params': ['rho', 'axlambda', 'loc_od_x', 'loc_od_y',
+                          'implant_x', 'implant_y', 'implant_rot'],
+        'subject_params': ['implant_type']
+    },
     'D': {  # Axon map model with perspective transform
         'object': p2pspatial.models.ModelD,
         'search_params': ['rho', 'axlambda'],
         'subject_params': ['implant_type', 'implant_x', 'implant_y',
                            'implant_rot', 'loc_od_x', 'loc_od_y']
     },
-    'D2': {  # Axon map model with perspective transform
+    'D2': {  # Axon map model with perspective transform: search OD
         'object': p2pspatial.models.ModelD,
         'search_params': ['rho', 'axlambda', 'loc_od_x', 'loc_od_y',
                           'implant_x', 'implant_y', 'implant_rot'],
         'subject_params': ['implant_type']
     },
-    'E2': {  # Axon map model with perspective transform
+    'E2': {  # Axon map model + predict area/orient: search OD
         'object': p2pspatial.models.ModelE,
         'search_params': ['rho', 'axlambda', 'loc_od_x', 'loc_od_y',
                           'implant_x', 'implant_y', 'implant_rot'],
         'subject_params': ['implant_type']
     },
-    'F2': {  # Axon map model with perspective transform
+    'F2': {  # Axon map model with perspective transform + predict area/orient
         'object': p2pspatial.models.ModelF,
         'search_params': ['rho', 'axlambda', 'loc_od_x', 'loc_od_y',
                           'implant_x', 'implant_y', 'implant_rot'],
