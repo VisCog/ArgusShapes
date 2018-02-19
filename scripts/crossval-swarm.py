@@ -154,7 +154,7 @@ def main():
     t_start = time()
     now = datetime.now().strftime('%Y-%m-%d_%H-%M-%S')
     filename = '%s-%s-swarm_%s_%s.pickle' % (
-        modelname, ("crossval" if n_folds > 1 else "fit"), subject, now
+        modelname, ("fit" if n_folds == 1 else "crossval"), subject, now
     )
     print("")
     print(filename)
