@@ -28,8 +28,7 @@ from . import imgproc
 
 p2p.console.setLevel(logging.ERROR)
 
-__all__ = ["load_data", "average_data", "transform_mean_images",
-           "ret2dva", "dva2ret", "SpatialSimulation"]
+__all__ = ["load_data", "transform_mean_images", "ret2dva", "dva2ret"]
 
 
 # Use duecredit (duecredit.org) to provide a citation to relevant work to
@@ -332,18 +331,6 @@ def transform_mean_images(Xraw, yraw):
     return pd.DataFrame(Xout), pd.DataFrame(yout)
 
 
-def average_data(Xold, yold):
-    """Average trials to yield mean images"""
-    Xy = pd.concat((Xold, yold), axis=1).groupby(['electrode', 'amp'])
-    df = pd.DataFrame(Xy[yold.columns].mean()).reset_index()
-
-    Xnew = df.loc[:, ['electrode', 'amp']]
-    for col in set(Xold.columns) - set(Xnew.columns) & set(Xold.columns):
-        Xnew[col] = Xold[col]
-    ynew = df.loc[:, yold.columns]
-    return Xnew, ynew
-
-
 def ret2dva(r_um):
     """Converts retinal distances (um) to visual angles (deg)
 
@@ -384,153 +371,3 @@ def pol2cart(theta, rho):
     y = rho * np.sin(theta)
     return x, y
 
-
-class SpatialSimulation(p2p.Simulation):
-
-    def set_params(self, **params):
-        for param, value in six.iteritems(params):
-            setattr(self, param, value)
-
-    def set_ganglion_cell_layer(self):
-        self.gcl = {}
-
-    def calc_electrode_ecs(self, electrode, gridx, gridy):
-        assert isinstance(electrode, six.string_types)
-        assert isinstance(self.csmode, six.string_types)
-        assert isinstance(self.use_ofl, bool)
-        ename = '%s%d' % (electrode[0], int(electrode[1:]))
-
-        # Current spread either from Nanduri model or with fitted radius
-        if self.csmode.lower() == 'ahuja':
-            cs = self.implant[ename].current_spread(gridx, gridy, layer='OFL')
-        elif self.csmode.lower() == 'gaussian':
-            assert isinstance(self.cswidth, (int, float))
-            assert self.cswidth > 0
-            r2 = (gridx - self.implant[ename].x_center) ** 2
-            r2 += (gridy - self.implant[ename].y_center) ** 2
-            cs = np.exp(-r2 / (2.0 * self.cswidth ** 2))
-        else:
-            raise ValueError('Unknown csmode "%s"' % self.csmode)
-
-        if self.use_ofl:
-            # Take into account axonal stimulation
-            cs = self.ofl.current2effectivecurrent(cs)
-        return cs
-
-    def calc_currents(self, electrodes, verbose=False):
-        assert isinstance(electrodes, (list, np.ndarray))
-
-        # Multiple electrodes possible, separated by '_'
-        list_2d = [e.split('_') for e in list(electrodes)]
-        list_1d = [item for sublist in list_2d for item in sublist]
-        electrodes = np.unique(list_1d)
-        if verbose:
-            print('Calculating effective current for electrodes:', electrodes)
-
-        ecs = p2p.utils.parfor(self.calc_electrode_ecs, electrodes,
-                               func_args=[self.ofl.gridx, self.ofl.gridy],
-                               engine=self.engine, scheduler=self.scheduler,
-                               n_jobs=self.n_jobs)
-        if not hasattr(self, 'ecs'):
-            self.ecs = {}
-        for k, v in zip(electrodes, ecs):
-            self.ecs[k] = v
-        if verbose:
-            print('Done.')
-
-    def calc_displacement(self, r, meridian='temporal'):
-        alpha = np.where(meridian == 'temporal', 1.8938, 2.4607)
-        beta = np.where(meridian == 'temporal', 2.4598, 1.7463)
-        gamma = np.where(meridian == 'temporal', 0.91565, 0.77754)
-        delta = np.where(meridian == 'temporal', 14.904, 15.111)
-        mu = np.where(meridian == 'temporal', -0.09386, -0.15933)
-        scale = np.where(meridian == 'temporal', 12.0, 10.0)
-
-        rmubeta = (np.abs(r) - mu) / beta
-        numer = delta * gamma * np.exp(-rmubeta ** gamma)
-        numer *= rmubeta ** (alpha * gamma - 1)
-        denom = beta * sps.gamma.pdf(alpha, 5)
-
-        return numer / denom / scale
-
-    def inv_displace(self, xy):
-        """In: visual field coords (dva), Out: retinal surface coords (um)"""
-        if self.implant.eye == 'LE':
-            # Let's not think about eyes right now...
-            raise NotImplementedError
-
-        nasal_in = np.arange(0, 30, 0.1)
-        nasal_out = nasal_in + self.calc_displacement(nasal_in,
-                                                      meridian='nasal')
-        inv_displace_nasal = spi.interp1d(nasal_out, nasal_in,
-                                          bounds_error=False)
-
-        temporal_in = np.arange(0, 30, 0.1)
-        temporal_out = temporal_in + self.calc_displacement(
-            temporal_in, meridian='temporal'
-        )
-        inv_displace_temporal = spi.interp1d(temporal_out, temporal_in,
-                                             bounds_error=False)
-
-        # Convert x, y (dva) into polar coordinates
-        theta, rho_dva = cart2pol(xy[:, 0], xy[:, 1])
-
-        # Add inverse displacement
-        rho_dva = np.where(xy[:, 0] < 0, inv_displace_temporal(rho_dva),
-                           inv_displace_nasal(rho_dva))
-
-        # Convert radius from um to dva
-        rho_ret = dva2ret(rho_dva)
-
-        # Convert back to x, y (dva)
-        x, y = pol2cart(theta, rho_ret)
-        return np.vstack((x, y)).T
-
-    def inv_warp(self, xy, img_shape=None):
-        # From output img coords to output dva coords
-        x_out_range = self.out_x_range
-        y_out_range = self.out_y_range
-        xy_dva = np.zeros_like(xy)
-        xy_dva[:, 0] = (x_out_range[0] +
-                        xy[:, 0] / img_shape[1] * np.diff(x_out_range))
-        xy_dva[:, 1] = (y_out_range[0] +
-                        xy[:, 1] / img_shape[0] * np.diff(y_out_range))
-
-        # From output dva coords ot input ret coords
-        xy_ret = self.inv_displace(xy_dva)
-
-        # From input ret coords to input img coords
-        x_in_range = self.ofl.x_range
-        y_in_range = self.ofl.y_range
-        xy_img = np.zeros_like(xy_ret)
-        xy_img[:, 0] = ((xy_ret[:, 0] - x_in_range[0]) /
-                        np.diff(x_in_range) * img_shape[1])
-        xy_img[:, 1] = ((xy_ret[:, 1] - y_in_range[0]) /
-                        np.diff(y_in_range) * img_shape[0])
-        return xy_img
-
-    def pulse2percept(self, el_str, amp):
-        assert isinstance(el_str, six.string_types)
-        assert isinstance(amp, (int, float))
-        assert isinstance(self.use_persp_trafo, bool)
-        assert amp >= 0
-        if np.isclose(amp, 0):
-            print('Warning: amp is zero on %s' % el_str)
-
-        ecs = np.zeros_like(self.ofl.gridx)
-        electrodes = el_str.split('_')
-        for e in electrodes:
-            if e not in self.ecs:
-                # It's possible that the test set contains an electrode that
-                # was not in the training set (and thus not in ``fit``)
-                self.calc_currents([e])
-            ecs += self.ecs[e]
-        if ecs.max() > 0:
-            ecs = ecs / ecs.max() * amp
-
-        if self.use_persp_trafo:
-            out = skit.warp(ecs, self.inv_warp,
-                            map_args={'img_shape': ecs.shape})
-        else:
-            out = ecs
-        return out

@@ -15,6 +15,8 @@ import scipy.stats as spst
 import sklearn.base as sklb
 import sklearn.exceptions as skle
 
+import skimage
+
 from .p2pspatial import *
 from . import imgproc
 
@@ -570,27 +572,31 @@ class ImageMomentsLossMixin(BaseModel):
         params.update(greater_is_better=self.greater_is_better)
         return params
 
-    def _predicts_target_values(self, ytyp, w_area=0.001, w_orient=1):
+    def _predicts_target_values(self, img):
+        if not isinstance(img, np.ndarray):
+            raise TypeError("`img` must be a NumPy array.")
+        # The image has already been thresholded using `self.img_thresh`:
+        props = imgproc.get_region_props(img, thresh=0.5)
+        return {'area': props.area, 'orientation': props.orientation}
+
+    def _scores_props(self, ytyp, w_area=0.001, w_orient=1):
         (_, yt), (_, yp) = ytyp
         if not isinstance(yt, pd.core.series.Series):
             raise TypeError("`yt` must be a pandas Series")
         if not isinstance(yp, pd.core.series.Series):
             raise TypeError("`yp` must be a pandas Series")
-
-        img_yt = imgproc.center_phosphene(skimage.image_as_float(yt['image']))
-        img_yp = imgproc.center_phosphene(skimage.image_as_float(yp['image']))
-
+        # Extract props from ground-truth image:
+        img_yt = imgproc.center_phosphene(skimage.img_as_float(yt['image']))
         props_yt = imgproc.get_region_props(img_yt, thresh=0.5)
-        props_yp = imgproc.get_region_props(img_yp, thresh=self.img_thresh)
-
-        err_area = (props_yt.area - props_yp.area) ** 2
-
-        err_orient = np.abs(props_yt.orientation - props_yp.orientation)
+        # Calculate area error:
+        err_area = (props_yt.area - yp['area']) ** 2
+        # Calculate orient error (degrees, < 180 deg):
+        err_orient = np.abs(props_yt.orientation - yp['orientation'])
         err_orient = np.rad2deg(err_orient)
         if err_orient > 180:
             err_orient = 360 - err_orient
         err_orient = err_orient ** 2
-
+        # Return weighted sum of area and orient errors:
         return w_area * err_area + w_orient * err_orient
 
     def score(self, X, y, sample_weight=None):
@@ -608,7 +614,7 @@ class ImageMomentsLossMixin(BaseModel):
 
         # Compute the scaling factor / rotation angle / dice coefficient loss:
         # The loss function expects a tupel of two DataFrame rows
-        losses = p2pu.parfor(self._predicts_target_values,
+        losses = p2pu.parfor(self._scores_props,
                              zip(y.iterrows(), y_pred.iterrows()),
                              engine=self.engine, scheduler=self.scheduler,
                              n_jobs=self.n_jobs)
