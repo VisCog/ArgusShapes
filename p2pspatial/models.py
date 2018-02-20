@@ -577,6 +577,8 @@ class ImageMomentsLossMixin(BaseModel):
             raise TypeError("`img` must be a NumPy array.")
         # The image has already been thresholded using `self.img_thresh`:
         props = imgproc.get_region_props(img, thresh=0.5)
+        if props is None:
+            return {'area': 0, 'orientation': 0}
         return {'area': props.area, 'orientation': props.orientation}
 
     def _scores_props(self, ytyp, w_area=0.001, w_orient=1):
@@ -588,6 +590,7 @@ class ImageMomentsLossMixin(BaseModel):
         # Extract props from ground-truth image:
         img_yt = imgproc.center_phosphene(skimage.img_as_float(yt['image']))
         props_yt = imgproc.get_region_props(img_yt, thresh=0.5)
+        assert props_yt is not None
         # Calculate area error:
         err_area = (props_yt.area - yp['area']) ** 2
         # Calculate orient error (degrees, < 180 deg):
