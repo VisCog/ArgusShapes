@@ -310,6 +310,22 @@ def _transforms_electrode_images(Xel):
 
 
 def transform_mean_images(Xraw, yraw):
+    """Extract mean images on an electrode from all raw trial drawings
+
+    Parameters
+    ----------
+    Xraw : pd.DataFrame
+        Feature matrix, raw trial data
+    yraw : pd.DataFrame
+        Target values, raw trial data
+
+    Returns
+    =======
+    Xout : pd.DataFrame
+        Feature matrix, single entry per electrode
+    yout : pd.DataFrame
+        Target values, single entry per electrode
+    """
     subjects = Xraw.subject.unique()
     Xout = []
     yout = []
