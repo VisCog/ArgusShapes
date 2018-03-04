@@ -224,7 +224,7 @@ def load_data(folder, subject=None, electrodes=None, amplitude=None,
     return pd.DataFrame(features), pd.DataFrame(targets)
 
 
-def _transforms_electrode_images(Xel):
+def _transforms_electrode_images(Xel, threshold=True):
     """Takes all trial images (given electrode) and computes mean image"""
     assert len(Xel.subject.unique()) == 1
     subject = Xel.subject.unique()[0]
@@ -271,31 +271,34 @@ def _transforms_electrode_images(Xel):
             img = skit.rotate(img, angle, order=3)
             img_avg += img
 
-        # Binarize the average image:
-        img_avg_th = imgproc.get_thresholded_image(img_avg,
-                                                   thresh='otsu')
-        assert np.isclose(img_avg_th.min(), 0)
-        assert np.isclose(img_avg_th.max(), 1)
-        # Remove "pepper" (fill small holes):
-        img_avg_th = skim.binary_closing(img_avg_th, selem=skim.disk(11))
-        # Erode back down
-        img_avg_th = skim.erosion(img_avg_th, skim.disk(5))
-        # Remove "salt" (remove small bright spots):
-        # img_avg_morph = skim.binary_opening(img_avg_morph,
-        #                                     selem=skim.square(9))
-        # if not np.allclose(img_avg_morph, np.zeros_like(img_avg_morph)):
-        #     img_avg_th = img_avg_morph
-        # Rotate the binarized image to have the same orientation as
-        # the mean trial image:
-        props = imgproc.get_region_props(img_avg_th, thresh=0)
-        angle_rad = np.mean(orientations) - props.orientation
-        img_avg_th = skit.rotate(img_avg_th, np.rad2deg(angle_rad),
-                                 order=3)
-        # Scale the binarized image to have the same area as the mean
-        # trial image:
-        props = imgproc.get_region_props(img_avg_th, thresh=0)
-        scale = np.sqrt(np.mean(areas) / props.area)
-        img_avg_th = imgproc.scale_phosphene(img_avg_th, scale)
+        if threshold:
+            # Binarize the average image:
+            img_avg_th = imgproc.get_thresholded_image(img_avg,
+                                                       thresh='otsu')
+            assert np.isclose(img_avg_th.min(), 0)
+            assert np.isclose(img_avg_th.max(), 1)
+            # Remove "pepper" (fill small holes):
+            img_avg_th = skim.binary_closing(img_avg_th, selem=skim.disk(11))
+            # Erode back down
+            img_avg_th = skim.erosion(img_avg_th, skim.disk(5))
+            # Remove "salt" (remove small bright spots):
+            # img_avg_morph = skim.binary_opening(img_avg_morph,
+            #                                     selem=skim.square(9))
+            # if not np.allclose(img_avg_morph, np.zeros_like(img_avg_morph)):
+            #     img_avg_th = img_avg_morph
+            # Rotate the binarized image to have the same orientation as
+            # the mean trial image:
+            props = imgproc.get_region_props(img_avg_th, thresh=0)
+            angle_rad = np.mean(orientations) - props.orientation
+            img_avg_th = skit.rotate(img_avg_th, np.rad2deg(angle_rad),
+                                     order=3)
+            # Scale the binarized image to have the same area as the mean
+            # trial image:
+            props = imgproc.get_region_props(img_avg_th, thresh=0)
+            scale = np.sqrt(np.mean(areas) / props.area)
+            img_avg_th = imgproc.scale_phosphene(img_avg_th, scale)
+        else:
+            img_avg_th = img_avg
 
     # The result is an image that has the exact same area and
     # orientation as all trial images averaged. This is what we
@@ -309,7 +312,7 @@ def _transforms_electrode_images(Xel):
     return feat, target
 
 
-def transform_mean_images(Xraw, yraw):
+def transform_mean_images(Xraw, yraw, threshold=True):
     """Extract mean images on an electrode from all raw trial drawings
 
     Parameters
@@ -339,7 +342,8 @@ def transform_mean_images(Xraw, yraw):
             electrodes = Xamp.electrode.unique()
 
             Xel = [Xamp[Xamp.electrode == e] for e in electrodes]
-            feat_target = p2p.utils.parfor(_transforms_electrode_images, Xel)
+            feat_target = p2p.utils.parfor(_transforms_electrode_images, Xel,
+                                          func_kwargs={'threshold': threshold})
             Xout += [ft[0] for ft in feat_target]
             yout += [ft[1] for ft in feat_target]
 

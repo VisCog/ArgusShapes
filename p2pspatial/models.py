@@ -141,12 +141,7 @@ class BaseModel(sklb.BaseEstimator):
         self._is_fitted = True
         return self
 
-    @abc.abstractmethod
-    def _predicts_target_values(self, img):
-        """Must return a dict of predicted values, e.g {'image': img}"""
-        raise NotImplementedError
-
-    def _predicts(self, Xrow):
+    def _predicts_image(self, Xrow):
         """Predicts a single data point"""
         _, row = Xrow
         assert isinstance(row, pd.core.series.Series)
@@ -155,6 +150,15 @@ class BaseModel(sklb.BaseEstimator):
         if not isinstance(curr_map, np.ndarray):
             raise TypeError(("Method '_curr_map' must return a np.ndarray, "
                              "not '%s'." % type(curr_map)))
+        return curr_map
+
+    @abc.abstractmethod
+    def _predicts_target_values(self, img):
+        """Must return a dict of predicted values, e.g {'image': img}"""
+        raise NotImplementedError
+
+    def _predicts(self, Xrow):
+        curr_map = self._predicts_image(Xrow)
         # Rescale output if specified:
         out_shape = None
         if hasattr(row, 'img_shape'):
@@ -166,6 +170,7 @@ class BaseModel(sklb.BaseEstimator):
         img = imgproc.get_thresholded_image(curr_map, thresh=self.img_thresh,
                                             out_shape=out_shape)
         return self._predicts_target_values(img)
+
 
     def predict(self, X):
         """Compute predicted drawing"""
