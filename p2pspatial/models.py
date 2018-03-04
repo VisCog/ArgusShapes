@@ -159,6 +159,7 @@ class BaseModel(sklb.BaseEstimator):
 
     def _predicts(self, Xrow):
         curr_map = self._predicts_image(Xrow)
+        _, row = Xrow
         # Rescale output if specified:
         out_shape = None
         if hasattr(row, 'img_shape'):
