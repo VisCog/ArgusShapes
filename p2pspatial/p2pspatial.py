@@ -70,6 +70,13 @@ def _loads_data_row_a16(row):
     else:
         stim_class = "MultiElectrode"
 
+    params = row['notes'].split('_')
+    freq = params[4]
+    if freq[:5] == "Freq:" and freq[-2:] == "Hz":
+        freq = float(freq[5:-2])
+    else:
+        freq = 0.0
+
     # Assemble all feature values in a dict
     feat = {'filename': row['filename'],
             'folder': os.path.join(row['exp_folder'], row['foldername']),
@@ -78,6 +85,7 @@ def _loads_data_row_a16(row):
             'param_str': row['notes'],
             'stim_class': stim_class,
             'amp': amp,
+            'freq': freq,
             'date': date}
     return feat
 
@@ -105,6 +113,12 @@ def _loads_data_row_a60(row):
         return None
     amp = float(row['exp_folder'][idx_start + 1:idx_end])
 
+    freq = stim[2]
+    if freq[0] == 'f':
+        freq = float(freq[1:])
+    else:
+        freq = 0
+
     # Assemble all feature values in a dict
     feat = {'filename': fname,
             'folder': row['exp_folder'],
@@ -113,11 +127,12 @@ def _loads_data_row_a60(row):
             'electrode': params[1],
             'stim_class': stim[1],
             'amp': amp,
+            'freq': freq,
             'date': date}
     return feat
 
 
-def _loads_data_row(df_row, subject, electrodes, amplitude, date, single_stim):
+def _loads_data_row(df_row, subject, electrodes, amplitude, frequency, date, single_stim):
     _, row = df_row
 
     if np.all([c in row for c in ['Filename', 'Params']]):
@@ -149,6 +164,8 @@ def _loads_data_row(df_row, subject, electrodes, amplitude, date, single_stim):
         return None
     if amplitude is not None and not np.isclose(feat['amp'], amplitude):
         return None
+    if frequency is not None and not np.isclose(feat['freq'], frequency):
+        return None
 
     # Load image
     if not os.path.isfile(os.path.join(feat['folder'], feat['filename'])):
@@ -169,7 +186,8 @@ def _loads_data_row(df_row, subject, electrodes, amplitude, date, single_stim):
     return feat, target
 
 
-def load_data(folder, subject=None, electrodes=None, amplitude=None,
+def load_data(folder, subject=None, electrodes=None,
+              amplitude=2.0, frequency=20.0,
               date=None, verbose=False, random_state=None, single_stim=True,
               engine='joblib', scheduler='threading', n_jobs=-1):
     # Recursive search for all files whose name contains the string
@@ -207,7 +225,8 @@ def load_data(folder, subject=None, electrodes=None, amplitude=None,
     if verbose:
         print('Parsing data')
     feat_target = p2p.utils.parfor(_loads_data_row, df.iterrows(),
-                                   func_args=[subject, electrodes, amplitude,
+                                   func_args=[subject, electrodes,
+                                              amplitude, frequency,
                                               date, single_stim],
                                    engine=engine, scheduler=scheduler,
                                    n_jobs=n_jobs)
