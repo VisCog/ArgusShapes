@@ -235,10 +235,10 @@ class AxonMapMixin(BaseModel):
         self.loc_od_y = 1.5
         # Set parameters of the Jansonius model: Number of axons and number of
         # segments per axon can be overriden by the user:
-        self.n_axons = 301
+        self.n_axons = 500
         self.axons_range = (-180, 180)
         # Number of sampling points along the radial axis(polar coordinates):
-        self.n_ax_segments = 301
+        self.n_ax_segments = 500
         # Lower and upper bounds for the radial position values(polar
         # coordinates):
         self.ax_segments_range = (3, 50)
@@ -446,10 +446,11 @@ class AxonMapMixin(BaseModel):
             axons = self._finds_closest_axons(bundles)
         # Calculate axon contributions (depends on axlambda):
         self.axon_contrib = self._calcs_axon_contribution(axons)
-        # Pickle axons:
+        # Pickle axons along with all important parameters:
         params = {'loc_od_x': self.loc_od_x, 'loc_od_y': self.loc_od_y,
                   'n_axons': self.n_axons, 'axons_range': self.axons_range,
-                  'n_ax_segments': self.n_ax_segments,
+                  'xrange': self.xrange, 'yrange': self.yrange,
+                  'xystep': self.xystep, 'n_ax_segments': self.n_ax_segments,
                   'ax_segments_range': self.ax_segments_range}
         pickle.dump((params, axons), open('axons.pickle', 'wb'))
 
@@ -484,7 +485,7 @@ class RetinalCoordTrafoMixin(BaseModel):
         # degrees of visual angle, at a given spatial resolution (step size):
         self.xrange = (-30, 30)  # dva
         self.yrange = (-20, 20)  # dva
-        self.xystep = 0.2  # dva
+        self.xystep = 0.35  # dva
 
     def get_params(self, deep=True):
         params = super(RetinalCoordTrafoMixin, self).get_params(deep=deep)
