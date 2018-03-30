@@ -7,6 +7,9 @@ from Cython.Build import cythonize
 extensions = [
     Extension('p2pspatial.fast_models', ['p2pspatial/fast_models.pyx'],
               include_dirs=[np.get_include()],
+              extra_compile_args=['-O3']),
+    Extension('p2pspatial.fast_imgproc', ['p2pspatial/fast_imgproc.pyx'],
+              include_dirs=[np.get_include()],
               extra_compile_args=['-O3'])
 ]
 

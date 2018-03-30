@@ -383,6 +383,19 @@ def transform_mean_images(Xraw, yraw, threshold=True):
     return pd.DataFrame(Xout), pd.DataFrame(yout)
 
 
+def adjust_drawing_bias(y, scale_compact=1, scale_elong=1, rot_deg_elong=0):
+    for idx, row in y.iterrows():
+        img = row['image']
+        is_elongated = row['major_axis_length'] / row['minor_axis_length'] > 2
+        if is_elongated:
+            img = imgproc.scale_phosphene(img, scale_elong)
+        else:
+            img = imgproc.scale_phosphene(img, scale_compact)
+        img = skit.rotate(img, rot_deg_elong, order=3)
+        y.loc[idx, 'image'] = img
+    return y
+
+
 def ret2dva(r_um):
     """Converts retinal distances (um) to visual angles (deg)
 

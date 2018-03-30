@@ -47,7 +47,7 @@ class BaseModel(sklb.BaseEstimator):
         self.implant_rot = 0
 
         # Current maps are thresholded to produce a binary image:
-        self.img_thresh = 0.1
+        self.img_thresh = 1.0 / np.sqrt(np.e)
 
         # JobLib or Dask can be used to parallelize computations:
         self.engine = 'joblib'
@@ -108,16 +108,10 @@ class BaseModel(sklb.BaseEstimator):
         #   but trim the zeros:
         wants_el = set([self._ename(e) for e in set(X.electrode)])
         needs_el = wants_el.difference(has_el)
-        # - Calculate the current maps for the missing electrodes:
-        engine = 'joblib' if self.engine == 'cython' else self.engine
-        curr_map = p2pu.parfor(self._calcs_el_curr_map, needs_el,
-                               engine=engine, scheduler=self.scheduler,
-                               n_jobs=self.n_jobs)
-        # - Store the new current maps:
-        for key, cm in zip(needs_el, curr_map):
-            # We should process each key only once:
-            assert key not in self._curr_map
-            self._curr_map[key] = cm
+        # - Calculate the current maps for the missing electrodes (parallel
+        #   makes things worse - overhead?)
+        for el in needs_el:
+            self._curr_map[el] = self._calcs_el_curr_map(el)
 
     def fit(self, X, y=None, **fit_params):
         """Fits the model"""
@@ -188,8 +182,9 @@ class BaseModel(sklb.BaseEstimator):
         self.calc_curr_map(X)
 
         # Predict percept
+        engine = 'serial' if self.engine is 'cython' else self.engine
         y_pred = p2pu.parfor(self._predicts, X.iterrows(),
-                             engine=self.engine, scheduler=self.scheduler,
+                             engine=engine, scheduler=self.scheduler,
                              n_jobs=self.n_jobs)
 
         # Convert to DataFrame, preserving the index of `X` (otherwise
@@ -314,25 +309,30 @@ class AxonMapMixin(BaseModel):
         if self.ax_segments_range[0] > self.ax_segments_range[1]:
             raise ValueError('Lower bound on rho cannot be larger than the '
                              ' upper bound.')
+
         is_superior = phi0 > 0
         rho = np.linspace(*self.ax_segments_range, num=self.n_ax_segments)
-
-        if is_superior:
-            # Axon is in superior retina, compute `b` (real number) from Eq. 5:
-            b = np.exp(beta_sup + 3.9 * np.tanh(-(phi0 - 121.0) / 14.0))
-            # Equation 3, `c` a positive real number:
-            c = 1.9 + 1.4 * np.tanh((phi0 - 121.0) / 14.0)
+        if self.engine == 'cython':
+            xprime, yprime = fm.fast_jansonius(rho, phi0, beta_sup, beta_inf)
         else:
-            # Axon is in inferior retina: compute `b` (real number) from Eq. 6:
-            b = -np.exp(beta_inf + 1.5 * np.tanh(-(-phi0 - 90.0) / 25.0))
-            # Equation 4, `c` a positive real number:
-            c = 1.0 + 0.5 * np.tanh((-phi0 - 90.0) / 25.0)
+            if is_superior:
+                # Axon is in superior retina, compute `b` (real number) from
+                # Eq. 5:
+                b = np.exp(beta_sup + 3.9 * np.tanh(-(phi0 - 121.0) / 14.0))
+                # Equation 3, `c` a positive real number:
+                c = 1.9 + 1.4 * np.tanh((phi0 - 121.0) / 14.0)
+            else:
+                # Axon is in inferior retina: compute `b` (real number) from
+                # Eq. 6:
+                b = -np.exp(beta_inf + 1.5 * np.tanh(-(-phi0 - 90.0) / 25.0))
+                # Equation 4, `c` a positive real number:
+                c = 1.0 + 0.5 * np.tanh((-phi0 - 90.0) / 25.0)
 
-        # Spiral as a function of `rho`:
-        phi = phi0 + b * (rho - rho.min()) ** c
-        # Convert to Cartesian coordinates:
-        xprime = rho * np.cos(np.deg2rad(phi))
-        yprime = rho * np.sin(np.deg2rad(phi))
+            # Spiral as a function of `rho`:
+            phi = phi0 + b * (rho - rho.min()) ** c
+            # Convert to Cartesian coordinates:
+            xprime = rho * np.cos(np.deg2rad(phi))
+            yprime = rho * np.sin(np.deg2rad(phi))
         # Find the array elements where the axon crosses the meridian:
         if is_superior:
             # Find elements in inferior retina
@@ -364,8 +364,9 @@ class AxonMapMixin(BaseModel):
     def _grows_axon_bundles(self):
         # Build the Jansonius model: Grow a number of axon bundles in all dirs:
         phi = np.linspace(*self.axons_range, num=self.n_axons)
+        engine = 'serial' if self.engine == 'cython' else self.engine
         bundles = p2pu.parfor(self._jansonius2009, phi,
-                              engine=self.engine, n_jobs=self.n_jobs,
+                              engine=engine, n_jobs=self.n_jobs,
                               scheduler=self.scheduler)
         assert len(bundles) == self.n_axons
         # Remove axon bundles outside the simulated area:
@@ -428,16 +429,19 @@ class AxonMapMixin(BaseModel):
     def build_optic_fiber_layer(self):
         if self.implant.eye == 'LE':
             raise NotImplementedError
-        need_axons = True
+        need_axons = False
         # Check if math for Jansonius model has been done before:
         if os.path.isfile('axons.pickle'):
             params, axons = pickle.load(open('axons.pickle', 'rb'))
             for key, value in six.iteritems(params):
-                if getattr(self, key) != value:
+                if not np.allclose(getattr(self, key), value):
+                    need_axons = True
                     break
-            need_axons = False
+        else:
+            need_axons = True
         # Build the Jansonius model: Grow a number of axon bundles in all dirs:
         if need_axons:
+            self._curr_map = {}
             bundles = self._grows_axon_bundles()
             axons = self._finds_closest_axons(bundles)
         # Calculate axon contributions (depends on axlambda):
@@ -455,14 +459,19 @@ class AxonMapMixin(BaseModel):
         if not self.implant[electrode]:
             raise ValueError("Electrode '%s' could not be found." % electrode)
         ecm = []
+        xc = self.implant[electrode].x_center
+        yc = self.implant[electrode].y_center
         for ax in self.axon_contrib:
             if ax.shape[0] == 0:
                 ecm.append(0)
                 continue
-            r2 = (ax[:, 0] - self.implant[electrode].x_center) ** 2
-            r2 += (ax[:, 1] - self.implant[electrode].y_center) ** 2
-            curr = np.exp(-r2 / (2.0 * self.rho ** 2))
-            act = np.multiply(curr, ax[:, 2])
+            if self.engine == 'cython':
+                act = fm.fast_axon_activation(ax, xc, yc, self.rho)
+            else:
+                r2 = (ax[:, 0] - self.implant[electrode].x_center) ** 2
+                r2 += (ax[:, 1] - self.implant[electrode].y_center) ** 2
+                curr = np.exp(-r2 / (2.0 * self.rho ** 2))
+                act = np.multiply(curr, ax[:, 2])
             ecm.append(np.max(act))
         return np.array(ecm, dtype=float).reshape(self.xret.shape)
 
@@ -635,9 +644,10 @@ class ImageMomentsLossMixin(BaseModel):
 
         # Compute the scaling factor / rotation angle / dice coefficient loss:
         # The loss function expects a tupel of two DataFrame rows
+        engine = 'serial' if self.engine == 'cython' else self.engine
         losses = p2pu.parfor(self._scores_props,
                              zip(y.iterrows(), y_pred.iterrows()),
-                             engine=self.engine, scheduler=self.scheduler,
+                             engine=engine, scheduler=self.scheduler,
                              n_jobs=self.n_jobs)
         return np.mean(losses)
 
@@ -692,12 +702,13 @@ class SRDLossMixin(BaseModel):
 
         # Compute the scaling factor / rotation angle / dice coefficient loss:
         # The loss function expects a tupel of two DataFrame rows
+        engine = 'serial' if self.engine == 'cython' else self.engine
         losses = p2pu.parfor(imgproc.srd_loss,
                              zip(y.iterrows(), y_pred.iterrows()),
                              func_kwargs={'w_scale': self.w_scale,
                                           'w_rot': self.w_rot,
                                           'w_dice': self.w_dice},
-                             engine=self.engine, scheduler=self.scheduler,
+                             engine=engine, scheduler=self.scheduler,
                              n_jobs=self.n_jobs)
         return np.mean(losses)
 

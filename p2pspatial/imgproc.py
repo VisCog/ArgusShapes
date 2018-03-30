@@ -9,8 +9,10 @@ import skimage.filters as skif
 import skimage.transform as skit
 import skimage.measure as skim
 
+from . import fast_imgproc as fi
 
-def get_thresholded_image(img, thresh=0, out_shape=None, verbose=True):
+
+def get_thresholded_image(img, thresh=0.5, out_shape=None, verbose=True):
     """Thresholds an image
 
     Parameters
@@ -159,9 +161,7 @@ def dice_coeff(image0, image1):
         raise ValueError(("'image0' and 'image1' must have the same shape "
                           "(%s) vs. (%s)" % (", ".join(image0.shape),
                                              ", ".join(image1.shape))))
-    img0 = image0 > 0
-    img1 = image1 > 0
-    return 2 * np.sum(img0 * img1) / (np.sum(img0) + np.sum(img1) + 1e-12)
+    return fi.fast_dice_coeff(image0, image1)
 
 
 def srd_loss(images, n_angles=37, w_scale=33, w_rot=34, w_dice=33,
