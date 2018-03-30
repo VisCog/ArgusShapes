@@ -109,8 +109,9 @@ class BaseModel(sklb.BaseEstimator):
         wants_el = set([self._ename(e) for e in set(X.electrode)])
         needs_el = wants_el.difference(has_el)
         # - Calculate the current maps for the missing electrodes:
+        engine = 'joblib' if self.engine == 'cython' else self.engine
         curr_map = p2pu.parfor(self._calcs_el_curr_map, needs_el,
-                               engine=self.engine, scheduler=self.scheduler,
+                               engine=engine, scheduler=self.scheduler,
                                n_jobs=self.n_jobs)
         # - Store the new current maps:
         for key, cm in zip(needs_el, curr_map):
