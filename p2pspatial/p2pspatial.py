@@ -132,7 +132,7 @@ def _loads_data_row_a60(row):
     return feat
 
 
-def _loads_data_row(df_row, subject, electrodes, amplitude, frequency, date, single_stim):
+def _loads_data_row(df_row, subject, electrodes, amplitude, frequency, date):
     _, row = df_row
 
     if np.all([c in row for c in ['Filename', 'Params']]):
@@ -157,10 +157,10 @@ def _loads_data_row(df_row, subject, electrodes, amplitude, frequency, date, sin
     if date is not None and feat['date'] != date:
         return None
     # Multiple electrodes mentioned:
-    if single_stim and '_' in feat['stim_class']:
+    if '_' in feat['stim_class']:
         return None
     # Stimulus class mismatch:
-    if single_stim and feat['stim_class'] != 'SingleElectrode':
+    if feat['stim_class'] != 'SingleElectrode':
         return None
     if amplitude is not None and not np.isclose(feat['amp'], amplitude):
         return None
@@ -187,14 +187,14 @@ def _loads_data_row(df_row, subject, electrodes, amplitude, frequency, date, sin
 
 
 def load_data(folder, subject=None, electrodes=None,
-              amplitude=2.0, frequency=20.0,
-              date=None, verbose=False, random_state=None, single_stim=True,
+              amplitude=2.0, frequency=20.0, n_min_trials=5, n_max_trials=5,
+              date=None, verbose=False, random_state=None,
               engine='joblib', scheduler='threading', n_jobs=-1):
     # Recursive search for all files whose name contains the string
     # '_rawDataFileList_': These contain the paths to the raw bmp images
     sstr = '*' if subject is None else subject
-    search_patterns = [os.path.join(folder, sstr, '*', '*_rawDataFileList_*'),
-                       os.path.join(folder, sstr, '*', 'VIDFileListNew_*')]
+    search_patterns = [os.path.join(folder, sstr, '**', '*_rawDataFileList_*'),
+                       os.path.join(folder, sstr, '**', 'VIDFileListNew_*')]
     dfs = []
     n_samples = 0
     for search_pattern in search_patterns:
@@ -228,20 +228,32 @@ def load_data(folder, subject=None, electrodes=None,
     feat_target = p2p.utils.parfor(_loads_data_row, df.iterrows(),
                                    func_args=[subject, electrodes,
                                               amplitude, frequency,
-                                              date, single_stim],
+                                              date],
                                    engine=engine, scheduler=scheduler,
                                    n_jobs=n_jobs)
     # Invalid rows are returned as None, filter them out:
     feat_target = list(filter(None, feat_target))
     # For all other rows, a tuple (X, y) is returned:
-    features = [ft[0] for ft in feat_target]
-    targets = [ft[1] for ft in feat_target]
+    features = pd.DataFrame([ft[0] for ft in feat_target])
+    targets = pd.DataFrame([ft[1] for ft in feat_target], index=features.index)
+
+    for electrode in features.electrode.unique():
+        idx = features.electrode == electrode
+
+        # Drop trials if we have more than `n_max_trials`
+        features.drop(index=features[idx].index[n_max_trials:], inplace=True)
+        targets.drop(index=targets[idx].index[n_max_trials:], inplace=True)
+
+        # Drop electrodes if we have less than `n_min_trials`
+        if n_min_trials > 0 and np.sum(idx) < n_min_trials:
+            features.drop(index=features[idx].index, inplace=True)
+            targets.drop(index=targets[idx].index, inplace=True)
 
     if verbose:
         print('Found %d samples: %d feature values, %d target values' % (
-            len(features), len(features[0]), len(targets[0]))
+            features.shape[0], features.shape[1], targets.shape[1])
         )
-    return pd.DataFrame(features), pd.DataFrame(targets)
+    return features, targets
 
 
 def _transforms_electrode_images(Xel, threshold=True):
