@@ -192,8 +192,9 @@ def load_data(folder, subject=None, electrodes=None,
               engine='joblib', scheduler='threading', n_jobs=-1):
     # Recursive search for all files whose name contains the string
     # '_rawDataFileList_': These contain the paths to the raw bmp images
-    search_patterns = [os.path.join(folder, '**', '*_rawDataFileList_*'),
-                       os.path.join(folder, '*', 'VIDFileListNew_*')]
+    sstr = '*' if subject is None else subject
+    search_patterns = [os.path.join(folder, sstr, '*', '*_rawDataFileList_*'),
+                       os.path.join(folder, sstr, '*', 'VIDFileListNew_*')]
     dfs = []
     n_samples = 0
     for search_pattern in search_patterns:
