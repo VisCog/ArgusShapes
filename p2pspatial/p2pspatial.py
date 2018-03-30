@@ -362,7 +362,7 @@ def transform_mean_images(Xraw, yraw, threshold=True):
 
             Xel = [Xamp[Xamp.electrode == e] for e in electrodes]
             feat_target = p2p.utils.parfor(_transforms_electrode_images, Xel,
-                                          func_kwargs={'threshold': threshold})
+                                           func_kwargs={'threshold': threshold})
             Xout += [ft[0] for ft in feat_target]
             yout += [ft[1] for ft in feat_target]
 
@@ -409,4 +409,3 @@ def pol2cart(theta, rho):
     x = rho * np.cos(theta)
     y = rho * np.sin(theta)
     return x, y
-

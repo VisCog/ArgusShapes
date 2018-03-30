@@ -19,6 +19,8 @@ import skimage
 
 from .p2pspatial import *
 from . import imgproc
+from . import fast_models as fm
+
 
 try:
     # Python 2
@@ -172,7 +174,6 @@ class BaseModel(sklb.BaseEstimator):
                                             out_shape=out_shape)
         return self._predicts_target_values(img)
 
-
     def predict(self, X):
         """Compute predicted drawing"""
         if not self._is_fitted:
@@ -241,7 +242,7 @@ class AxonMapMixin(BaseModel):
         self.n_axons = 301
         self.axons_range = (-180, 180)
         # Number of sampling points along the radial axis(polar coordinates):
-        self.n_ax_segments = 71
+        self.n_ax_segments = 301
         # Lower and upper bounds for the radial position values(polar
         # coordinates):
         self.ax_segments_range = (3, 50)
@@ -387,9 +388,14 @@ class AxonMapMixin(BaseModel):
         # is given by `axon_idx` above:
         flat_bundles = np.concatenate(bundles)
         # For every pixel on the grid, find the closest axon segment:
-        closest_seg = [np.argmin((flat_bundles[:, 0] - x) ** 2 +
-                                 (flat_bundles[:, 1] - y) ** 2)
-                       for x, y in zip(self.xret.ravel(), self.yret.ravel())]
+        if self.engine == 'cython':
+            closest_seg = np.asarray(fm.fast_finds_closest_axons(
+                flat_bundles, self.xret.ravel(), self.yret.ravel()))
+        else:
+            closest_seg = [np.argmin((flat_bundles[:, 0] - x) ** 2 +
+                                     (flat_bundles[:, 1] - y) ** 2)
+                           for x, y in zip(self.xret.ravel(),
+                                           self.yret.ravel())]
         # Look up the axon ID for every axon segment:
         closest_axon = axon_idx[closest_seg]
         return [bundles[n] for n in closest_axon]
