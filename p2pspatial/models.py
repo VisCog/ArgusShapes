@@ -389,8 +389,9 @@ class AxonMapMixin(BaseModel):
         flat_bundles = np.concatenate(bundles)
         # For every pixel on the grid, find the closest axon segment:
         if self.engine == 'cython':
-            closest_seg = np.asarray(fm.fast_finds_closest_axons(
-                flat_bundles, self.xret.ravel(), self.yret.ravel()))
+            closest_seg = fm.fast_finds_closest_axons(flat_bundles,
+                                                      self.xret.ravel(),
+                                                      self.yret.ravel())
         else:
             closest_seg = [np.argmin((flat_bundles[:, 0] - x) ** 2 +
                                      (flat_bundles[:, 1] - y) ** 2)
@@ -404,19 +405,23 @@ class AxonMapMixin(BaseModel):
         xyret = np.column_stack((self.xret.ravel(), self.yret.ravel()))
         axon_contrib = []
         for xy, bundle in zip(xyret, axons):
-            idx = np.argmin((bundle[:, 0] - xy[0]) ** 2 +
-                            (bundle[:, 1] - xy[1]) ** 2)
-            # Cut off the part of the fiber that goes beyond the soma:
-            axon = np.flipud(bundle[0: idx + 1, :])
-            # Add the exact location of the soma:
-            axon = np.insert(axon, 0, xy, axis=0)
-            # For every axon segment, calculate distance from soma by summing
-            # up the individual distances between neighboring axon segments
-            # (by "walking along the axon"):
-            d2 = np.cumsum(np.diff(axon[:, 0], axis=0) ** 2 +
-                           np.diff(axon[:, 1], axis=0) ** 2)
-            sensitivity = np.exp(-d2 / (2.0 * self.axlambda ** 2))
-            axon_contrib.append(np.column_stack((axon[1:, :], sensitivity)))
+            if self.engine == 'cython':
+                contrib = fm.fast_axon_contribution(bundle, xy, self.axlambda)
+            else:
+                idx = np.argmin((bundle[:, 0] - xy[0]) ** 2 +
+                                (bundle[:, 1] - xy[1]) ** 2)
+                # Cut off the part of the fiber that goes beyond the soma:
+                axon = np.flipud(bundle[0: idx + 1, :])
+                # Add the exact location of the soma:
+                axon = np.insert(axon, 0, xy, axis=0)
+                # For every axon segment, calculate distance from soma by
+                # summing up the individual distances between neighboring axon
+                # segments (by "walking along the axon"):
+                d2 = np.cumsum(np.diff(axon[:, 0], axis=0) ** 2 +
+                               np.diff(axon[:, 1], axis=0) ** 2)
+                sensitivity = np.exp(-d2 / (2.0 * self.axlambda ** 2))
+                contrib = np.column_stack((axon[1:, :], sensitivity))
+            axon_contrib.append(contrib)
         return axon_contrib
 
     def build_optic_fiber_layer(self):
