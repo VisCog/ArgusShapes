@@ -16,8 +16,9 @@ import pulse2percept as p2p
 import skimage
 import skimage.io as skio
 import skimage.filters as skif
-import skimage.morphology as skim
 import skimage.transform as skit
+import skimage.morphology as skimo
+import skimage.measure as skime
 
 import sklearn.base as sklb
 import sklearn.metrics as sklm
@@ -28,7 +29,8 @@ from . import imgproc
 
 p2p.console.setLevel(logging.ERROR)
 
-__all__ = ["load_data", "transform_mean_images", "ret2dva", "dva2ret"]
+__all__ = ["load_data", "ret2dva", "dva2ret",
+           "adjust_drawing_bias", "calc_mean_images"]
 
 
 # Use duecredit (duecredit.org) to provide a citation to relevant work to
@@ -256,6 +258,64 @@ def load_data(folder, subject=None, electrodes=None,
     return features, targets
 
 
+def adjust_drawing_bias(X, y, scale_major=(1, 1), scale_minor=(1, 1),
+                        rotate=0):
+    targets = []
+    for _, row in y.iterrows():
+        # Compact and elongated shapes are processed differently:
+        img = row['image']
+        props = imgproc.get_region_props(img)
+        if props.major_axis_length / props.minor_axis_length > 2:
+            # Phosphene is elongated:
+            smajor = scale_major[1]
+            sminor = scale_minor[1]
+            rot = np.deg2rad(rotate)
+        else:
+            # Phosphene is compact:
+            smajor = scale_major[0]
+            sminor = scale_minor[0]
+            rot = 0
+
+        # Shift phosphene to (0, 0) and back
+        mom = skime.moments(img, order=1)
+        transl = np.array([-mom[1, 0] / mom[0, 0], -mom[0, 1] / mom[0, 0]])
+        ts = skit.SimilarityTransform(translation=transl)
+        tsi = skit.SimilarityTransform(translation=-transl)
+
+        # Rotate the phosphene so the major axis is oriented along the
+        # horizontal:
+        props = imgproc.get_region_props(img)
+        tr = skit.SimilarityTransform(rotation=props.orientation)
+        # When undoing the rotation, add the specified extra rotation:
+        tri = skit.SimilarityTransform(rotation=-props.orientation - rot)
+
+        # Scale the phosphene with two different scaling factors along the
+        # major and minor axes using a homogeneous transformation matrix:
+        mat = np.array([[smajor, 0, 0],
+                        [0, sminor, 0],
+                        [0, 0, 1]])
+        tp = skit.ProjectiveTransform(matrix=mat)
+
+        # Put them all together:
+        newimg = skit.warp(img, (ts + (tr + (tp + (tri + tsi)))).inverse)
+
+        # Now we could adjust the size further using a scaling factor for the
+        # overall area...
+
+        # Calculate new props:
+        props = imgproc.get_region_props(newimg)
+        target = {'image': newimg,
+                  'electrode': row['electrode'],
+                  'x_center': props.centroid[1],
+                  'y_center': props.centroid[0],
+                  'area': props.area,
+                  'orientation': props.orientation,
+                  'major_axis_length': props.major_axis_length,
+                  'minor_axis_length': props.minor_axis_length}
+        targets.append(target)
+    return pd.DataFrame(targets, index=X.index)
+
+
 def _transforms_electrode_images(Xel, threshold=True):
     """Takes all trial images (given electrode) and computes mean image"""
     assert len(Xel.subject.unique()) == 1
@@ -275,7 +335,7 @@ def _transforms_electrode_images(Xel, threshold=True):
                           as_grey=True)
         img = skimage.img_as_float(img)
         img = imgproc.center_phosphene(img)
-        props = imgproc.get_region_props(img, thresh=0)
+        props = imgproc.get_region_props(img)
         assert not np.isnan(props.area)
         assert not np.isnan(props.orientation)
         areas.append(props.area)
@@ -285,22 +345,23 @@ def _transforms_electrode_images(Xel, threshold=True):
     assert len(imgs) > 0
     if len(imgs) == 1:
         # Only one image found, save this one
-        img_avg_th = imgproc.get_thresholded_image(img, thresh=0)
+        img_avg_th = imgproc.get_thresholded_image(img)
     else:
         # More than one image found: Save the first image as seed image to
         # which all other images will be compared:
-        img_seed = skim.dilation(imgs[0], skim.disk(5))
+        # img_seed = skimo.dilation(imgs[0], skimo.disk(5))
+        img_seed = imgs[0]
         img_avg = np.zeros_like(img_seed)
         for img in imgs[1:]:
             # Dilate images slightly so matching is easier for streaks
             # (will be eroded later):
-            img = skim.dilation(img, skim.disk(5))
+            img = skimo.dilation(img, skimo.disk(5))
             _, _, params = imgproc.srd_loss((img_seed, img),
                                             return_raw=True)
             img = imgproc.scale_phosphene(img, params['scale'])
             # There might be more than one optimal angle, choose the smallest:
             angle = params['angle'][np.argmin(np.abs(params['angle']))]
-            img = skit.rotate(img, angle, order=3)
+            img = imgproc.rotate_phosphene(img, angle)
             img_avg += img
 
         if threshold:
@@ -310,23 +371,18 @@ def _transforms_electrode_images(Xel, threshold=True):
             assert np.isclose(img_avg_th.min(), 0)
             assert np.isclose(img_avg_th.max(), 1)
             # Remove "pepper" (fill small holes):
-            img_avg_th = skim.binary_closing(img_avg_th, selem=skim.disk(11))
+            img_avg_th = skimo.binary_closing(img_avg_th, selem=skimo.disk(11))
             # Erode back down
-            img_avg_th = skim.erosion(img_avg_th, skim.disk(5))
-            # Remove "salt" (remove small bright spots):
-            # img_avg_morph = skim.binary_opening(img_avg_morph,
-            #                                     selem=skim.square(9))
-            # if not np.allclose(img_avg_morph, np.zeros_like(img_avg_morph)):
-            #     img_avg_th = img_avg_morph
+            img_avg_th = skimo.erosion(img_avg_th, skimo.disk(5))
             # Rotate the binarized image to have the same orientation as
             # the mean trial image:
-            props = imgproc.get_region_props(img_avg_th, thresh=0)
+            props = imgproc.get_region_props(img_avg_th)
             angle_rad = np.mean(orientations) - props.orientation
-            img_avg_th = skit.rotate(img_avg_th, np.rad2deg(angle_rad),
-                                     order=3)
+            img_avg_th = imgproc.rotate_phosphene(img_avg_th,
+                                                  np.rad2deg(angle_rad))
             # Scale the binarized image to have the same area as the mean
             # trial image:
-            props = imgproc.get_region_props(img_avg_th, thresh=0)
+            props = imgproc.get_region_props(img_avg_th)
             scale = np.sqrt(np.mean(areas) / props.area)
             img_avg_th = imgproc.scale_phosphene(img_avg_th, scale)
         else:
@@ -335,6 +391,7 @@ def _transforms_electrode_images(Xel, threshold=True):
     # The result is an image that has the exact same area and
     # orientation as all trial images averaged. This is what we
     # save:
+    props = imgproc.get_region_props(img_avg_th)
     target = {'electrode': electrode, 'image': img_avg_th}
 
     # Remove ambiguous (trial-related) parameters:
@@ -344,7 +401,41 @@ def _transforms_electrode_images(Xel, threshold=True):
     return feat, target
 
 
-def transform_mean_images(Xraw, yraw, threshold=True):
+def _calcs_mean_image(Xy, thresh=True):
+    assert len(Xy.subject.unique()) == 1
+    subject = Xy.subject.unique()[0]
+    assert len(Xy.amp.unique()) == 1
+    amplitude = Xy.amp.unique()[0]
+    assert len(Xy.electrode.unique()) == 1
+    electrode = Xy.electrode.unique()[0]
+
+    # Calculate mean image
+    images = Xy.image
+    for img in images:
+        if not img_avg:
+            img_avg = np.zeros_like(img, dtype=float)
+        img_avg += imgproc.center_phosphene(img)
+    # Adjust to [0, 1]
+    if img_avg.max() > 0:
+        img_avg /= img_avg.max()
+    # Threshold if required:
+    if thresh:
+        img_avg = imgproc.get_thresholded_image(img_avg, thresh='otsu')
+    # Move back to its original position:
+    img_avg = imgproc.center_phosphene(img_avg, center=(np.mean(Xy.y_center),
+                                                        np.mean(Xy.x_center)))
+    # Calculate props:
+    props = imgproc.get_region_props(img_avg)
+
+    # Remove ambiguous (trial-related) parameters:
+    target = {'electrode': electrode, 'image': img_avg}
+    feat = {'subject': subject, 'amplitude': amplitude,
+            'electrode': electrode, 'img_shape': img_avg.shape}
+
+    return feat, target
+
+
+def calc_mean_images(Xraw, yraw, thresh=True):
     """Extract mean images on an electrode from all raw trial drawings
 
     Parameters
@@ -361,39 +452,26 @@ def transform_mean_images(Xraw, yraw, threshold=True):
     yout : pd.DataFrame
         Target values, single entry per electrode
     """
-    subjects = Xraw.subject.unique()
+    Xy = pd.concat((Xraw, yraw.drop(columns='electrode')), axis=1)
+    assert np.allclose(Xy.index, Xraw.index)
+    subjects = Xy.subject.unique()
     Xout = []
-    yout = []
 
     for subject in subjects:
-        X = Xraw[Xraw.subject == subject]
+        X = Xy[Xy.subject == subject]
         amplitudes = X.amp.unique()
 
         for amp in amplitudes:
-            Xamp = X[X.amp == amp]
-            electrodes = Xamp.electrode.unique()
+            Xamp = X[np.isclose(X.amp, amp)]
+            electrodes = np.unique(Xamp.electrode)
 
             Xel = [Xamp[Xamp.electrode == e] for e in electrodes]
-            feat_target = p2p.utils.parfor(_transforms_electrode_images, Xel,
-                                           func_kwargs={'threshold': threshold})
+            feat_target = p2p.utils.parfor(_calcs_mean_image, Xel,
+                                           func_kwargs={'thresh': thresh})
             Xout += [ft[0] for ft in feat_target]
-            yout += [ft[1] for ft in feat_target]
 
     # Return feature matrix and target values as DataFrames
     return pd.DataFrame(Xout), pd.DataFrame(yout)
-
-
-def adjust_drawing_bias(y, scale_compact=1, scale_elong=1, rot_deg_elong=0):
-    for idx, row in y.iterrows():
-        img = row['image']
-        is_elongated = row['major_axis_length'] / row['minor_axis_length'] > 2
-        if is_elongated:
-            img = imgproc.scale_phosphene(img, scale_elong)
-        else:
-            img = imgproc.scale_phosphene(img, scale_compact)
-        img = skit.rotate(img, rot_deg_elong, order=3)
-        y.loc[idx, 'image'] = img
-    return y
 
 
 def ret2dva(r_um):

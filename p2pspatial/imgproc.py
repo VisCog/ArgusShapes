@@ -92,7 +92,7 @@ def get_avg_image(X, subject, electrode, amp=None, align_center=None):
     return avg_img
 
 
-def get_region_props(img, thresh=0, out_shape=None, return_all=False):
+def get_region_props(img, thresh=0.5, out_shape=None, return_all=False):
     img = get_thresholded_image(img, thresh=thresh, out_shape=out_shape)
     if img is None:
         return None
@@ -113,30 +113,59 @@ def get_region_props(img, thresh=0, out_shape=None, return_all=False):
             return regions[idx]
 
 
-def center_phosphene(img_in):
+def center_phosphene(img, center=None):
     """Centers a phosphene in an image"""
     # Subtract center of mass from image center
-    m = skim.moments(img_in, order=1)
+    m = skim.moments(img, order=1)
 
     # No area found:
     if np.isclose(m[0, 0], 0):
-        return img_in
+        return img
+
+    if center is None:
+        center = (img.shape[0] // 2, img.shape[1] // 2)
 
     # Valid image: shift the image by -centroid, +image center
-    transl = (img_in.shape[1] // 2 - m[1, 0] / m[0, 0],
-              img_in.shape[0] // 2 - m[0, 1] / m[0, 0])
+    transl = (center[1] - m[1, 0] / m[0, 0],
+              center[0] - m[0, 1] / m[0, 0])
     tf_shift = skit.SimilarityTransform(translation=transl)
-    return skit.warp(img_in, tf_shift.inverse)
+    return skit.warp(img, tf_shift.inverse)
 
 
 def scale_phosphene(img, scale):
     """Scales phosphene with a scaling factor"""
-    # Shift the phosphene to (0, 0), scale, shift back to the image center
-    shift_y, shift_x = np.array(img.shape[:2]) / 2.0
-    tf_shift = skit.SimilarityTransform(translation=[-shift_x, -shift_y])
+    m = skim.moments(img, order=1)
+
+    # No area found:
+    if np.isclose(m[0, 0], 0):
+        return img
+
+    # Shift the phosphene to (0, 0):
+    transl = np.array([-m[1, 0] / m[0, 0], -m[0, 1] / m[0, 0]])
+    tf_shift = skit.SimilarityTransform(translation=transl)
+    # Scale the phosphene:
     tf_scale = skit.SimilarityTransform(scale=scale)
-    tf_shift_inv = skit.SimilarityTransform(translation=[shift_x, shift_y])
+    # Shift the phosphene back to where it was:
+    tf_shift_inv = skit.SimilarityTransform(translation=-transl)
     return skit.warp(img, (tf_shift + (tf_scale + tf_shift_inv)).inverse)
+
+
+def rotate_phosphene(img, rot_deg):
+    """Rotates phosphene by an angle counter-clock-wise (deg) """
+    m = skim.moments(img, order=1)
+
+    # No area found:
+    if np.isclose(m[0, 0], 0):
+        return img
+
+    # Shift the phosphene to (0, 0):
+    transl = np.array([-m[1, 0] / m[0, 0], -m[0, 1] / m[0, 0]])
+    tf_shift = skit.SimilarityTransform(translation=transl)
+    # Rotate the phosphene:
+    tf_rot = skit.SimilarityTransform(rotation=np.deg2rad(-rot_deg))
+    # Shift the phosphene back to where it was:
+    tf_shift_inv = skit.SimilarityTransform(translation=-transl)
+    return skit.warp(img, (tf_shift + (tf_rot + tf_shift_inv)).inverse)
 
 
 def dice_coeff(image0, image1):
@@ -228,7 +257,7 @@ def srd_loss(images, n_angles=37, w_scale=33, w_rot=34, w_dice=33,
     # maximized (using bi-cubic interpolation):
     max_rot = 180.0
     angles = np.linspace(-180, 180, n_angles)
-    dice = [dice_coeff(img_true, skit.rotate(img_pred, r, order=3))
+    dice = [dice_coeff(img_true, rotate_phosphene(img_pred, r))
             for r in angles]
     # If multiple angles give the same dice coefficient, choose the smallest
     # angle. Scale the loss to [0, 1]:

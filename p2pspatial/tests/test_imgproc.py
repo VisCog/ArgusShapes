@@ -72,6 +72,18 @@ def test_scale_phosphene():
         npt.assert_almost_equal(scaled_area, img_area * scale ** 2)
 
 
+def test_rotate_phosphene():
+    img = np.zeros((200, 200), dtype=np.double)
+    img[90:110, 80:130] = 1
+    true_props = imgproc.get_region_props(img)
+    for rot in [-17, -10, 0, 5, 10, 45]:
+        rotated = imgproc.rotate_phosphene(img, rot)
+        props = imgproc.get_region_props(rotated)
+        npt.assert_almost_equal(true_props.orientation + np.deg2rad(rot),
+                                props.orientation,
+                                decimal=2)
+
+
 def test_dice_coeff():
     for img0 in [1, (3, 4), [1, 2, 3], [[1, 2]]]:
         with pytest.raises(TypeError):
@@ -135,7 +147,7 @@ def test_srd_loss():
     # Rotation term should be symmetric around 0: rotation by +10deg and -10deg
     # should give the same error
     for rot in [0, 5, 10, 20]:
-        img_rot = skit.rotate(img, rot, order=3)
+        img_rot = imgproc.rotate_phosphene(img, rot)
         npt.assert_almost_equal(
             imgproc.srd_loss((img, img_rot), w_scale=0, w_dice=0),
             imgproc.srd_loss((img_rot, img), w_scale=0, w_dice=0)
