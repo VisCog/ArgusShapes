@@ -65,7 +65,7 @@ models = {
 }
 
 search_param_ranges = {
-    'rho': (10, 3000),
+    'rho': (50, 3000),
     'axlambda': (10, 3000),
     'loc_od_x': (13, 17),
     'loc_od_y': (0, 5),
@@ -81,7 +81,9 @@ subject_params = {
         'implant_y': 0,
         'implant_rot': -0.700177748,
         'loc_od_x': 15.6,
-        'loc_od_y': 0.6
+        'loc_od_y': 0.6,
+        'xrange': (-36.9, 36.9),
+        'yrange': (-36.9, 36.9)
     },
     '12-005': {
         'implant_type': p2pi.ArgusII,
@@ -89,7 +91,9 @@ subject_params = {
         'implant_y': 537.7463881,  # or should this be minus?
         'implant_rot': -0.664813628,
         'loc_od_x': 15.5,
-        'loc_od_y': 1.2
+        'loc_od_y': 1.2,
+        'xrange': (-30, 30),
+        'yrange': (-22.5, 22.5)
     },
     '51-009': {
         'implant_type': p2pi.ArgusII,
@@ -97,7 +101,9 @@ subject_params = {
         'implant_y': -540.8417613,
         'implant_rot': -0.526951314,
         'loc_od_x': 14.8,
-        'loc_od_y': 4.7
+        'loc_od_y': 4.7,
+        'xrange': (-32.5, 32.5),
+        'yrange': (-24.4, 24.4)
     },
     '52-001': {
         'implant_type': p2pi.ArgusII,
@@ -105,7 +111,32 @@ subject_params = {
         'implant_y': -369.1922119,
         'implant_rot': -0.342307766,
         'loc_od_x': 14.9,
-        'loc_od_y': 4.3
+        'loc_od_y': 4.3,
+        'xrange': (-32, 32),
+        'yrange': (-24, 24)
+    }
+}
+
+drawing = {
+    'TB': {
+        'major': (1/1.34, 1/0.939),
+        'minor': (1/1.19, 1/1.62),
+        'orient': -9
+    },
+    '12-005': {
+        'major': (1/0.632, 1/0.686),
+        'minor': (1/0.704, 1/1.35),
+        'orient': -16
+    },
+    '51-009': {
+        'major': (1/1.38, 1/1.34),
+        'minor': (1/1.06, 1/1.94),
+        'orient': 4
+    },
+    '52-001': {
+        'major': (1/1.39, 1/1.47),
+        'minor': (1/1.76, 1/1.61),
+        'orient': -14
     }
 }
 
@@ -154,7 +185,7 @@ def main():
     t_start = time()
     now = datetime.now().strftime('%Y-%m-%d_%H-%M-%S')
     filename = '%s-%s-swarm_%s_%s.pickle' % (
-        modelname, ("fit" if n_folds == 1 else "crossval"), subject, now
+        modelname, ("newfit" if n_folds == 1 else "newcrossval"), subject, now
     )
     print("")
     print(filename)
@@ -171,16 +202,18 @@ def main():
     print("w_scale=%.2f w_rot=%.2f w_dice=%.2f" % (w_scale, w_rot, w_dice))
 
     # Load data
-    rootfolder = os.path.join(os.environ['SECOND_SIGHT_DATA'], 'shape',
-                              subject)
+    rootfolder = os.path.join(os.environ['SECOND_SIGHT_DATA'], 'shape')
     X, y = p2pspatial.load_data(rootfolder, subject=subject, electrodes=None,
                                 amplitude=amplitude, random_state=42,
-                                single_stim=True, verbose=False)
+                                verbose=False)
+    y = p2pspatial.adjust_drawing_bias(X, y, scale_major=drawing[subject]['major'],
+                                       scale_minor=drawing[subject]['minor'],
+                                       rotate=drawing[subject]['orient'])
     print('Data loaded:', X.shape, y.shape)
     if len(X) == 0:
         raise ValueError('No data found. Abort.')
     if avg_img:
-        X, y = p2pspatial.transform_mean_images(X, y)
+        X, y = p2pspatial.calc_mean_images(X, y)
         print('Data transformed:', X.shape, y.shape)
 
     if n_folds == -1:
@@ -189,10 +222,11 @@ def main():
 
     # Instantiate model
     model = models[modelname]
-    model_params = {'engine': 'joblib', 'scheduler': 'threading',
-                    'n_jobs': n_jobs,
-                    'xystep': 0.5, 'img_thresh': 1.0 / np.sqrt(np.e)}
-    # 'w_scale': w_scale, 'w_rot': w_rot, 'w_dice': w_dice}
+    model_params = {'engine': 'cython', 'scheduler': 'threading',
+                    'n_jobs': n_jobs, 'xrange': (-29, 29), 'yrange': (-22, 22),
+                    'axon_pickle': 'axons-%s-%s.pickle' % (subject, modelname),
+                    'xystep': 0.35}
+    #x 'w_scale': w_scale, 'w_rot': w_rot, 'w_dice': w_dice}
     for key in model['subject_params']:
         model_params.update({key: subject_params[subject][key]})
     regressor = model['object'](**model_params)
@@ -239,6 +273,7 @@ def main():
                  'model_params': model_params,
                  'search_params': search_params,
                  'fit_params': fit_params,
+                 'drawing': drawing[subject],
                  'now': now,
                  'exetime': t_end - t_start,
                  'random_state': 42}

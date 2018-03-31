@@ -411,8 +411,9 @@ def _calcs_mean_image(Xy, thresh=True):
 
     # Calculate mean image
     images = Xy.image
+    img_avg = None
     for img in images:
-        if not img_avg:
+        if img_avg is None:
             img_avg = np.zeros_like(img, dtype=float)
         img_avg += imgproc.center_phosphene(img)
     # Adjust to [0, 1]
@@ -456,7 +457,7 @@ def calc_mean_images(Xraw, yraw, thresh=True):
     assert np.allclose(Xy.index, Xraw.index)
     subjects = Xy.subject.unique()
     Xout = []
-
+    yout = []
     for subject in subjects:
         X = Xy[Xy.subject == subject]
         amplitudes = X.amp.unique()
@@ -469,7 +470,7 @@ def calc_mean_images(Xraw, yraw, thresh=True):
             feat_target = p2p.utils.parfor(_calcs_mean_image, Xel,
                                            func_kwargs={'thresh': thresh})
             Xout += [ft[0] for ft in feat_target]
-
+            yout += [ft[1] for ft in feat_target]
     # Return feature matrix and target values as DataFrames
     return pd.DataFrame(Xout), pd.DataFrame(yout)
 

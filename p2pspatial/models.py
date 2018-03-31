@@ -242,6 +242,8 @@ class AxonMapMixin(BaseModel):
         # Lower and upper bounds for the radial position values(polar
         # coordinates):
         self.ax_segments_range = (3, 50)
+        # Precomputed axon maps stored in the following file:
+        self.axon_pickle = 'axons.pickle'
 
     def get_params(self, deep=True):
         params = super(AxonMapMixin, self).get_params(deep=deep)
@@ -249,7 +251,8 @@ class AxonMapMixin(BaseModel):
                       n_axons=self.n_axons, axons_range=self.axons_range,
                       n_ax_segments=self.n_ax_segments,
                       ax_segments_range=self.ax_segments_range,
-                      loc_od_x=self.loc_od_x, loc_od_y=self.loc_od_y)
+                      loc_od_x=self.loc_od_x, loc_od_y=self.loc_od_y,
+                      axon_pickle=self.axon_pickle)
         return params
 
     def _jansonius2009(self, phi0, beta_sup=-1.9, beta_inf=0.5, eye='RE'):
@@ -431,8 +434,8 @@ class AxonMapMixin(BaseModel):
             raise NotImplementedError
         need_axons = False
         # Check if math for Jansonius model has been done before:
-        if os.path.isfile('axons.pickle'):
-            params, axons = pickle.load(open('axons.pickle', 'rb'))
+        if os.path.isfile(self.axon_pickle):
+            params, axons = pickle.load(open(self.axon_pickle, 'rb'))
             for key, value in six.iteritems(params):
                 if not np.allclose(getattr(self, key), value):
                     need_axons = True
@@ -452,7 +455,7 @@ class AxonMapMixin(BaseModel):
                   'xrange': self.xrange, 'yrange': self.yrange,
                   'xystep': self.xystep, 'n_ax_segments': self.n_ax_segments,
                   'ax_segments_range': self.ax_segments_range}
-        pickle.dump((params, axons), open('axons.pickle', 'wb'))
+        pickle.dump((params, axons), open(self.axon_pickle, 'wb'))
 
     def _calcs_el_curr_map(self, electrode):
         """Calculates the current map for a specific electrode"""
