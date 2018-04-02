@@ -93,7 +93,8 @@ def get_avg_image(X, subject, electrode, amp=None, align_center=None):
 
 
 def get_region_props(img, thresh=0.5, out_shape=None, return_all=False):
-    img = get_thresholded_image(img, thresh=thresh, out_shape=out_shape)
+    if thresh is not None:
+        img = get_thresholded_image(img, thresh=thresh, out_shape=out_shape)
     if img is None:
         return None
 

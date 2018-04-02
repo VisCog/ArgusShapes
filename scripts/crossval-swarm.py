@@ -17,50 +17,27 @@ models = {
     'A': {  # Scoreboard model
         'object': p2pspatial.models.ModelA,
         'search_params': ['rho'],
-        'subject_params': ['implant_type', 'implant_x', 'implant_y',
-                           'implant_rot']
+        'subject_params': ['implant_type', 'loc_od_x', 'loc_od_y',
+                           'implant_x', 'implant_y', 'implant_rot',
+                           'xrange', 'yrange']
     },
     'B': {  # Scoreboard model with perspective transform
         'object': p2pspatial.models.ModelB,
-        'search_params': ['rho'],
-        'subject_params': ['implant_type', 'implant_x', 'implant_y',
-                           'implant_rot']
+        'search_params': ['rho', 'loc_od_x', 'loc_od_y',
+                          'implant_x', 'implant_y', 'implant_rot'],
+        'subject_params': ['implant_type', 'xrange', 'yrange']
     },
-    'C': {  # Axon map model
+    'C': {  # Axon map model: search OD location
         'object': p2pspatial.models.ModelC,
-        'search_params': ['rho', 'axlambda'],
-        'subject_params': ['implant_type', 'implant_x', 'implant_y',
-                           'implant_rot', 'loc_od_x', 'loc_od_y']
+        'search_params': ['rho', 'axlambda', 'loc_od_x', 'loc_od_y',
+                          'implant_x', 'implant_y', 'implant_rot'],
+        'subject_params': ['implant_type', 'xrange', 'yrange']
     },
-    'C2': {  # Axon map model: search OD location
+    'D': {  # Axon map model with perspective transform + predict area/orient
         'object': p2pspatial.models.ModelD,
         'search_params': ['rho', 'axlambda', 'loc_od_x', 'loc_od_y',
                           'implant_x', 'implant_y', 'implant_rot'],
-        'subject_params': ['implant_type']
-    },
-    'D': {  # Axon map model with perspective transform
-        'object': p2pspatial.models.ModelD,
-        'search_params': ['rho', 'axlambda'],
-        'subject_params': ['implant_type', 'implant_x', 'implant_y',
-                           'implant_rot', 'loc_od_x', 'loc_od_y']
-    },
-    'D2': {  # Axon map model with perspective transform: search OD
-        'object': p2pspatial.models.ModelD,
-        'search_params': ['rho', 'axlambda', 'loc_od_x', 'loc_od_y',
-                          'implant_x', 'implant_y', 'implant_rot'],
-        'subject_params': ['implant_type']
-    },
-    'E2': {  # Axon map model + predict area/orient: search OD
-        'object': p2pspatial.models.ModelE,
-        'search_params': ['rho', 'axlambda', 'loc_od_x', 'loc_od_y',
-                          'implant_x', 'implant_y', 'implant_rot'],
-        'subject_params': ['implant_type']
-    },
-    'F2': {  # Axon map model with perspective transform + predict area/orient
-        'object': p2pspatial.models.ModelF,
-        'search_params': ['rho', 'axlambda', 'loc_od_x', 'loc_od_y',
-                          'implant_x', 'implant_y', 'implant_rot'],
-        'subject_params': ['implant_type']
+        'subject_params': ['implant_type', 'xrange', 'yrange']
     }
 }
 
@@ -119,23 +96,23 @@ subject_params = {
 
 drawing = {
     'TB': {
-        'major': (1/1.34, 1/0.939),
-        'minor': (1/1.19, 1/1.62),
+        'major': (1 / 1.34, 1 / 0.939),
+        'minor': (1 / 1.19, 1 / 1.62),
         'orient': -9
     },
     '12-005': {
-        'major': (1/0.632, 1/0.686),
-        'minor': (1/0.704, 1/1.35),
+        'major': (1 / 0.632, 1 / 0.686),
+        'minor': (1 / 0.704, 1 / 1.35),
         'orient': -16
     },
     '51-009': {
-        'major': (1/1.38, 1/1.34),
-        'minor': (1/1.06, 1/1.94),
+        'major': (1 / 1.38, 1 / 1.34),
+        'minor': (1 / 1.06, 1 / 1.94),
         'orient': 4
     },
     '52-001': {
-        'major': (1/1.39, 1/1.47),
-        'minor': (1/1.76, 1/1.61),
+        'major': (1 / 1.39, 1 / 1.47),
+        'minor': (1 / 1.76, 1 / 1.61),
         'orient': -14
     }
 }
@@ -146,9 +123,6 @@ def main():
     amplitude = 2.0
     n_folds = 5
     n_jobs = -1
-    w_scale = 34
-    w_rot = 33
-    w_dice = 34
     avg_img = False
 
     # Parse input arguments
@@ -158,8 +132,7 @@ def main():
     subject = sys.argv[2]
     assert subject in subject_params
     try:
-        longopts = ["n_folds=", "n_jobs=", "amplitude=",
-                    "w_scale=", "w_rot=", "w_dice=", "avg_img"]
+        longopts = ["n_folds=", "n_jobs=", "amplitude=", "avg_img"]
         opts, args = getopt.getopt(sys.argv[3:], "", longopts=longopts)
     except getopt.GetoptError as err:
         raise RuntimeError(err)
@@ -170,12 +143,6 @@ def main():
             n_jobs = int(a)
         elif o == "--amplitude":
             amplitude = float(a)
-        elif o == "--w_scale":
-            w_scale = float(a)
-        elif o == "--w_rot":
-            w_rot = float(a)
-        elif o == "--w_dice":
-            w_dice = float(a)
         elif o == "--avg_img":
             avg_img = True
         else:
@@ -185,7 +152,7 @@ def main():
     t_start = time()
     now = datetime.now().strftime('%Y-%m-%d_%H-%M-%S')
     filename = '%s-%s-swarm_%s_%s.pickle' % (
-        modelname, ("newfit" if n_folds == 1 else "newcrossval"), subject, now
+        modelname, ("shapefit" if n_folds == 1 else "shapecv"), subject, now
     )
     print("")
     print(filename)
@@ -199,14 +166,14 @@ def main():
         print("Fit all data (n_jobs=%d)" % n_jobs)
     else:
         print("%d-fold cross-validation (n_jobs=%d)" % (n_folds, n_jobs))
-    print("w_scale=%.2f w_rot=%.2f w_dice=%.2f" % (w_scale, w_rot, w_dice))
 
     # Load data
     rootfolder = os.path.join(os.environ['SECOND_SIGHT_DATA'], 'shape')
     X, y = p2pspatial.load_data(rootfolder, subject=subject, electrodes=None,
                                 amplitude=amplitude, random_state=42,
                                 verbose=False)
-    y = p2pspatial.adjust_drawing_bias(X, y, scale_major=drawing[subject]['major'],
+    y = p2pspatial.adjust_drawing_bias(X, y,
+                                       scale_major=drawing[subject]['major'],
                                        scale_minor=drawing[subject]['minor'],
                                        rotate=drawing[subject]['orient'])
     print('Data loaded:', X.shape, y.shape)
@@ -214,7 +181,11 @@ def main():
         raise ValueError('No data found. Abort.')
     if avg_img:
         X, y = p2pspatial.calc_mean_images(X, y)
-        print('Data transformed:', X.shape, y.shape)
+        print('Images averaged:', X.shape, y.shape)
+
+    y = pd.DataFrame([ShapeLossMixin()._predicts_target_values(row['img'])
+                      for _, row in y.iterrows()], index=X.index)
+    print('Image props extracted:', X.shape, y.shape)
 
     if n_folds == -1:
         n_folds = len(X)
@@ -223,10 +194,9 @@ def main():
     # Instantiate model
     model = models[modelname]
     model_params = {'engine': 'cython', 'scheduler': 'threading',
-                    'n_jobs': n_jobs, 'xrange': (-29, 29), 'yrange': (-22, 22),
-                    'axon_pickle': 'axons-%s-%s.pickle' % (subject, modelname),
-                    'xystep': 0.35}
-    #x 'w_scale': w_scale, 'w_rot': w_rot, 'w_dice': w_dice}
+                    'n_jobs': n_jobs, 'xystep': 0.35}
+    if 'C' in modelname or 'D' in modelname':
+        model_params.update({'axon_pickle': 'axons-%s.pickle' % now})
     for key in model['subject_params']:
         model_params.update({key: subject_params[subject][key]})
     regressor = model['object'](**model_params)
@@ -253,8 +223,8 @@ def main():
     else:
         pso.fit(X, y, fit_params=fit_params)
         best_params = pso.best_params_
-        y_pred = []
-        y_test = []
+        y_pred = pso.predict(X)
+        y_test = y
 
     t_end = time()
     print("Done in %.3fs" % (t_end - t_start))
@@ -265,9 +235,6 @@ def main():
                  'amplitude': amplitude,
                  'electrodes': None,
                  'n_folds': n_folds,
-                 'w_scale': w_scale,
-                 'w_rot': w_rot,
-                 'w_dice': w_dice,
                  'regressor': regressor,
                  'optimizer': pso,
                  'model_params': model_params,

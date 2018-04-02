@@ -717,31 +717,109 @@ class SRDLossMixin(BaseModel):
         return np.mean(losses)
 
 
-class ModelA(SRDLossMixin, RetinalGridMixin, ScoreboardMixin):
-    """Scoreboard model with SRD loss"""
-    pass
+class ShapeLossMixin(BaseModel):
+
+    def _sets_default_params(self):
+        super(ShapeLossMixin, self)._sets_default_params()
+        self.greater_is_better = False
+
+    def get_params(self, deep=True):
+        params = super(ShapeLossMixin, self).get_params(deep=deep)
+        params.update(greater_is_better=self.greater_is_better)
+        return params
+
+    def _periodic_corr(self, alpha1, alpha2, axis=None):
+        # https://github.com/jhamrick/python-snippets
+        # snippets/circstats.py
+        if axis is not None and alpha1.shape[axis] != alpha2.shape[axis]:
+            raise(ValueError, "shape mismatch")
+        # Compute mean directions:
+        if axis is None:
+            n = alpha1.size
+        else:
+            n = alpha1.shape[axis]
+        c1 = np.cos(alpha1)
+        c1_2 = np.cos(2 * alpha1)
+        c2 = np.cos(alpha2)
+        c2_2 = np.cos(2 * alpha2)
+        s1 = np.sin(alpha1)
+        s1_2 = np.sin(2 * alpha1)
+        s2 = np.sin(alpha2)
+        s2_2 = np.sin(2 * alpha2)
+        sumfunc = lambda x: np.nansum(x, axis=axis)
+        num = 4 * (sumfunc(c1 * c2) * sumfunc(s1 * s2) -
+                   sumfunc(c1 * s2) * sumfunc(s1 * c2))
+        den = np.sqrt((n**2 - sumfunc(c1_2)**2 - sumfunc(s1_2)**2) *
+                      (n**2 - sumfunc(c2_2)**2 - sumfunc(s2_2)**2))
+        rho = num / den
+        return rho
+
+    def _predicts_target_values(self, img):
+        if not isinstance(img, np.ndarray):
+            raise TypeError("`img` must be a NumPy array.")
+        # The image has already been thresholded using `self.img_thresh`:
+        props = imgproc.get_region_props(img, thresh=0.5)
+        if props is None:
+            return {'area': 0, 'orientation': 0}
+        return {'img': img,
+                'area': props.area,
+                'eccentricity': props.eccentricity,
+                'orientation': props.orientation,
+                'compactness': props.perimeter ** 2 / props.area}
+
+    def score(self, X, y, sample_weight=None):
+        """Score the model in [0, 8] by correlating shape descriptors"""
+        if not isinstance(X, pd.core.frame.DataFrame):
+            raise TypeError("'X' must be a pandas DataFrame, not %s" % type(X))
+        if not isinstance(y, pd.core.frame.DataFrame):
+            raise TypeError("'y' must be a pandas DataFrame, not %s" % type(y))
+
+        y_pred = self.predict(X)
+
+        # `y` and `y_pred` must have the same index, otherwise subtraction
+        # produces nan:
+        assert np.allclose(y_pred.index, y.index)
+
+        loss_area = 1 - y['area'].corr(y_pred['area'])
+        loss_ecc = 1 - y['eccentricity'].corr(y_pred['eccentricity'])
+        loss_orient = 1 - self._periodic_corr(y['orientation'],
+                                              y_pred['orientation'])
+        loss_compact = 1 - y['compactness'].corr(y_pred['compactness'])
+
+        return loss_area + loss_ecc + loss_orient + loss_compact
 
 
-class ModelB(SRDLossMixin, RetinalCoordTrafoMixin, ScoreboardMixin):
-    """Scoreboard model with perspective transform and SRD loss"""
-    pass
+class ModelA(ShapeLossMixin, RetinalGridMixin, ScoreboardMixin):
+    """Scoreboard model with shape descriptor loss"""
+
+    def get_params(self, deep=True):
+        params = super(ModelA, self).get_params(deep=deep)
+        params.update(name="Scoreboard")
+        return params
 
 
-class ModelC(SRDLossMixin, RetinalGridMixin, AxonMapMixin):
-    """Axon map model with SRD loss"""
-    pass
+class ModelB(ShapeLossMixin, RetinalCoordTrafoMixin, ScoreboardMixin):
+    """Scoreboard model with perspective transform and shape descriptor loss"""
+
+    def get_params(self, deep=True):
+        params = super(ModelB, self).get_params(deep=deep)
+        params.update(name="Scoreboard + persp trafo")
+        return params
 
 
-class ModelD(SRDLossMixin, RetinalCoordTrafoMixin, AxonMapMixin):
-    """Axon map model with perspective transform and SRD loss"""
-    pass
+class ModelC(ShapeLossMixin, RetinalGridMixin, AxonMapMixin):
+    """Axon map model with shape descriptor loss"""
+
+    def get_params(self, deep=True):
+        params = super(ModelC, self).get_params(deep=deep)
+        params.update(name="Axon map")
+        return params
 
 
-class ModelE(ImageMomentsLossMixin, RetinalGridMixin, AxonMapMixin):
-    """Axon map model with SRD loss"""
-    pass
+class ModelD(ShapeLossMixin, RetinalCoordTrafoMixin, AxonMapMixin):
+    """Axon map model with perspective transform and shape descriptor loss"""
 
-
-class ModelF(ImageMomentsLossMixin, RetinalCoordTrafoMixin, AxonMapMixin):
-    """Axon map model with perspective transform and SRD loss"""
-    pass
+    def get_params(self, deep=True):
+        params = super(ModelD, self).get_params(deep=deep)
+        params.update(name="Axon map")
+        return params
