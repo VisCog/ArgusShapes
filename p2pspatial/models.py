@@ -764,10 +764,10 @@ class ShapeLossMixin(BaseModel):
             return {'area': 0, 'orientation': 0}
         return {'image': img,
                 'electrode': electrode,
-                'area': props.area,
-                'eccentricity': props.eccentricity,
-                'orientation': props.orientation,
-                'compactness': props.perimeter ** 2 / props.area}
+                'area': np.nan_to_num(props.area),
+                'eccentricity': np.nan_to_num(props.eccentricity),
+                'orientation': np.nan_to_num(props.orientation),
+                'compactness': np.nan_to_num(props.perimeter ** 2 / props.area)}
 
     def score(self, X, y, sample_weight=None):
         """Score the model in [0, 8] by correlating shape descriptors"""
