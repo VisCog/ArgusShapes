@@ -174,6 +174,8 @@ def main():
     print("Subject: %s" % subject)
     print("Model: %s" % modelname)
     print("Amplitude: %.2fx Th" % amplitude)
+    print("Average image: %s" % ("on" if avg_img else "off"))
+    print("Adjust bias: %s" % ("on" if adjust_bias else "off"))
     if n_folds == -1:
         print("Leave-one-out cross-validation (n_jobs=%d)" % n_jobs)
     elif n_folds == 1:
@@ -202,6 +204,7 @@ def main():
     y = pd.DataFrame([shapeloss._predicts_target_values(row['electrode'],
                                                         row['image'])
                       for _, row in y.iterrows()], index=X.index)
+    assert 'eccentricity' in y.columns
     print('Image props extracted:', X.shape, y.shape)
 
     if n_folds == -1:

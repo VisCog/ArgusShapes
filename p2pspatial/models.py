@@ -783,6 +783,9 @@ class ShapeLossMixin(BaseModel):
         assert np.allclose(y_pred.index, y.index)
 
         cols = ['area', 'orientation', 'eccentricity', 'compactness']
+        for c in cols:
+            assert c in y.columns
+            assert c in y_pred.columns
         loss = np.zeros(len(cols))
         for i, col in enumerate(cols):
             l = 1 - sklm.r2_score(y[col], np.nan_to_num(y_pred[col]))
