@@ -227,8 +227,9 @@ def main():
     for key in model['search_params']:
         search_params.update({key: search_param_ranges[key]})
     print('search_params:', search_params)
-    pso_options = {'max_iter': 100,
-                   'min_func': 0.1}
+    pso_options = {'max_iter': 50,
+                   'min_func': 0.1,
+                   'min_step': 0.1}
     pso = p2pspatial.model_selection.ParticleSwarmOptimizer(
         regressor, search_params, **pso_options
     )
@@ -239,12 +240,13 @@ def main():
         result = p2pspatial.model_selection.crossval_predict(
             pso, X, y, fit_params=fit_params, n_folds=n_folds
         )
-        y_test, y_pred, best_params = result
+        y_test, y_pred, best_params, best_score = result
     else:
         pso.fit(X, y, fit_params=fit_params)
         best_params = pso.best_params_
         y_pred = pso.predict(X)
         y_test = y
+        best_score = pso.score(X, y)
 
     t_end = time()
     print("Done in %.3fs" % (t_end - t_start))
@@ -257,6 +259,8 @@ def main():
                  'n_folds': n_folds,
                  'regressor': regressor,
                  'optimizer': pso,
+                 'optimizer_options': pso_options,
+                 'best_score': best_score,
                  'model_params': model_params,
                  'search_params': search_params,
                  'fit_params': fit_params,
@@ -268,6 +272,9 @@ def main():
                  'random_state': 42}
     pickle.dump((y_test, y_pred, best_params, specifics), open(filename, 'wb'))
     print('Dumped data to %s' % filename)
+
+    if os.path.isfile(model_params['axon_pickle']):
+        os.remove(model_params['axon_pickle'])
 
 
 if __name__ == "__main__":

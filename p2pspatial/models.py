@@ -761,13 +761,22 @@ class ShapeLossMixin(BaseModel):
         # The image has already been thresholded using `self.img_thresh`:
         props = imgproc.get_region_props(img, thresh=0.5)
         if props is None:
-            return {'area': 0, 'orientation': 0}
+            area = 0
+        if np.isclose(area, 0):
+            orientation = 0
+            eccentricity = 0  # assume circle
+            compactness = 4 * np.pi  # assume circle
+        else:
+            orientation = np.nan_to_num(props.orientation)
+            eccentricity = np.nan_to_num(props.eccentricity)
+            compactness = np.nan_to_num(props.perimeter ** 2 / props.area)
         return {'image': img,
                 'electrode': electrode,
-                'area': np.nan_to_num(props.area),
-                'eccentricity': np.nan_to_num(props.eccentricity),
-                'orientation': np.nan_to_num(props.orientation),
-                'compactness': np.nan_to_num(props.perimeter ** 2 / props.area)}
+                'area': area,
+                'orientation': orientation,
+                'eccentricity': eccentricity,
+                'compactness': compactness}
+
 
     def score(self, X, y, sample_weight=None):
         """Score the model in [0, 8] by correlating shape descriptors"""
@@ -783,12 +792,11 @@ class ShapeLossMixin(BaseModel):
         assert np.allclose(y_pred.index, y.index)
 
         cols = ['area', 'orientation', 'eccentricity', 'compactness']
-        for c in cols:
-            assert c in y.columns
-            assert c in y_pred.columns
         loss = np.zeros(len(cols))
         for i, col in enumerate(cols):
-            l = 1 - sklm.r2_score(y[col], np.nan_to_num(y_pred[col]))
+            yt = np.array(y.loc[:, col], dtype=float)
+            yp = np.array(y_pred.loc[:, col], dtype=float)
+            l = 1 - sklm.r2_score(yt, np.nan_to_num(yp))
             loss[i] = 2 if np.isnan(l) else l
         return np.sum(loss)
 
