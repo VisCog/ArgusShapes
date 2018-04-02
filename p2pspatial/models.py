@@ -14,6 +14,7 @@ import scipy.stats as spst
 
 import sklearn.base as sklb
 import sklearn.exceptions as skle
+import sklearn.metrics as sklm
 
 import skimage
 
@@ -150,7 +151,7 @@ class BaseModel(sklb.BaseEstimator):
         return curr_map
 
     @abc.abstractmethod
-    def _predicts_target_values(self, img):
+    def _predicts_target_values(self, electrode, img):
         """Must return a dict of predicted values, e.g {'image': img}"""
         raise NotImplementedError
 
@@ -167,7 +168,7 @@ class BaseModel(sklb.BaseEstimator):
         assert hasattr(self, 'img_thresh')
         img = imgproc.get_thresholded_image(curr_map, thresh=self.img_thresh,
                                             out_shape=out_shape)
-        return self._predicts_target_values(img)
+        return self._predicts_target_values(row['electrode'], img)
 
     def predict(self, X):
         """Compute predicted drawing"""
@@ -603,7 +604,7 @@ class ImageMomentsLossMixin(BaseModel):
         params.update(greater_is_better=self.greater_is_better)
         return params
 
-    def _predicts_target_values(self, img):
+    def _predicts_target_values(self, electrode, img):
         if not isinstance(img, np.ndarray):
             raise TypeError("`img` must be a NumPy array.")
         # The image has already been thresholded using `self.img_thresh`:
@@ -688,7 +689,7 @@ class SRDLossMixin(BaseModel):
                       w_dice=self.w_dice)
         return params
 
-    def _predicts_target_values(self, img):
+    def _predicts_target_values(self, electrode, img):
         return {'image': img}
 
     def score(self, X, y, sample_weight=None):
@@ -754,14 +755,15 @@ class ShapeLossMixin(BaseModel):
         rho = num / den
         return rho
 
-    def _predicts_target_values(self, img):
+    def _predicts_target_values(self, electrode, img):
         if not isinstance(img, np.ndarray):
             raise TypeError("`img` must be a NumPy array.")
         # The image has already been thresholded using `self.img_thresh`:
         props = imgproc.get_region_props(img, thresh=0.5)
         if props is None:
             return {'area': 0, 'orientation': 0}
-        return {'img': img,
+        return {'image': img,
+                'electrode': electrode,
                 'area': props.area,
                 'eccentricity': props.eccentricity,
                 'orientation': props.orientation,
@@ -780,13 +782,12 @@ class ShapeLossMixin(BaseModel):
         # produces nan:
         assert np.allclose(y_pred.index, y.index)
 
-        loss_area = 1 - y['area'].corr(y_pred['area'])
-        loss_ecc = 1 - y['eccentricity'].corr(y_pred['eccentricity'])
-        loss_orient = 1 - self._periodic_corr(y['orientation'],
-                                              y_pred['orientation'])
-        loss_compact = 1 - y['compactness'].corr(y_pred['compactness'])
-
-        return loss_area + loss_ecc + loss_orient + loss_compact
+        cols = ['area', 'orientation', 'eccentricity', 'compactness']
+        loss = np.zeros(len(cols))
+        for i, col in enumerate(cols):
+            l = 1 - sklm.r2_score(y[col], np.nan_to_num(y_pred[col]))
+            loss[i] = 2 if np.isnan(l) else l
+        return np.sum(loss)
 
 
 class ModelA(ShapeLossMixin, RetinalGridMixin, ScoreboardMixin):

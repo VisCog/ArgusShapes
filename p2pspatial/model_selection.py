@@ -11,7 +11,7 @@ import sklearn.utils.validation as skluv
 class ParticleSwarmOptimizer(sklb.BaseEstimator, sklb.RegressorMixin):
 
     def __init__(self, estimator, search_params, swarm_size=None, max_iter=100,
-                 min_func=1e-4, verbose=True):
+                 min_func=0.01, min_step=0.01, verbose=True):
         """Performs particle swarm optimization
 
         Parameters
@@ -25,9 +25,12 @@ class ParticleSwarmOptimizer(sklb.BaseEstimator, sklb.RegressorMixin):
             The number of particles in the swarm.
         max_iter : int, optional, default: 100
             Maximum number of iterations for the swarm to search.
-        min_func : float, optional, default: 1e-4
+        min_func : float, optional, default: 0.01
             The minimum change of swarm's best objective value before the
             search terminates.
+        min_step : float, optional, default: 0.01
+            The minimum step size of swarm's best objective value before
+            the search terminates.
         verbose : bool, optional, default: True
             Flag whether to print more stuff
         """
@@ -39,6 +42,7 @@ class ParticleSwarmOptimizer(sklb.BaseEstimator, sklb.RegressorMixin):
         self.swarm_size = swarm_size
         self.max_iter = max_iter
         self.min_func = min_func
+        self.min_step = min_step
         self.verbose = verbose
 
     def swarm_error(self, search_vals, X, y, fit_params={}):
@@ -71,8 +75,8 @@ class ParticleSwarmOptimizer(sklb.BaseEstimator, sklb.RegressorMixin):
         ub = [v[1] for v in self.search_params.values()]
         best_vals, best_err = pyswarm.pso(
             self.swarm_error, lb, ub, swarmsize=self.swarm_size,
-            maxiter=self.max_iter, minfunc=self.min_func, debug=self.verbose,
-            args=[X, y], kwargs={'fit_params': fit_params}
+            maxiter=self.max_iter, minfunc=self.min_func, minstep=self.min_step,
+            debug=self.verbose, args=[X, y], kwargs={'fit_params': fit_params}
         )
 
         # Pair values of best params with their names to build a dict

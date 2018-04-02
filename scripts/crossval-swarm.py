@@ -4,6 +4,7 @@ import os
 import getopt
 
 import numpy as np
+import pandas as pd
 import pickle
 from time import time
 from datetime import datetime
@@ -11,19 +12,28 @@ from datetime import datetime
 import pulse2percept.implants as p2pi
 import p2pspatial
 
+class ValidShapeLoss(p2pspatial.models.ShapeLossMixin):
+
+    def _calcs_el_curr_map(self, electrode):
+        return 0
+
+    def build_ganglion_cell_layer(self):
+        pass
+
+
 # All available models with their corresponding function calls, search
 # parameters and model parameters
 models = {
     'A': {  # Scoreboard model
         'object': p2pspatial.models.ModelA,
         'search_params': ['rho'],
-        'subject_params': ['implant_type', 'loc_od_x', 'loc_od_y',
+        'subject_params': ['implant_type',
                            'implant_x', 'implant_y', 'implant_rot',
                            'xrange', 'yrange']
     },
     'B': {  # Scoreboard model with perspective transform
         'object': p2pspatial.models.ModelB,
-        'search_params': ['rho', 'loc_od_x', 'loc_od_y',
+        'search_params': ['rho', 
                           'implant_x', 'implant_y', 'implant_rot'],
         'subject_params': ['implant_type', 'xrange', 'yrange']
     },
@@ -124,6 +134,7 @@ def main():
     n_folds = 5
     n_jobs = -1
     avg_img = False
+    adjust_bias = False
 
     # Parse input arguments
     assert len(sys.argv) >= 3
@@ -132,7 +143,8 @@ def main():
     subject = sys.argv[2]
     assert subject in subject_params
     try:
-        longopts = ["n_folds=", "n_jobs=", "amplitude=", "avg_img"]
+        longopts = ["n_folds=", "n_jobs=", "amplitude=", "avg_img",
+                    "adjust_bias"]
         opts, args = getopt.getopt(sys.argv[3:], "", longopts=longopts)
     except getopt.GetoptError as err:
         raise RuntimeError(err)
@@ -145,14 +157,16 @@ def main():
             amplitude = float(a)
         elif o == "--avg_img":
             avg_img = True
+        elif o == "--adjust_bias":
+            adjust_bias = True
         else:
             raise ValueError("Unknown option '%s'='%s'" % (o, a))
 
     # Generate filename
     t_start = time()
     now = datetime.now().strftime('%Y-%m-%d_%H-%M-%S')
-    filename = '%s-%s-swarm_%s_%s.pickle' % (
-        modelname, ("shapefit" if n_folds == 1 else "shapecv"), subject, now
+    filename = '%s-%s-%s-swarm_%s.pickle' % (
+        subject, modelname, ("shapefit" if n_folds == 1 else "shapecv"), now
     )
     print("")
     print(filename)
@@ -172,18 +186,21 @@ def main():
     X, y = p2pspatial.load_data(rootfolder, subject=subject, electrodes=None,
                                 amplitude=amplitude, random_state=42,
                                 verbose=False)
-    y = p2pspatial.adjust_drawing_bias(X, y,
-                                       scale_major=drawing[subject]['major'],
-                                       scale_minor=drawing[subject]['minor'],
-                                       rotate=drawing[subject]['orient'])
-    print('Data loaded:', X.shape, y.shape)
+    if adjust_bias:
+        y = p2pspatial.adjust_drawing_bias(X, y,
+                                           scale_major=drawing[subject]['major'],
+                                           scale_minor=drawing[subject]['minor'],
+                                           rotate=drawing[subject]['orient'])
+        print('Adjusted for drawing bias:', X.shape, y.shape)
     if len(X) == 0:
         raise ValueError('No data found. Abort.')
     if avg_img:
         X, y = p2pspatial.calc_mean_images(X, y)
         print('Images averaged:', X.shape, y.shape)
 
-    y = pd.DataFrame([ShapeLossMixin()._predicts_target_values(row['img'])
+    shapeloss = ValidShapeLoss()
+    y = pd.DataFrame([shapeloss._predicts_target_values(row['electrode'],
+                                                        row['image'])
                       for _, row in y.iterrows()], index=X.index)
     print('Image props extracted:', X.shape, y.shape)
 
@@ -195,7 +212,7 @@ def main():
     model = models[modelname]
     model_params = {'engine': 'cython', 'scheduler': 'threading',
                     'n_jobs': n_jobs, 'xystep': 0.35}
-    if 'C' in modelname or 'D' in modelname':
+    if 'C' in modelname or 'D' in modelname:
         model_params.update({'axon_pickle': 'axons-%s.pickle' % now})
     for key in model['subject_params']:
         model_params.update({key: subject_params[subject][key]})
