@@ -760,8 +760,7 @@ class ShapeLossMixin(BaseModel):
             raise TypeError("`img` must be a NumPy array.")
         # The image has already been thresholded using `self.img_thresh`:
         props = imgproc.get_region_props(img, thresh=0.5)
-        if props is None:
-            area = 0
+        area = 0 if props is None else props.area
         if np.isclose(area, 0):
             orientation = 0
             eccentricity = 0  # assume circle
