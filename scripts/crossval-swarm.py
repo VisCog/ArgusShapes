@@ -259,6 +259,8 @@ def main():
                  'fit_params': fit_params,
                  'drawing': drawing[subject],
                  'now': now,
+                 'avg_img': avg_img,
+                 'adjust_bias': adjust_bias,
                  'exetime': t_end - t_start,
                  'random_state': 42}
     pickle.dump((y_test, y_pred, best_params, specifics), open(filename, 'wb'))
