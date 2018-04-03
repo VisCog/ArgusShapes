@@ -94,6 +94,9 @@ class ParticleSwarmOptimizer(sklb.BaseEstimator, sklb.RegressorMixin):
         skluv.check_is_fitted(self, "best_params_", msg=msg)
         return self.estimator.predict(X)
 
+    def score(self, X, y, sample_weight=None):
+        return self.estimator.score(X, y, sample_weight=None)
+
 
 def crossval_predict(estimator, X, y, fit_params={}, n_folds=5):
     """Performs cross-validation

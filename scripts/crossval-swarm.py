@@ -12,6 +12,7 @@ from datetime import datetime
 import pulse2percept.implants as p2pi
 import p2pspatial
 
+
 class ValidShapeLoss(p2pspatial.models.ShapeLossMixin):
 
     def _calcs_el_curr_map(self, electrode):
@@ -33,8 +34,7 @@ models = {
     },
     'B': {  # Scoreboard model with perspective transform
         'object': p2pspatial.models.ModelB,
-        'search_params': ['rho', 
-                          'implant_x', 'implant_y', 'implant_rot'],
+        'search_params': ['rho', 'implant_x', 'implant_y', 'implant_rot'],
         'subject_params': ['implant_type', 'xrange', 'yrange']
     },
     'C': {  # Axon map model: search OD location
