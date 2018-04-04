@@ -29,7 +29,7 @@ from . import imgproc
 
 p2p.console.setLevel(logging.ERROR)
 
-__all__ = ["load_data", "ret2dva", "dva2ret",
+__all__ = ["load_data", "ret2dva", "dva2ret", "exclude_bistables",
            "adjust_drawing_bias", "calc_mean_images"]
 
 
@@ -174,7 +174,7 @@ def _loads_data_row(df_row, subject, electrodes, amplitude, frequency, date):
         return None
     img = skio.imread(os.path.join(feat['folder'], feat['filename']),
                       as_grey=True)
-    props = imgproc.get_region_props(img, thresh=0)
+    props = imgproc.get_region_props(img, thresh=0.5)
     feat.update(img_shape=img.shape)
 
     target = {'image': img,
@@ -183,8 +183,8 @@ def _loads_data_row(df_row, subject, electrodes, amplitude, frequency, date):
               'y_center': props.centroid[0],
               'area': props.area,
               'orientation': props.orientation,
-              'major_axis_length': props.major_axis_length,
-              'minor_axis_length': props.minor_axis_length}
+              'eccentricity': props.eccentricity,
+              'compactness': props.perimeter ** 2 / props.area}
     return feat, target
 
 
@@ -258,14 +258,28 @@ def load_data(folder, subject=None, electrodes=None,
     return features, targets
 
 
+def exclude_bistables(X, y, std_compact=0.8):
+    gb = y.groupby('electrode', as_index=False)['compactness'].agg(['mean',
+                                                                    'std'])
+    el_excl = gb[gb['std'] > std_compact * gb['mean']].index
+    for el in el_excl:
+        idx = y[y['electrode'] == el].index
+        X.drop(index=idx, inplace=True)
+        y.drop(index=idx, inplace=True)
+    assert np.allclose(X.index, y.index)
+    return X, y
+
+
 def adjust_drawing_bias(X, y, scale_major=(1, 1), scale_minor=(1, 1),
                         rotate=0):
     targets = []
     for _, row in y.iterrows():
         # Compact and elongated shapes are processed differently:
         img = row['image']
-        props = imgproc.get_region_props(img)
-        if props.major_axis_length / props.minor_axis_length > 2:
+        if row['eccentricity'] > np.sqrt(0.5):
+            # props = imgproc.get_region_props(img)
+            # if props.major_axis_length / props.minor_axis_length > 2:
+        
             # Phosphene is elongated:
             smajor = scale_major[1]
             sminor = scale_minor[1]
@@ -284,10 +298,9 @@ def adjust_drawing_bias(X, y, scale_major=(1, 1), scale_minor=(1, 1),
 
         # Rotate the phosphene so the major axis is oriented along the
         # horizontal:
-        props = imgproc.get_region_props(img)
-        tr = skit.SimilarityTransform(rotation=props.orientation)
+        tr = skit.SimilarityTransform(rotation=row['orientation'])
         # When undoing the rotation, add the specified extra rotation:
-        tri = skit.SimilarityTransform(rotation=-props.orientation - rot)
+        tri = skit.SimilarityTransform(rotation=-row['orientation'] - rot)
 
         # Scale the phosphene with two different scaling factors along the
         # major and minor axes using a homogeneous transformation matrix:
@@ -310,98 +323,13 @@ def adjust_drawing_bias(X, y, scale_major=(1, 1), scale_minor=(1, 1),
                   'y_center': props.centroid[0],
                   'area': props.area,
                   'orientation': props.orientation,
-                  'major_axis_length': props.major_axis_length,
-                  'minor_axis_length': props.minor_axis_length}
+                  'eccentricity': props.eccentricity,
+                  'compactness': props.perimeter ** 2 / props.area}
         targets.append(target)
     return pd.DataFrame(targets, index=X.index)
 
 
-def _transforms_electrode_images(Xel, threshold=True):
-    """Takes all trial images (given electrode) and computes mean image"""
-    assert len(Xel.subject.unique()) == 1
-    subject = Xel.subject.unique()[0]
-    assert len(Xel.amp.unique()) == 1
-    amplitude = Xel.amp.unique()[0]
-    assert len(Xel.electrode.unique()) == 1
-    electrode = Xel.electrode.unique()[0]
-
-    imgs = []
-    areas = []
-    orientations = []
-    for Xrow in Xel.iterrows():
-        _, row = Xrow
-        img = skio.imread(os.path.join(row['folder'],
-                                       row['filename']),
-                          as_grey=True)
-        img = skimage.img_as_float(img)
-        img = imgproc.center_phosphene(img)
-        props = imgproc.get_region_props(img)
-        assert not np.isnan(props.area)
-        assert not np.isnan(props.orientation)
-        areas.append(props.area)
-        orientations.append(props.orientation)
-        imgs.append(img)
-
-    assert len(imgs) > 0
-    if len(imgs) == 1:
-        # Only one image found, save this one
-        img_avg_th = imgproc.get_thresholded_image(img)
-    else:
-        # More than one image found: Save the first image as seed image to
-        # which all other images will be compared:
-        # img_seed = skimo.dilation(imgs[0], skimo.disk(5))
-        img_seed = imgs[0]
-        img_avg = np.zeros_like(img_seed)
-        for img in imgs[1:]:
-            # Dilate images slightly so matching is easier for streaks
-            # (will be eroded later):
-            img = skimo.dilation(img, skimo.disk(5))
-            _, _, params = imgproc.srd_loss((img_seed, img),
-                                            return_raw=True)
-            img = imgproc.scale_phosphene(img, params['scale'])
-            # There might be more than one optimal angle, choose the smallest:
-            angle = params['angle'][np.argmin(np.abs(params['angle']))]
-            img = imgproc.rotate_phosphene(img, angle)
-            img_avg += img
-
-        if threshold:
-            # Binarize the average image:
-            img_avg_th = imgproc.get_thresholded_image(img_avg,
-                                                       thresh='otsu')
-            assert np.isclose(img_avg_th.min(), 0)
-            assert np.isclose(img_avg_th.max(), 1)
-            # Remove "pepper" (fill small holes):
-            img_avg_th = skimo.binary_closing(img_avg_th, selem=skimo.disk(11))
-            # Erode back down
-            img_avg_th = skimo.erosion(img_avg_th, skimo.disk(5))
-            # Rotate the binarized image to have the same orientation as
-            # the mean trial image:
-            props = imgproc.get_region_props(img_avg_th)
-            angle_rad = np.mean(orientations) - props.orientation
-            img_avg_th = imgproc.rotate_phosphene(img_avg_th,
-                                                  np.rad2deg(angle_rad))
-            # Scale the binarized image to have the same area as the mean
-            # trial image:
-            props = imgproc.get_region_props(img_avg_th)
-            scale = np.sqrt(np.mean(areas) / props.area)
-            img_avg_th = imgproc.scale_phosphene(img_avg_th, scale)
-        else:
-            img_avg_th = img_avg
-
-    # The result is an image that has the exact same area and
-    # orientation as all trial images averaged. This is what we
-    # save:
-    props = imgproc.get_region_props(img_avg_th)
-    target = {'electrode': electrode, 'image': img_avg_th}
-
-    # Remove ambiguous (trial-related) parameters:
-    feat = {'subject': subject, 'amplitude': amplitude,
-            'electrode': electrode, 'img_shape': img_avg_th.shape}
-
-    return feat, target
-
-
-def _calcs_mean_image(Xy, thresh=True):
+def _calcs_mean_image(Xy, thresh=True, max_area=2):
     assert len(Xy.subject.unique()) == 1
     subject = Xy.subject.unique()[0]
     assert len(Xy.amp.unique()) == 1
@@ -412,10 +340,12 @@ def _calcs_mean_image(Xy, thresh=True):
     # Calculate mean image
     images = Xy.image
     img_avg = None
+
     for img in images:
         if img_avg is None:
             img_avg = np.zeros_like(img, dtype=float)
         img_avg += imgproc.center_phosphene(img)
+ 
     # Adjust to [0, 1]
     if img_avg.max() > 0:
         img_avg /= img_avg.max()
@@ -428,15 +358,27 @@ def _calcs_mean_image(Xy, thresh=True):
     # Calculate props:
     props = imgproc.get_region_props(img_avg)
 
+    # Compare area of mean image to the mean of trial images: If smaller than
+    # some fraction, skip:
+    if props.area > max_area * np.mean(Xy.area):
+        return None, None
+
     # Remove ambiguous (trial-related) parameters:
-    target = {'electrode': electrode, 'image': img_avg}
-    feat = {'subject': subject, 'amplitude': amplitude,
-            'electrode': electrode, 'img_shape': img_avg.shape}
+    target = {'electrode': electrode,
+              'image': img_avg,
+              'area': props.area,
+              'orientation': props.orientation,
+              'eccentricity': props.eccentricity,
+              'compactness': props.perimeter ** 2 / props.area}
+    feat = {'subject': subject,
+            'amplitude': amplitude,
+            'electrode': electrode,
+            'img_shape': img_avg.shape}
 
     return feat, target
 
 
-def calc_mean_images(Xraw, yraw, thresh=True):
+def calc_mean_images(Xraw, yraw, thresh=True, max_area=2):
     """Extract mean images on an electrode from all raw trial drawings
 
     Parameters
@@ -445,6 +387,13 @@ def calc_mean_images(Xraw, yraw, thresh=True):
         Feature matrix, raw trial data
     yraw : pd.DataFrame
         Target values, raw trial data
+    thresh : bool, optional, default: True
+        Whether to binarize the averaged image.
+    max_area : float, optional, default: 2
+        Skip if mean image has area larger than a factor `max_area`
+        of the mean of the individual images. A large area of the mean
+        image indicates poor averaging: instead of maintaining area,
+        individual nonoverlapping images are added. 
 
     Returns
     =======
@@ -468,10 +417,15 @@ def calc_mean_images(Xraw, yraw, thresh=True):
 
             Xel = [Xamp[Xamp.electrode == e] for e in electrodes]
             feat_target = p2p.utils.parfor(_calcs_mean_image, Xel,
-                                           func_kwargs={'thresh': thresh})
-            Xout += [ft[0] for ft in feat_target]
-            yout += [ft[1] for ft in feat_target]
+                                           func_kwargs={'thresh': thresh,
+                                                        'max_area': max_area})
+            # feat_target = filter(None, feat_target)
+            Xout += [ft[0] for ft in feat_target if ft[0] is not None]
+            yout += [ft[1] for ft in feat_target if ft[1] is not None]
+
     # Return feature matrix and target values as DataFrames
+    # Xout = list(filter(None, Xout))
+    # yout = list(filter(None, yout))
     return pd.DataFrame(Xout), pd.DataFrame(yout)
 
 

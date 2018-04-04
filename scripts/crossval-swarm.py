@@ -13,14 +13,6 @@ import pulse2percept.implants as p2pi
 import p2pspatial
 
 
-class ValidShapeLoss(p2pspatial.models.ShapeLossMixin):
-
-    def _calcs_el_curr_map(self, electrode):
-        return 0
-
-    def build_ganglion_cell_layer(self):
-        pass
-
 
 # All available models with their corresponding function calls, search
 # parameters and model parameters
@@ -165,8 +157,8 @@ def main():
     # Generate filename
     t_start = time()
     now = datetime.now().strftime('%Y-%m-%d_%H-%M-%S')
-    filename = '%s-%s-%s-swarm_%s.pickle' % (
-        subject, modelname, ("shapefit" if n_folds == 1 else "shapecv"), now
+    filename = '%s_%s_%s-swarm_%s.pickle' % (
+        subject, modelname, ("shape2fit" if n_folds == 1 else "shape2cv"), now
     )
     print("")
     print(filename)
@@ -188,6 +180,11 @@ def main():
     X, y = p2pspatial.load_data(rootfolder, subject=subject, electrodes=None,
                                 amplitude=amplitude, random_state=42,
                                 verbose=False)
+
+    # Exclude bistable percepts:
+    X, y = p2pspatial.exclude_bistables(X, y)
+
+    # Adjust for drawing bias:
     if adjust_bias:
         y = p2pspatial.adjust_drawing_bias(X, y,
                                            scale_major=drawing[subject]['major'],
@@ -198,14 +195,8 @@ def main():
         raise ValueError('No data found. Abort.')
     if avg_img:
         X, y = p2pspatial.calc_mean_images(X, y)
-        print('Images averaged:', X.shape, y.shape)
 
-    shapeloss = ValidShapeLoss()
-    y = pd.DataFrame([shapeloss._predicts_target_values(row['electrode'],
-                                                        row['image'])
-                      for _, row in y.iterrows()], index=X.index)
-    assert 'eccentricity' in y.columns
-    print('Image props extracted:', X.shape, y.shape)
+    print('Data extracted:', X.shape, y.shape)
 
     if n_folds == -1:
         n_folds = len(X)
