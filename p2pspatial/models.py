@@ -797,7 +797,7 @@ class ShapeLossMixin(BaseModel):
             yp = np.array(y_pred.loc[:, col], dtype=float)
             if col == 'orientation':
                 err = np.abs(yt - np.nan_to_num(yp))
-                err = np.where(err > np.pi / 2, np.pi / 2 - err, err)
+                err = np.where(err > np.pi / 2, np.pi - err, err)
                 ss_res = np.sum(err ** 2)
                 ss_tot = np.sum((yt - np.mean(yt)) ** 2)
                 ll = 1 - (1 - ss_res / ss_tot)
