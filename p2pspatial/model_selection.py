@@ -8,7 +8,45 @@ import sklearn.metrics as sklm
 import sklearn.utils.validation as skluv
 
 
-class ParticleSwarmOptimizer(sklb.BaseEstimator, sklb.RegressorMixin):
+
+class GridSearchOptimizer(sklb.BaseEstimator):
+
+    def __init__(self, estimator, search_params, verbose=True):
+        self.estimator = estimator
+        assert hasattr(estimator, 'greater_is_better')
+        self.search_params = search_params
+        self.verbose = verbose
+
+    def fit(self, X, y, fit_params={}):
+        best_params = {}
+        best_loss = np.inf
+        for params in self.search_params:
+            estimator = sklb.clone(self.estimator)
+            estimator.set_params(**params)
+            estimator.fit(X, y=y, **fit_params)
+            loss = estimator.score(X, y)
+            loss = -loss if estimator.greater_is_better else loss
+            if loss < best_loss:
+                best_loss = loss
+                best_params = params
+        self.best_params_ = best_params
+        print('Best err:', best_loss, 'Best params:', self.best_params_)
+
+        self.estimator.set_params(**self.best_params_)
+        self.estimator.fit(X, y=y, **fit_params)
+        return self
+
+    def predict(self, X):
+        msg = "Estimator, %(name)s, must be fitted before predicting."
+        skluv.check_is_fitted(self, "best_params_", msg=msg)
+        return self.estimator.predict(X)
+
+    def score(self, X, y, sample_weight=None):
+        return self.estimator.score(X, y, sample_weight=None)
+
+
+
+class ParticleSwarmOptimizer(sklb.BaseEstimator):
 
     def __init__(self, estimator, search_params, swarm_size=None, max_iter=100,
                  min_func=0.01, min_step=0.01, verbose=True):
@@ -66,7 +104,7 @@ class ParticleSwarmOptimizer(sklb.BaseEstimator, sklb.RegressorMixin):
         # Loss function: if `greater_is_better`, the estimator's ``score``
         # method is a true scoring function => invert to get an error function
         loss = estimator.score(X, y)
-        loss = -loss if self.estimator.greater_is_better else loss
+        loss = -loss if estimator.greater_is_better else loss
         return loss
 
     def fit(self, X, y, fit_params={}):
