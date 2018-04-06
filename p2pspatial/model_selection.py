@@ -136,7 +136,7 @@ class ParticleSwarmOptimizer(sklb.BaseEstimator):
         return self.estimator.score(X, y, sample_weight=None)
 
 
-def crossval_predict(estimator, X, y, fit_params={}, n_folds=5):
+def crossval_predict(estimator, X, y, fit_params={}, n_folds=5, idx_fold=-1):
     """Performs cross-validation
 
     Parameters
@@ -161,6 +161,7 @@ def crossval_predict(estimator, X, y, fit_params={}, n_folds=5):
     assert isinstance(X, pd.core.frame.DataFrame)
     assert isinstance(y, pd.core.frame.DataFrame)
     assert n_folds > 1
+    assert idx_fold >= -1 and idx_fold < n_folds
     # Manual partitioning of X
     all_idx = np.arange(len(X))
     groups = np.array_split(all_idx, n_folds)
@@ -170,6 +171,9 @@ def crossval_predict(estimator, X, y, fit_params={}, n_folds=5):
     best_params = []
     best_score = []
     for i, test_idx in enumerate(groups):
+        if idx_fold != -1 and idx_fold != i:
+            # Process only one fold, not all
+            continue
         print('Fold %d / %d' % (i + 1, n_folds))
         train_idx = np.delete(all_idx, test_idx)
         est = sklb.clone(estimator)

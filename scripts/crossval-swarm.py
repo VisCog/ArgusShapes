@@ -123,6 +123,7 @@ drawing = {
 def main():
     # Default values
     amplitude = 2.0
+    idx_fold = -1
     n_folds = 5
     n_jobs = -1
     avg_img = False
@@ -135,7 +136,7 @@ def main():
     subject = sys.argv[2]
     assert subject in subject_params
     try:
-        longopts = ["n_folds=", "n_jobs=", "amplitude=", "avg_img",
+        longopts = ["n_folds=", "idx_fold=", "n_jobs=", "amplitude=", "avg_img",
                     "adjust_bias"]
         opts, args = getopt.getopt(sys.argv[3:], "", longopts=longopts)
     except getopt.GetoptError as err:
@@ -143,6 +144,8 @@ def main():
     for o, a in opts:
         if o == "--n_folds":
             n_folds = int(a)
+        elif o == "--idx_fold":
+            idx_fold = int(a)
         elif o == "--n_jobs":
             n_jobs = int(a)
         elif o == "--amplitude":
@@ -157,8 +160,12 @@ def main():
     # Generate filename
     t_start = time()
     now = datetime.now().strftime('%Y-%m-%d_%H-%M-%S')
-    filename = '%s_%s_%s-swarm_%s.pickle' % (
-        subject, modelname, ("shape2fit" if n_folds == 1 else "shape2cv"), now
+    filename = '%s_%s_%s%s-swarm_%s.pickle' % (
+        subject, modelname, ("adjust_" if adjust_bias else "_"),
+        ("shape3fit" if n_folds == 1
+         else ("shape3cv%s%s" % (str(n_folds) if n_folds > 0 else "LOO",
+                                 ("-" + str(idx_fold)) if idx_fold > -1 else ""))),
+        now
     )
     print("")
     print(filename)
@@ -166,14 +173,15 @@ def main():
     print("Subject: %s" % subject)
     print("Model: %s" % modelname)
     print("Amplitude: %.2fx Th" % amplitude)
+    print("Processing: %s (n_jobs=%d)" % ("serial" if n_jobs == 1 else "parallel", n_jobs))
     print("Average image: %s" % ("on" if avg_img else "off"))
     print("Adjust bias: %s" % ("on" if adjust_bias else "off"))
     if n_folds == -1:
-        print("Leave-one-out cross-validation (n_jobs=%d)" % n_jobs)
+        print("Leave-one-out cross-validation (idx_fold=%d)" % idx_fold)
     elif n_folds == 1:
         print("Fit all data (n_jobs=%d)" % n_jobs)
     else:
-        print("%d-fold cross-validation (n_jobs=%d)" % (n_folds, n_jobs))
+        print("%d-fold cross-validation (idx_fold=%d)" % (n_folds, idx_fold))
 
     # Load data
     rootfolder = os.path.join(os.environ['SECOND_SIGHT_DATA'], 'shape')
@@ -201,6 +209,8 @@ def main():
     if n_folds == -1:
         n_folds = len(X)
         print('Leave-one-out cross-validation: n_folds=%d' % n_folds)
+    if idx_fold != -1:
+        print('Processing fold ID %d' % idx_fold)
 
     # Instantiate model
     model = models[modelname]
@@ -229,7 +239,8 @@ def main():
     fit_params = {}
     if n_folds > 1:
         result = p2pspatial.model_selection.crossval_predict(
-            pso, X, y, fit_params=fit_params, n_folds=n_folds
+            pso, X, y, fit_params=fit_params, n_folds=n_folds,
+            idx_fold=idx_fold,
         )
         y_test, y_pred, best_params, best_score = result
     else:
