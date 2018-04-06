@@ -796,11 +796,16 @@ class ShapeLossMixin(BaseModel):
             yt = np.array(y.loc[:, col], dtype=float)
             yp = np.array(y_pred.loc[:, col], dtype=float)
             if col == 'orientation':
+                # Use circular error:
                 err = np.abs(yt - np.nan_to_num(yp))
                 err = np.where(err > np.pi / 2, np.pi - err, err)
-                ss_res = np.sum(err ** 2)
-                ss_tot = np.sum((yt - np.mean(yt)) ** 2)
-                ll = 1 - (1 - ss_res / ss_tot)
+                # Use circular variance in `ss_tot`, which divides by len(yt).
+                # Therefore, we also need to divide `ss_res` by len(yt), which
+                # is the same as taking the mean instead of the sum.
+                ss_res = np.mean(err ** 2)
+                # ss_tot = np.sum((yt - np.mean(yt)) ** 2)
+                ss_tot = spst.circvar(yt, low=-np.pi / 2, high=np.pi / 2)
+                ll = 1 - (1 - ss_res / (ss_tot + 1e-12))
             else:
                 ll = 1 - sklm.r2_score(yt, np.nan_to_num(yp))
             loss[i] = 2 if np.isnan(ll) else ll
