@@ -187,7 +187,7 @@ def main():
     rootfolder = os.path.join(os.environ['SECOND_SIGHT_DATA'], 'shape')
     X, y = p2pspatial.load_data(rootfolder, subject=subject, electrodes=None,
                                 amplitude=amplitude, random_state=42,
-                                verbose=False)
+                                n_jobs=n_jobs, verbose=False)
 
     # Exclude bistable percepts:
     X, y = p2pspatial.exclude_bistables(X, y)
@@ -197,7 +197,7 @@ def main():
         y = p2pspatial.adjust_drawing_bias(X, y,
                                            scale_major=drawing[subject]['major'],
                                            scale_minor=drawing[subject]['minor'],
-                                           rotate=drawing[subject]['orient'])
+                                           rotate=drawing[subject]['orient']) 
         print('Adjusted for drawing bias:', X.shape, y.shape)
     if len(X) == 0:
         raise ValueError('No data found. Abort.')
