@@ -121,6 +121,7 @@ class ParticleSwarmOptimizer(sklb.BaseEstimator):
         self.best_params_ = {}
         for k, v in zip(list(self.search_params.keys()), best_vals):
             self.best_params_[k] = v
+        self.best_train_score_ = best_err
         print('Best err:', best_err, 'Best params:', self.best_params_)
 
         # Fit the class attribute with best params
@@ -169,7 +170,8 @@ def crossval_predict(estimator, X, y, fit_params={}, n_folds=5, idx_fold=-1):
     y_true = []
     y_pred = []
     best_params = []
-    best_score = []
+    best_train_score = []
+    best_test_score = []
     for i, test_idx in enumerate(groups):
         if idx_fold != -1 and idx_fold != i:
             # Process only one fold, not all
@@ -182,10 +184,14 @@ def crossval_predict(estimator, X, y, fit_params={}, n_folds=5, idx_fold=-1):
             best_params.append(est.best_params_)
         else:
             best_params.append(None)
+        if hasattr(est, 'best_train_score_'):
+            best_train_score.append(est.best_train_score_)
+        else:
+            best_train_score.append(None)
         y_true.append(y.iloc[test_idx, :])
         y_pred.append(est.predict(X.iloc[test_idx, :]))
-        best_score.append(est.score(X.iloc[test_idx, :], y.iloc[test_idx, :]))
-    return y_true, y_pred, best_params, best_score
+        best_test_score.append(est.score(X.iloc[test_idx, :], y.iloc[test_idx, :]))
+    return y_true, y_pred, best_params, best_train_score, best_test_score
 
 
 def crossval_score(y_true, y_pred, metric='mse', key='all', weights=None):

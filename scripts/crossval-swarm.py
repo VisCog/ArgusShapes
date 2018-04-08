@@ -242,13 +242,14 @@ def main():
             pso, X, y, fit_params=fit_params, n_folds=n_folds,
             idx_fold=idx_fold,
         )
-        y_test, y_pred, best_params, best_score = result
+        y_test, y_pred, best_params, best_train_score, best_test_score = result
     else:
         pso.fit(X, y, fit_params=fit_params)
         best_params = pso.best_params_
         y_pred = pso.predict(X)
         y_test = y
-        best_score = pso.score(X, y)
+        best_train_score = pso.score(X, y)
+        best_test_score = None
 
     t_end = time()
     print("Done in %.3fs" % (t_end - t_start))
@@ -259,10 +260,12 @@ def main():
                  'amplitude': amplitude,
                  'electrodes': None,
                  'n_folds': n_folds,
+                 'idx_fold': idx_fold,
                  'regressor': regressor,
                  'optimizer': pso,
                  'optimizer_options': pso_options,
-                 'best_score': best_score,
+                 'best_train_score': best_train_score,
+                 'best_test_score': best_test_score,
                  'model_params': model_params,
                  'search_params': search_params,
                  'fit_params': fit_params,
@@ -275,8 +278,9 @@ def main():
     pickle.dump((y_test, y_pred, best_params, specifics), open(filename, 'wb'))
     print('Dumped data to %s' % filename)
 
-    if os.path.isfile(model_params['axon_pickle']):
-        os.remove(model_params['axon_pickle'])
+    if 'axon_pickle' in model_params:
+        if os.path.isfile(model_params['axon_pickle']):
+            os.remove(model_params['axon_pickle'])
 
 
 if __name__ == "__main__":
