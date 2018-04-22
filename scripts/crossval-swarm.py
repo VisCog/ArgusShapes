@@ -26,20 +26,23 @@ models = {
     },
     'B': {  # Scoreboard model with perspective transform
         'object': p2pspatial.models.ModelB,
-        'search_params': ['rho', 'implant_x', 'implant_y', 'implant_rot'],
-        'subject_params': ['implant_type', 'xrange', 'yrange']
+        'search_params': ['rho'],
+        'subject_params': ['implant_type', 'implant_x', 'implant_y', 'implant_rot',
+                           'xrange', 'yrange']
     },
     'C': {  # Axon map model: search OD location
         'object': p2pspatial.models.ModelC,
-        'search_params': ['rho', 'axlambda', 'loc_od_x', 'loc_od_y',
-                          'implant_x', 'implant_y', 'implant_rot'],
-        'subject_params': ['implant_type', 'xrange', 'yrange']
+        'search_params': ['rho', 'axlambda'],
+        'subject_params': ['implant_type', 'xrange', 'yrange',
+                           'loc_od_x', 'loc_od_y',
+                           'implant_x', 'implant_y', 'implant_rot']
     },
     'D': {  # Axon map model with perspective transform + predict area/orient
         'object': p2pspatial.models.ModelD,
-        'search_params': ['rho', 'axlambda', 'loc_od_x', 'loc_od_y',
-                          'implant_x', 'implant_y', 'implant_rot'],
-        'subject_params': ['implant_type', 'xrange', 'yrange']
+        'search_params': ['rho', 'axlambda'],
+        'subject_params': ['implant_type', 'xrange', 'yrange',
+                           'loc_od_x', 'loc_od_y',
+                           'implant_x', 'implant_y', 'implant_rot']
     }
 }
 
@@ -54,43 +57,43 @@ search_param_ranges = {
 }
 
 subject_params = {
-    'TB': {
+    'TB': { 
         'implant_type': p2pi.ArgusI,
-        'implant_x': -700,
-        'implant_y': 0,
-        'implant_rot': -0.700177748,
-        'loc_od_x': 15.6,
-        'loc_od_y': 0.6,
+        'implant_x': -168.699,
+        'implant_y': -579.2926,
+        'implant_rot': -0.72437198,
+        'loc_od_x': 19.84,
+        'loc_od_y': 2.04,
         'xrange': (-36.9, 36.9),
         'yrange': (-36.9, 36.9)
     },
     '12-005': {
         'implant_type': p2pi.ArgusII,
-        'implant_x': -1344.36597,
-        'implant_y': 537.7463881,  # or should this be minus?
-        'implant_rot': -0.664813628,
-        'loc_od_x': 15.5,
-        'loc_od_y': 1.2,
+        'implant_x': -1462.56,
+        'implant_y': -1153.17,
+        'implant_rot': -0.485286613,
+        'loc_od_x': 17.0,
+        'loc_od_y': 0.321,
         'xrange': (-30, 30),
         'yrange': (-22.5, 22.5)
     },
-    '51-009': {
+    '51-009': { 
         'implant_type': p2pi.ArgusII,
-        'implant_x': 398.514982,
-        'implant_y': -540.8417613,
-        'implant_rot': -0.526951314,
-        'loc_od_x': 14.8,
-        'loc_od_y': 4.7,
+        'implant_x': 586.0497,
+        'implant_y': 93.1473147,
+        'implant_rot': -0.6689511,
+        'loc_od_x': 16.68115,
+        'loc_od_y': 2.9778827,
         'xrange': (-32.5, 32.5),
         'yrange': (-24.4, 24.4)
     },
     '52-001': {
         'implant_type': p2pi.ArgusII,
-        'implant_x': -1147.132944,
-        'implant_y': -369.1922119,
-        'implant_rot': -0.342307766,
-        'loc_od_x': 14.9,
-        'loc_od_y': 4.3,
+        'implant_x': -1572.360776,
+        'implant_y': 148.6334026,
+        'implant_rot': -0.385777021,
+        'loc_od_x': 16.1,
+        'loc_od_y': 2.5,
         'xrange': (-32, 32),
         'yrange': (-24, 24)
     }
@@ -162,8 +165,8 @@ def main():
     now = datetime.now().strftime('%Y-%m-%d_%H-%M-%S')
     filename = '%s_%s_%s%s-swarm_%s.pickle' % (
         subject, modelname, ("adjust_" if adjust_bias else "_"),
-        ("shape3fit" if n_folds == 1
-         else ("shape3cv%s%s" % (str(n_folds) if n_folds > 0 else "LOO",
+        ("shape4fit" if n_folds == 1
+         else ("shape4cv%s%s" % (str(n_folds) if n_folds > 0 else "LOO",
                                  ("-" + str(idx_fold)) if idx_fold > -1 else ""))),
         now
     )
