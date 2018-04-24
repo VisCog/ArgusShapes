@@ -13,7 +13,6 @@ import pulse2percept.implants as p2pi
 import p2pspatial
 
 
-
 # All available models with their corresponding function calls, search
 # parameters and model parameters
 models = {
@@ -57,43 +56,43 @@ search_param_ranges = {
 }
 
 subject_params = {
-    'TB': { 
+    'TB': {
         'implant_type': p2pi.ArgusI,
-        'implant_x': -168.699,
-        'implant_y': -579.2926,
-        'implant_rot': -0.72437198,
-        'loc_od_x': 19.84,
-        'loc_od_y': 2.04,
+        'implant_x': -1230,
+        'implant_y': 415,
+        'implant_rot': -0.457,
+        'loc_od_x': 15.9,
+        'loc_od_y': 1.96,
         'xrange': (-36.9, 36.9),
         'yrange': (-36.9, 36.9)
     },
     '12-005': {
         'implant_type': p2pi.ArgusII,
-        'implant_x': -1462.56,
-        'implant_y': -1153.17,
-        'implant_rot': -0.485286613,
-        'loc_od_x': 17.0,
-        'loc_od_y': 0.321,
+        'implant_x': -1761,
+        'implant_y': -212,
+        'implant_rot': -0.188,
+        'loc_od_x': 15.4,
+        'loc_od_y': 1.86,
         'xrange': (-30, 30),
         'yrange': (-22.5, 22.5)
     },
-    '51-009': { 
+    '51-009': {
         'implant_type': p2pi.ArgusII,
-        'implant_x': 586.0497,
-        'implant_y': 93.1473147,
-        'implant_rot': -0.6689511,
-        'loc_od_x': 16.68115,
-        'loc_od_y': 2.9778827,
+        'implant_x': -924,  # -278
+        'implant_y': -173,  # -529
+        'implant_rot': -0.367,  # -0.649
+        'loc_od_x': 14.0,  # 14.4
+        'loc_od_y': 1.88,  # 1.07
         'xrange': (-32.5, 32.5),
         'yrange': (-24.4, 24.4)
     },
     '52-001': {
         'implant_type': p2pi.ArgusII,
-        'implant_x': -1572.360776,
-        'implant_y': 148.6334026,
-        'implant_rot': -0.385777021,
-        'loc_od_x': 16.1,
-        'loc_od_y': 2.5,
+        'implant_x': -1230,
+        'implant_y': 415,
+        'implant_rot': -0.457,
+        'loc_od_x': 15.9,
+        'loc_od_y': 1.96,
         'xrange': (-32, 32),
         'yrange': (-24, 24)
     }
@@ -120,6 +119,16 @@ drawing = {
         'minor': (1 / 1.76, 1 / 1.61),
         'orient': -14
     }
+}
+
+use_electrodes = {
+    'TB': ['A4', 'C2', 'C3', 'C4', 'D2', 'D3', 'B3', 'D4'],
+    '12-005': ['A04', 'A06', 'B03', 'C07', 'C10', 'D07', 'D08', 'D10',
+               'E03', 'F06', 'F09'],
+    '51-009': ['A02', 'B03', 'B04', 'C01', 'C05', 'C06', 'C08', 'D03',
+               'E01', 'E05', 'E07', 'E09', 'F04', 'F06'],
+    '52-001': ['A05', 'A07', 'B09', 'A10', 'C10', 'D05', 'D07', 'E04',
+               'E09', 'E10', 'F06', 'F07', 'F08', 'F09', 'F10']
 }
 
 
@@ -165,8 +174,8 @@ def main():
     now = datetime.now().strftime('%Y-%m-%d_%H-%M-%S')
     filename = '%s_%s_%s%s-swarm_%s.pickle' % (
         subject, modelname, ("adjust_" if adjust_bias else "_"),
-        ("shape4fit" if n_folds == 1
-         else ("shape4cv%s%s" % (str(n_folds) if n_folds > 0 else "LOO",
+        ("shape6fit" if n_folds == 1
+         else ("shape6cv%s%s" % (str(n_folds) if n_folds > 0 else "LOO",
                                  ("-" + str(idx_fold)) if idx_fold > -1 else ""))),
         now
     )
@@ -192,18 +201,27 @@ def main():
                                 amplitude=amplitude, random_state=42,
                                 n_jobs=n_jobs, verbose=False)
 
-    # Exclude bistable percepts:
-    X, y = p2pspatial.exclude_bistables(X, y)
-
     # Adjust for drawing bias:
     if adjust_bias:
         y = p2pspatial.adjust_drawing_bias(X, y,
                                            scale_major=drawing[subject]['major'],
                                            scale_minor=drawing[subject]['minor'],
-                                           rotate=drawing[subject]['orient']) 
+                                           rotate=drawing[subject]['orient'])
         print('Adjusted for drawing bias:', X.shape, y.shape)
     if len(X) == 0:
         raise ValueError('No data found. Abort.')
+
+    # Use only electrodes in the list (includes only stable ones):
+    idx = np.zeros(len(X), dtype=np.bool)
+    for e in use_electrodes[subject]:
+        idx = np.logical_or(idx, X['electrode'] == e)
+    X = X[idx]
+    y = y[idx]
+    for e in use_electrodes[subject]:
+        assert e in X.electrode.unique()
+    assert len(X.electrode.unique()) == len(use_electrodes[subject])
+
+    # Calculate mean images:
     if avg_img:
         X, y = p2pspatial.calc_mean_images(X, y)
 
@@ -218,7 +236,7 @@ def main():
     # Instantiate model
     model = models[modelname]
     model_params = {'engine': 'cython', 'scheduler': 'threading',
-                    'n_jobs': n_jobs, 'xystep': 0.35}
+                    'n_jobs': n_jobs, 'xystep': 0.25}
     if 'C' in modelname or 'D' in modelname:
         model_params.update({'axon_pickle': 'axons-%s.pickle' % now})
     for key in model['subject_params']:
