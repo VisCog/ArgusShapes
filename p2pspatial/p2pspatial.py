@@ -369,8 +369,7 @@ def _calcs_mean_image(Xy, thresh=True, max_area=2):
               'area': props.area,
               'orientation': props.orientation,
               'eccentricity': props.eccentricity,
-              'compactness': (4 * np.pi * props.area /
-                              np.maximum(1e-12, props.perimeter ** 2))}
+              'compactness': props.perimeter ** 2 / props.area}
     feat = {'subject': subject,
             'amplitude': amplitude,
             'electrode': electrode,
