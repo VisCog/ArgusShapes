@@ -36,6 +36,12 @@ models = {
                            'loc_od_x', 'loc_od_y',
                            'implant_x', 'implant_y', 'implant_rot']
     },
+    'C2': {  # Axon map model: search OD location
+        'object': p2pspatial.models.ModelC,
+        'search_params': ['rho', 'axlambda', 'loc_od_x', 'loc_od_y',
+                          'implant_x', 'implant_y', 'implant_rot'],
+        'subject_params': ['implant_type', 'xrange', 'yrange']
+    },
     'D': {  # Axon map model with perspective transform + predict area/orient
         'object': p2pspatial.models.ModelD,
         'search_params': ['rho', 'axlambda'],
@@ -50,19 +56,19 @@ search_param_ranges = {
     'axlambda': (10, 3000),
     'loc_od_x': (13, 17),
     'loc_od_y': (0, 5),
-    'implant_x': (-2000, 1000),
-    'implant_y': (-1000, 1000),
-    'implant_rot': (-np.deg2rad(50), 0)
+    'implant_x': (-2000, 500),
+    'implant_y': (-1500, 500),
+    'implant_rot': (-np.deg2rad(65), -np.deg2rad(25))
 }
 
 subject_params = {
     'TB': {
         'implant_type': p2pi.ArgusI,
-        'implant_x': -1230,
-        'implant_y': 415,
-        'implant_rot': -0.457,
-        'loc_od_x': 15.9,
-        'loc_od_y': 1.96,
+        'implant_x': -1527,
+        'implant_y': -556,
+        'implant_rot': -1.13,
+        'loc_od_x': 13.6,
+        'loc_od_y': 0.0,
         'xrange': (-36.9, 36.9),
         'yrange': (-36.9, 36.9)
     },
@@ -78,11 +84,11 @@ subject_params = {
     },
     '51-009': {
         'implant_type': p2pi.ArgusII,
-        'implant_x': -924,  # -278
-        'implant_y': -173,  # -529
-        'implant_rot': -0.367,  # -0.649
-        'loc_od_x': 14.0,  # 14.4
-        'loc_od_y': 1.88,  # 1.07
+        'implant_x': -799,
+        'implant_y': 93,
+        'implant_rot': -1.09,
+        'loc_od_x': 15.7,
+        'loc_od_y': 0.75,
         'xrange': (-32.5, 32.5),
         'yrange': (-24.4, 24.4)
     },
@@ -124,9 +130,9 @@ drawing = {
 use_electrodes = {
     'TB': ['A4', 'C2', 'C3', 'C4', 'D2', 'D3', 'B3', 'D4'],
     '12-005': ['A04', 'A06', 'B03', 'C07', 'C10', 'D07', 'D08', 'D10',
-               'E03', 'F06', 'F09'],
-    '51-009': ['A02', 'B03', 'B04', 'C01', 'C05', 'C06', 'C08', 'D03',
-               'E01', 'E05', 'E07', 'E09', 'F04', 'F06'],
+               'F06'],
+    '51-009': ['A02', 'C01', 'C05', 'C06', 'D03', 'E01', 'E05', 'E07',
+               'F04', 'F06'],
     '52-001': ['A05', 'A07', 'B09', 'A10', 'C10', 'D05', 'D07', 'E04',
                'E09', 'E10', 'F06', 'F07', 'F08', 'F09', 'F10']
 }
@@ -220,6 +226,9 @@ def main():
     for e in use_electrodes[subject]:
         assert e in X.electrode.unique()
     assert len(X.electrode.unique()) == len(use_electrodes[subject])
+
+    #X, y = p2pspatial.exclude_bistables(X, y)
+    # print(X.electrode.unique())
 
     # Calculate mean images:
     if avg_img:

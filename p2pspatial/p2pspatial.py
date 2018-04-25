@@ -279,7 +279,7 @@ def adjust_drawing_bias(X, y, scale_major=(1, 1), scale_minor=(1, 1),
         if row['eccentricity'] > np.sqrt(0.5):
             # props = imgproc.get_region_props(img)
             # if props.major_axis_length / props.minor_axis_length > 2:
-        
+
             # Phosphene is elongated:
             smajor = scale_major[1]
             sminor = scale_minor[1]
@@ -345,7 +345,7 @@ def _calcs_mean_image(Xy, thresh=True, max_area=2):
         if img_avg is None:
             img_avg = np.zeros_like(img, dtype=float)
         img_avg += imgproc.center_phosphene(img)
- 
+
     # Adjust to [0, 1]
     if img_avg.max() > 0:
         img_avg /= img_avg.max()
@@ -369,7 +369,8 @@ def _calcs_mean_image(Xy, thresh=True, max_area=2):
               'area': props.area,
               'orientation': props.orientation,
               'eccentricity': props.eccentricity,
-              'compactness': props.perimeter ** 2 / props.area}
+              'compactness': (4 * np.pi * props.area /
+                              np.maximum(1e-12, props.perimeter ** 2))}
     feat = {'subject': subject,
             'amplitude': amplitude,
             'electrode': electrode,
@@ -393,7 +394,7 @@ def calc_mean_images(Xraw, yraw, thresh=True, max_area=2):
         Skip if mean image has area larger than a factor `max_area`
         of the mean of the individual images. A large area of the mean
         image indicates poor averaging: instead of maintaining area,
-        individual nonoverlapping images are added. 
+        individual nonoverlapping images are added.
 
     Returns
     =======
