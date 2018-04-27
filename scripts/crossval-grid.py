@@ -10,12 +10,12 @@ from time import time
 from datetime import datetime
 
 import pulse2percept.implants as p2pi
-import p2pspatial
+import argus_shapes
 
 from sklearn.model_selection import ParameterGrid
 
 
-class ValidShapeLoss(p2pspatial.models.ShapeLossMixin):
+class ValidShapeLoss(argus_shapes.models.ShapeLossMixin):
 
     def _calcs_el_curr_map(self, electrode):
         return 0
@@ -28,25 +28,25 @@ class ValidShapeLoss(p2pspatial.models.ShapeLossMixin):
 # parameters and model parameters
 models = {
     'A': {  # Scoreboard model
-        'object': p2pspatial.models.ModelA,
+        'object': argus_shapes.models.ModelA,
         'search_params': ['rho'],
         'subject_params': ['implant_type',
                            'implant_x', 'implant_y', 'implant_rot',
                            'xrange', 'yrange']
     },
     'B': {  # Scoreboard model with perspective transform
-        'object': p2pspatial.models.ModelB,
+        'object': argus_shapes.models.ModelB,
         'search_params': ['rho', 'implant_x', 'implant_y', 'implant_rot'],
         'subject_params': ['implant_type', 'xrange', 'yrange']
     },
     'C': {  # Axon map model: search OD location
-        'object': p2pspatial.models.ModelC,
+        'object': argus_shapes.models.ModelC,
         'search_params': ['rho', 'axlambda', 'loc_od_x', 'loc_od_y',
                           'implant_x', 'implant_y', 'implant_rot'],
         'subject_params': ['implant_type', 'xrange', 'yrange']
     },
     'D': {  # Axon map model with perspective transform + predict area/orient
-        'object': p2pspatial.models.ModelD,
+        'object': argus_shapes.models.ModelD,
         'search_params': ['rho', 'axlambda', 'loc_od_x', 'loc_od_y',
                           'implant_x', 'implant_y', 'implant_rot'],
         'subject_params': ['implant_type', 'xrange', 'yrange']
@@ -187,11 +187,11 @@ def main():
 
     # Load data
     rootfolder = os.path.join(os.environ['SECOND_SIGHT_DATA'], 'shape')
-    X, y = p2pspatial.load_data(rootfolder, subject=subject, electrodes=None,
+    X, y = argus_shapes.load_data(rootfolder, subject=subject, electrodes=None,
                                 amplitude=amplitude, random_state=42,
                                 verbose=False)
     if adjust_bias:
-        y = p2pspatial.adjust_drawing_bias(X, y,
+        y = argus_shapes.adjust_drawing_bias(X, y,
                                            scale_major=drawing[subject]['major'],
                                            scale_minor=drawing[subject]['minor'],
                                            rotate=drawing[subject]['orient'])
@@ -199,7 +199,7 @@ def main():
     if len(X) == 0:
         raise ValueError('No data found. Abort.')
     if avg_img:
-        X, y = p2pspatial.calc_mean_images(X, y)
+        X, y = argus_shapes.calc_mean_images(X, y)
         print('Images averaged:', X.shape, y.shape)
 
     shapeloss = ValidShapeLoss()
@@ -234,14 +234,14 @@ def main():
     print('Running %s=%d iters' % ('x'.join([str(n) for n in n_iter]),
                                    np.prod(n_iter)))
 
-    grid = p2pspatial.model_selection.GridSearchOptimizer(
+    grid = argus_shapes.model_selection.GridSearchOptimizer(
         regressor, ParameterGrid(param_expand)
     )
 
     # Launch cross-validation
     fit_params = {}
     if n_folds > 1:
-        result = p2pspatial.model_selection.crossval_predict(
+        result = argus_shapes.model_selection.crossval_predict(
             grid, X, y, fit_params=fit_params, n_folds=n_folds
         )
         y_test, y_pred, best_params, best_score = result

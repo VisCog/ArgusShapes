@@ -28,4 +28,4 @@ install:
 test_script:
   - mkdir for_test
   - cd for_test
-  - py.test --pyargs p2pspatial --cov-report term-missing --cov=p2pspatial
+  - py.test --pyargs argus_shapes --cov-report term-missing --cov=argus_shapes

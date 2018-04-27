@@ -10,40 +10,40 @@ from time import time
 from datetime import datetime
 
 import pulse2percept.implants as p2pi
-import p2pspatial
+import argus_shapes
 
 
 # All available models with their corresponding function calls, search
 # parameters and model parameters
 models = {
     'A': {  # Scoreboard model
-        'object': p2pspatial.models.ModelA,
+        'object': argus_shapes.models.ModelA,
         'search_params': ['rho'],
         'subject_params': ['implant_type',
                            'implant_x', 'implant_y', 'implant_rot',
                            'xrange', 'yrange']
     },
     'B': {  # Scoreboard model with perspective transform
-        'object': p2pspatial.models.ModelB,
+        'object': argus_shapes.models.ModelB,
         'search_params': ['rho'],
         'subject_params': ['implant_type', 'implant_x', 'implant_y', 'implant_rot',
                            'xrange', 'yrange']
     },
     'C': {  # Axon map model: search OD location
-        'object': p2pspatial.models.ModelC,
+        'object': argus_shapes.models.ModelC,
         'search_params': ['rho', 'axlambda'],
         'subject_params': ['implant_type', 'xrange', 'yrange',
                            'loc_od_x', 'loc_od_y',
                            'implant_x', 'implant_y', 'implant_rot']
     },
     'C2': {  # Axon map model: search OD location
-        'object': p2pspatial.models.ModelC,
+        'object': argus_shapes.models.ModelC,
         'search_params': ['rho', 'axlambda', 'loc_od_x', 'loc_od_y',
                           'implant_x', 'implant_y', 'implant_rot'],
         'subject_params': ['implant_type', 'xrange', 'yrange']
     },
     'D': {  # Axon map model with perspective transform + predict area/orient
-        'object': p2pspatial.models.ModelD,
+        'object': argus_shapes.models.ModelD,
         'search_params': ['rho', 'axlambda'],
         'subject_params': ['implant_type', 'xrange', 'yrange',
                            'loc_od_x', 'loc_od_y',
@@ -201,13 +201,13 @@ def main():
 
     # Load data
     rootfolder = os.path.join(os.environ['SECOND_SIGHT_DATA'], 'shape')
-    X, y = p2pspatial.load_data(rootfolder, subject=subject, electrodes=None,
+    X, y = argus_shapes.load_data(rootfolder, subject=subject, electrodes=None,
                                 amplitude=amplitude, random_state=42,
                                 n_jobs=n_jobs, verbose=False)
 
     # Adjust for drawing bias:
     if adjust_bias:
-        y = p2pspatial.adjust_drawing_bias(X, y,
+        y = argus_shapes.adjust_drawing_bias(X, y,
                                            scale_major=drawing[subject]['major'],
                                            scale_minor=drawing[subject]['minor'],
                                            rotate=drawing[subject]['orient'])
@@ -225,12 +225,12 @@ def main():
         assert e in X.electrode.unique()
     assert len(X.electrode.unique()) == len(use_electrodes[subject])
 
-    #X, y = p2pspatial.exclude_bistables(X, y)
+    #X, y = argus_shapes.exclude_bistables(X, y)
     # print(X.electrode.unique())
 
     # Calculate mean images:
     if avg_img:
-        X, y = p2pspatial.calc_mean_images(X, y)
+        X, y = argus_shapes.calc_mean_images(X, y)
 
     print('Data extracted:', X.shape, y.shape)
 
@@ -259,14 +259,14 @@ def main():
     pso_options = {'max_iter': 50,
                    'min_func': 0.1,
                    'min_step': 0.1}
-    pso = p2pspatial.model_selection.ParticleSwarmOptimizer(
+    pso = argus_shapes.model_selection.ParticleSwarmOptimizer(
         regressor, search_params, **pso_options
     )
 
     # Launch cross-validation
     fit_params = {}
     if n_folds > 1:
-        result = p2pspatial.model_selection.crossval_predict(
+        result = argus_shapes.model_selection.crossval_predict(
             pso, X, y, fit_params=fit_params, n_folds=n_folds,
             idx_fold=idx_fold,
         )

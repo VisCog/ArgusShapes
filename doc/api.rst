@@ -5,7 +5,7 @@ API
 Classes
 -------
 
-.. currentmodule:: p2pspatial
+.. currentmodule:: argus_shapes
 
 .. autosummary::
    :template: class.rst

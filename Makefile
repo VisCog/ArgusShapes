@@ -9,4 +9,4 @@ flake8:
 	@echo "flake8 passed"
 
 test:
-	py.test --pyargs p2pspatial --cov-report term-missing --cov=p2pspatial
+	py.test --pyargs argus_shapes --cov-report term-missing --cov=argus_shapes

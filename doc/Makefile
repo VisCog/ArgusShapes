@@ -87,17 +87,17 @@ qthelp:
 	@echo
 	@echo "Build finished; now you can run "qcollectiongenerator" with the" \
 	      ".qhcp project file in $(BUILDDIR)/qthelp, like this:"
-	@echo "# qcollectiongenerator $(BUILDDIR)/qthelp/p2pspatial.qhcp"
+	@echo "# qcollectiongenerator $(BUILDDIR)/qthelp/argus_shapes.qhcp"
 	@echo "To view the help file:"
-	@echo "# assistant -collectionFile $(BUILDDIR)/qthelp/p2pspatial.qhc"
+	@echo "# assistant -collectionFile $(BUILDDIR)/qthelp/argus_shapes.qhc"
 
 devhelp:
 	$(SPHINXBUILD) -b devhelp $(ALLSPHINXOPTS) $(BUILDDIR)/devhelp
 	@echo
 	@echo "Build finished."
 	@echo "To view the help file:"
-	@echo "# mkdir -p $$HOME/.local/share/devhelp/p2pspatial"
-	@echo "# ln -s $(BUILDDIR)/devhelp $$HOME/.local/share/devhelp/p2pspatial"
+	@echo "# mkdir -p $$HOME/.local/share/devhelp/argus_shapes"
+	@echo "# ln -s $(BUILDDIR)/devhelp $$HOME/.local/share/devhelp/argus_shapes"
 	@echo "# devhelp"
 
 epub:

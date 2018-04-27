@@ -3,14 +3,14 @@
 Plotting model stability
 ========================
 
-Next we'll show off another demonstration of model fitting with p2pspatial.
+Next we'll show off another demonstration of model fitting with argus_shapes.
 We'll generate a bunch of data with varying levels of signal to noise, and then
 show the stability of the model coefficients for each set of data.
 """
 
 import numpy as np
 import matplotlib.pyplot as plt
-import p2pspatial as sb
+import argus_shapes as sb
 plt.style.use('ggplot')
 
 # Set seed for reproducibility

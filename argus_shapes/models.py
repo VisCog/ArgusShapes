@@ -18,7 +18,7 @@ import sklearn.metrics as sklm
 
 import skimage
 
-from .p2pspatial import *
+from .argus_shapes import *
 from . import imgproc
 from . import fast_models as fm
 

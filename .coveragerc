@@ -1,7 +1,7 @@
 [run]
 branch = True
-source = p2pspatial/*
-include = p2pspatial/*
+source = argus_shapes/*
+include = argus_shapes/*
 omit = */setup.py
 [report]
-include = p2pspatial/*
+include = argus_shapes/*

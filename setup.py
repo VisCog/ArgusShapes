@@ -5,16 +5,16 @@ from setuptools.extension import Extension
 from Cython.Build import cythonize
 
 extensions = [
-    Extension('p2pspatial.fast_models', ['p2pspatial/fast_models.pyx'],
+    Extension('argus_shapes.fast_models', ['argus_shapes/fast_models.pyx'],
               include_dirs=[np.get_include()],
               extra_compile_args=['-O3']),
-    Extension('p2pspatial.fast_imgproc', ['p2pspatial/fast_imgproc.pyx'],
+    Extension('argus_shapes.fast_imgproc', ['argus_shapes/fast_imgproc.pyx'],
               include_dirs=[np.get_include()],
               extra_compile_args=['-O3'])
 ]
 
-# Get version and release info, which is all stored in p2pspatial/version.py
-ver_file = os.path.join('p2pspatial', 'version.py')
+# Get version and release info, which is all stored in argus_shapes/version.py
+ver_file = os.path.join('argus_shapes', 'version.py')
 with open(ver_file) as f:
     exec(f.read())
 

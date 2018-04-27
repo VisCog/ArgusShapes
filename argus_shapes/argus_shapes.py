@@ -39,7 +39,7 @@ __all__ = ["load_data", "ret2dva", "dva2ret", "exclude_bistables",
 due.cite(Doi("10.1167/13.9.30"),
          description="Template project for small scientific Python projects",
          tags=["reference-implementation"],
-         path='p2pspatial')
+         path='argus_shapes')
 
 
 def _loads_data_row_a16(row):

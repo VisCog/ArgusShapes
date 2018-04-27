@@ -1,11 +1,11 @@
 """
 ================================
-Fitting a function with p2pspatial
+Fitting a function with argus_shapes
 ================================
 
 Shablona contains a number of tools for fitting functions to
 data. This example shows us how to load data into python, fit
-a function to our datapoints with p2pspatial, and then plot the
+a function to our datapoints with argus_shapes, and then plot the
 result.
 
 This example is meant to demonstrate the functionality of
@@ -16,14 +16,14 @@ documents from python files.
 import os.path as op
 import numpy as np
 import matplotlib.pyplot as plt
-import p2pspatial as sb
+import argus_shapes as sb
 plt.style.use('ggplot')
 
 ###############################################################################
 # Loading data
 # ------------
 #
-# First, we'll load some data into p2pspatial.
+# First, we'll load some data into argus_shapes.
 data_path = op.join(sb.__path__[0], 'data')
 
 ortho_x, ortho_y, ortho_n = sb.transform_data(op.join(data_path, 'ortho.csv'))
@@ -33,7 +33,7 @@ para_x, para_y, para_n = sb.transform_data(op.join(data_path, 'para.csv'))
 # Fitting a model
 # ---------------
 #
-# With p2pspatial, models are created with the :ref:Model class.
+# With argus_shapes, models are created with the :ref:Model class.
 # This class has a `fit` method that returns the coefficients for the given
 # input data.
 
