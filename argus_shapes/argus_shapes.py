@@ -29,7 +29,7 @@ from . import imgproc
 
 p2p.console.setLevel(logging.ERROR)
 
-__all__ = ["load_data", "ret2dva", "dva2ret", "exclude_bistables",
+__all__ = ["load_data", "load_subjects", "ret2dva", "dva2ret", "exclude_bistables",
            "adjust_drawing_bias", "calc_mean_images"]
 
 
@@ -256,6 +256,10 @@ def load_data(folder, subject=None, electrodes=None,
             features.shape[0], features.shape[1], targets.shape[1])
         )
     return features, targets
+
+
+def load_subjects(fname):
+    return pd.read_csv(fname)
 
 
 def exclude_bistables(X, y, std_compact=0.8):
