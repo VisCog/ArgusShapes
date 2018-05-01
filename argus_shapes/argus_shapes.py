@@ -29,7 +29,8 @@ from . import imgproc
 
 p2p.console.setLevel(logging.ERROR)
 
-__all__ = ["load_data", "load_subjects", "ret2dva", "dva2ret", "exclude_bistables",
+__all__ = ["load_data_raw", "load_data", "load_subjects", "ret2dva", "dva2ret",
+           "exclude_bistables",
            "adjust_drawing_bias", "calc_mean_images"]
 
 
@@ -188,10 +189,10 @@ def _loads_data_row(df_row, subject, electrodes, amplitude, frequency, date):
     return feat, target
 
 
-def load_data(folder, subject=None, electrodes=None,
-              amplitude=2.0, frequency=20.0, n_min_trials=5, n_max_trials=5,
-              date=None, verbose=False, random_state=None,
-              engine='joblib', scheduler='threading', n_jobs=-1):
+def load_data_raw(folder, subject=None, electrodes=None,
+                  amplitude=2.0, frequency=20.0, n_min_trials=5, n_max_trials=5,
+                  date=None, verbose=False, random_state=None,
+                  engine='joblib', scheduler='threading', n_jobs=-1):
     # Recursive search for all files whose name contains the string
     # '_rawDataFileList_': These contain the paths to the raw bmp images
     sstr = '*' if subject is None else subject
@@ -260,6 +261,29 @@ def load_data(folder, subject=None, electrodes=None,
 
 def load_subjects(fname):
     return pd.read_csv(fname)
+
+
+def load_data(fname, subject=None, electrodes=None):
+    data = pd.read_csv(fname)
+    if subject is not None:
+        data = data[data.subject == subject]
+    if electrodes is not None:
+        idx = np.zeros(len(data), dtype=np.bool)
+        for e in electrodes:
+            idx = np.logical_or(idx, data.electrode == e)
+        data = data[idx]
+
+    # Load images
+    features = []
+    targets = []
+    for _, row in data.iterrows():
+        imgfile = os.path.join(os.path.dirname(fname), row['filepath'],
+                               row['filename'])
+        img = skio.imread(imgfile)
+
+    for idx, row in data.iterrows():
+        data.loc[idx, 'filepath'] = os.path.join(fpath, row['filepath'])
+    return data
 
 
 def exclude_bistables(X, y, std_compact=0.8):
@@ -363,7 +387,7 @@ def _calcs_mean_image(Xy, thresh=True, max_area=2):
     props = imgproc.get_region_props(img_avg)
 
     # Compare area of mean image to the mean of trial images: If smaller than
-    # some fraction, skip:
+    # some fraction, skip: 
     if props.area > max_area * np.mean(Xy.area):
         return None, None
 

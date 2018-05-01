@@ -128,10 +128,10 @@ drawing = {
 }
 
 use_electrodes = {
-    'TB': ['A4', 'C2', 'C3', 'C4', 'D2', 'D3', 'B3', 'D4'],
+    'TB': ['A4', 'C2', 'C3', 'C4', 'D2', 'D3', 'B3', 'D4', 'B1'],
     '12-005': ['A04', 'A06', 'B03', 'C07', 'C10', 'D07', 'D08', 'D10', 'F06'],
     '51-009': ['A02', 'C01', 'C06', 'D03', 'E01', 'E05', 'E07', 'F04', 'F06'],
-    '52-001': ['A05', 'A07', 'B09', 'A10', 'C10', 'D05', 'D07', 'E04', 'E09', 
+    '52-001': ['A05', 'A07', 'B09', 'A10', 'C10', 'D05', 'D07', 'E04', 'E09',
                'E10', 'F06', 'F07', 'F08', 'F09', 'F10']
 }
 
@@ -178,8 +178,8 @@ def main():
     now = datetime.now().strftime('%Y-%m-%d_%H-%M-%S')
     filename = '%s_%s_%s%s-swarm_%s.pickle' % (
         subject, modelname, ("adjust_" if adjust_bias else "_"),
-        ("shape6fit" if n_folds == 1
-         else ("shape6cv%s%s" % (str(n_folds) if n_folds > 0 else "LOO",
+        ("shape7fit" if n_folds == 1
+         else ("shape7cv%s%s" % (str(n_folds) if n_folds > 0 else "LOO",
                                  ("-" + str(idx_fold)) if idx_fold > -1 else ""))),
         now
     )
@@ -201,16 +201,16 @@ def main():
 
     # Load data
     rootfolder = os.path.join(os.environ['SECOND_SIGHT_DATA'], 'shape')
-    X, y = argus_shapes.load_data(rootfolder, subject=subject, electrodes=None,
-                                amplitude=amplitude, random_state=42,
-                                n_jobs=n_jobs, verbose=False)
+    X, y = argus_shapes.load_data_raw(rootfolder, subject=subject, electrodes=None,
+                                      amplitude=amplitude, random_state=42,
+                                      n_jobs=n_jobs, verbose=False)
 
     # Adjust for drawing bias:
     if adjust_bias:
         y = argus_shapes.adjust_drawing_bias(X, y,
-                                           scale_major=drawing[subject]['major'],
-                                           scale_minor=drawing[subject]['minor'],
-                                           rotate=drawing[subject]['orient'])
+                                             scale_major=drawing[subject]['major'],
+                                             scale_minor=drawing[subject]['minor'],
+                                             rotate=drawing[subject]['orient'])
         print('Adjusted for drawing bias:', X.shape, y.shape)
     if len(X) == 0:
         raise ValueError('No data found. Abort.')
@@ -219,20 +219,21 @@ def main():
     idx = np.zeros(len(X), dtype=np.bool)
     for e in use_electrodes[subject]:
         idx = np.logical_or(idx, X['electrode'] == e)
-    X = X[idx]
-    y = y[idx]
-    for e in use_electrodes[subject]:
-        assert e in X.electrode.unique()
-    assert len(X.electrode.unique()) == len(use_electrodes[subject])
+    # X = X[idx]
+    # y = y[idx]
+    # for e in use_electrodes[subject]:
+    #     assert e in X.electrode.unique()
+    # assert len(X.electrode.unique()) == len(use_electrodes[subject])
 
     #X, y = argus_shapes.exclude_bistables(X, y)
     # print(X.electrode.unique())
 
     # Calculate mean images:
     if avg_img:
-        X, y = argus_shapes.calc_mean_images(X, y)
+        X, y = argus_shapes.calc_mean_images(X, y, max_area=1.5)
 
     print('Data extracted:', X.shape, y.shape)
+    print(X.electrode.unique())
 
     if n_folds == -1:
         n_folds = len(X)
