@@ -58,7 +58,7 @@ class ValidBaseModel(m.BaseModel):
         return 0
 
 
-class ValidScoreboardModel(m.SRDLossMixin, m.RetinalGridMixin,
+class ValidScoreboardModel(m.ShapeLossMixin, m.RetinalGridMixin,
                            m.ScoreboardMixin):
     """A class that implements all abstract methods of BaseModel"""
 
@@ -71,7 +71,7 @@ class ValidScoreboardModel(m.SRDLossMixin, m.RetinalGridMixin,
         return self._predicts_target_values(row)
 
 
-class ValidAxonMapModel(m.SRDLossMixin, m.RetinalGridMixin, m.AxonMapMixin):
+class ValidAxonMapModel(m.ShapeLossMixin, m.RetinalGridMixin, m.AxonMapMixin):
     """A class that implements all abstract methods of AxonMapModel"""
 
     def build_optic_fiber_layer(self):
@@ -86,7 +86,7 @@ class ValidAxonMapModel(m.SRDLossMixin, m.RetinalGridMixin, m.AxonMapMixin):
         return self._predicts_target_values(row)
 
 
-class ValidRetinalCoordTrafo(m.SRDLossMixin, m.RetinalCoordTrafoMixin):
+class ValidRetinalCoordTrafo(m.ShapeLossMixin, m.RetinalCoordTrafoMixin):
     """A class that implements all abstract methods of BaseModel"""
 
     def _calcs_el_curr_map(self, electrode):
@@ -101,37 +101,7 @@ class ValidRetinalCoordTrafo(m.SRDLossMixin, m.RetinalCoordTrafoMixin):
         return self._predicts_target_values(row)
 
 
-class ValidRetinalGrid(m.SRDLossMixin, m.RetinalGridMixin):
-    """A class that implements all abstract methods of BaseModel"""
-
-    def _calcs_el_curr_map(self, electrode):
-        return np.array([[0]])
-
-    def _predicts_target_values(self, row):
-        return row
-
-    def _predicts(self, Xrow):
-        """Returns the input (a DataFrame row, without its index)"""
-        _, row = Xrow
-        return self._predicts_target_values(row)
-
-
-class ValidImageMomentsLoss(m.ImageMomentsLossMixin, m.RetinalGridMixin):
-    """A class that implements all abstract methods of BaseModel"""
-
-    def _calcs_el_curr_map(self, electrode):
-        return np.array([[0]])
-
-    def _predicts_target_values(self, row):
-        return row
-
-    def _predicts(self, Xrow):
-        """Returns the input (a DataFrame row, without its index)"""
-        _, row = Xrow
-        return self._predicts_target_values(row)
-
-
-class ValidSRDLoss(m.SRDLossMixin, m.RetinalGridMixin):
+class ValidRetinalGrid(m.ShapeLossMixin, m.RetinalGridMixin):
     """A class that implements all abstract methods of BaseModel"""
 
     def _calcs_el_curr_map(self, electrode):
@@ -160,22 +130,6 @@ def test_RetinalCoordTrafo():
     trafo = ValidRetinalCoordTrafo(**params)
     for k, v in six.iteritems(params):
         npt.assert_equal(getattr(trafo, k), v)
-
-
-def test_RetinalCoordTrafo__cart2pol():
-    trafo = ValidRetinalCoordTrafo()
-    npt.assert_almost_equal(trafo._cart2pol(0, 0), (0, 0))
-    npt.assert_almost_equal(trafo._cart2pol(10, 0), (0, 10))
-    npt.assert_almost_equal(trafo._cart2pol(3, 4), (np.arctan(4 / 3.0), 5))
-    npt.assert_almost_equal(trafo._cart2pol(4, 3), (np.arctan(3 / 4.0), 5))
-
-
-def test_RetinalCoordTrafo__pol2cart():
-    trafo = ValidRetinalCoordTrafo()
-    npt.assert_almost_equal(trafo._pol2cart(0, 0), (0, 0))
-    npt.assert_almost_equal(trafo._pol2cart(0, 10), (10, 0))
-    npt.assert_almost_equal(trafo._pol2cart(np.arctan(4 / 3.0), 5), (3, 4))
-    npt.assert_almost_equal(trafo._pol2cart(np.arctan(3 / 4.0), 5), (4, 3))
 
 
 def test_RetinalCoordTrafo__watson_displacement():
@@ -241,37 +195,6 @@ def test_RetinalGrid():
     # Make sure transformation is right
     npt.assert_almost_equal(trafo.xret[1, 2], 0)
     npt.assert_almost_equal(trafo.yret[1, 2], 0)
-
-
-def test_ImageMomentLoss():
-    params = {'greater_is_better': True}
-    trafo = ValidImageMomentsLoss()
-    for p in params:
-        npt.assert_equal(hasattr(trafo, p), True)
-
-    # Two different ways to set the parameters:
-    trafo.set_params(**params)
-    for k, v in six.iteritems(params):
-        npt.assert_equal(getattr(trafo, k), v)
-    trafo = ValidImageMomentsLoss(**params)
-    for k, v in six.iteritems(params):
-        npt.assert_equal(getattr(trafo, k), v)
-
-
-def test_SRDLoss():
-    params = {'greater_is_better': True, 'w_scale': 1, 'w_rot': 2,
-              'w_dice': 3}
-    trafo = ValidSRDLoss()
-    for p in params:
-        npt.assert_equal(hasattr(trafo, p), True)
-
-    # Two different ways to set the parameters:
-    trafo.set_params(**params)
-    for k, v in six.iteritems(params):
-        npt.assert_equal(getattr(trafo, k), v)
-    trafo = ValidSRDLoss(**params)
-    for k, v in six.iteritems(params):
-        npt.assert_equal(getattr(trafo, k), v)
 
 
 def test_BaseModel___init__():
@@ -420,10 +343,6 @@ def test_ScoreboardModel():
     # False
     npt.assert_equal(hasattr(model, 'greater_is_better'), True)
     npt.assert_equal(model.greater_is_better, False)
-    npt.assert_equal(hasattr(model, 'w_scale'), True)
-    npt.assert_equal(hasattr(model, 'w_rot'), True)
-    npt.assert_equal(hasattr(model, 'w_dice'), True)
-    model.set_params(w_scale=34, w_rot=33, w_dice=34)
 
     # User can set `rho`:
     model.set_params(rho=123)
@@ -459,10 +378,6 @@ def test_AxonMapModel():
     # False
     npt.assert_equal(hasattr(model, 'greater_is_better'), True)
     npt.assert_equal(model.greater_is_better, False)
-    npt.assert_equal(hasattr(model, 'w_scale'), True)
-    npt.assert_equal(hasattr(model, 'w_rot'), True)
-    npt.assert_equal(hasattr(model, 'w_dice'), True)
-    model.set_params(w_scale=34, w_rot=33, w_dice=34)
 
     # User can override default values
     for key, value in six.iteritems(set_params):

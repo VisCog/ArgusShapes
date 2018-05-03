@@ -114,6 +114,42 @@ def get_region_props(img, thresh=0.5, out_shape=None, return_all=False):
             return regions[idx]
 
 
+def calc_shape_descriptors(img, thresh=0.5):
+    """Calculates shape descriptors of a grayscale phosphene image"""
+    props = get_region_props(img, thresh=thresh)
+
+    # If no region is found, set area to 0:
+    area = 0 if props is None else props.area
+
+    # Avoid division by zero when calculating compactness:
+    if np.isclose(props.perimeter, 0):
+        # Undefined: Assume tiny circle
+        compactness = 1
+    else:
+        # The most compact shape is a circle, it has compactness 1/(4*pi). All
+        # other shapes have smaller values. We therefore multiply with 4*pi
+        # to confine the metric to [0, 1], where 1=most compact:
+        compactness = 4 * np.pi * props.area / props.perimeter ** 2
+        compactness = np.minimum(1, np.maximum(0, compactness))
+
+    if np.isclose(compactness, 1):
+        # For circles, orientation is not defined, and eccentricity in skimage
+        # is buggy, so manually set to 0:
+        orientation = 0
+        eccentricity = 0
+    else:
+        orientation = props.orientation
+        eccentricity = props.eccentricity
+
+    descriptors = {'x_center': props.centroid[1],
+                   'y_center': props.centroid[0],
+                   'area': area,
+                   'orientation': orientation,
+                   'eccentricity': eccentricity,
+                   'compactness': compactness}
+    return descriptors
+
+
 def center_phosphene(img, center=None):
     """Centers a phosphene in an image"""
     # Subtract center of mass from image center
@@ -192,89 +228,3 @@ def dice_coeff(image0, image1):
                           "(%s) vs. (%s)" % (", ".join(image0.shape),
                                              ", ".join(image1.shape))))
     return fi.fast_dice_coeff(image0, image1)
-
-
-def srd_loss(images, n_angles=37, w_scale=33, w_rot=34, w_dice=33,
-             return_raw=False):
-    """Calculates new loss function"""
-    # Unpack `images` into two images, which can be a bit of pain: Most common
-    # used case is when zip(y_true.iterrows(), y_pred.iterrows()) is passed
-    type_msg = ("'images' must be a tuple of either two images or two rows in "
-                "a pandas DataFrame with an 'image' column.")
-    if not isinstance(images, (list, tuple)):
-        raise TypeError(type_msg)
-    imgs = []
-    for item in images[:2]:
-        if isinstance(item, np.ndarray):
-            # `item` is an image, make sure it's of dtype double, otherwise
-            # the moment function is off
-            imgs.append(skimage.img_as_float(item))
-        elif isinstance(item, (list, tuple)):
-            # `item` is probably a row of a pandas DataFrame
-            _, row = item
-            if not isinstance(row, pd.core.series.Series):
-                raise TypeError(type_msg)
-            if (not hasattr(row, 'image') or hasattr(row, 'image') and
-                    not isinstance(row['image'], np.ndarray)):
-                raise TypeError(type_msg)
-            # Make sure image is saved with dtype double, otherwise the moment
-            # function is off
-            imgs.append(skimage.img_as_float(row['image']))
-        else:
-            raise TypeError(type_msg)
-
-    img_true, img_pred = imgs
-    if not np.allclose(img_true.shape, img_pred.shape):
-        raise ValueError(("Both images must have the same shape, img_true=(%s)"
-                          " img_pred=(%s)" % (", ".join(img_true.shape),
-                                              ", ".join(img_pred.shape))))
-    if img_true.dtype != img_pred.dtype:
-        raise ValueError(("Both images must have the same dtype, img_true=%s "
-                          "img_pred=%s" % (img_true.dtype, img_pred.dtype)))
-
-    # Center the phosphenes in the image:
-    img_true = center_phosphene(img_true)
-    img_pred = center_phosphene(img_pred)
-
-    # Scale phosphene in `img_pred` to area of phosphene in `img_truth`
-    area_true = skim.moments(img_true, order=0)[0, 0]
-    area_pred = skim.moments(img_pred, order=0)[0, 0]
-    if np.isclose(area_true, 0) or np.isclose(area_pred, 0):
-        # If one of the images is empty, the following analysis is not
-        # meaningful, and we simply return the max loss:
-        return w_scale + w_rot + w_dice
-
-    img_scale = np.sqrt(area_true / area_pred)
-    img_pred = scale_phosphene(img_pred, img_scale)
-
-    # Area loss: Make symmetric around 1, so that a scaling factor of 0.5 and
-    # 2 both have the same loss. Bound the error in [0, 10] first, then scale
-    # to [0, 1]
-    max_scale = 10.0
-    loss_scale = np.maximum(img_scale, 1.0 / img_scale) - 1
-    loss_scale = np.minimum(max_scale, loss_scale) / max_scale
-
-    # Rotation loss: Rotate the phosphene so that the dice coefficient is
-    # maximized (using bi-cubic interpolation):
-    max_rot = 180.0
-    angles = np.linspace(-180, 180, n_angles)
-    dice = [dice_coeff(img_true, rotate_phosphene(img_pred, r))
-            for r in angles]
-    # If multiple angles give the same dice coefficient, choose the smallest
-    # angle. Scale the loss to [0, 1]:
-    img_angle = angles[np.isclose(dice, np.max(dice))]
-    loss_rot = np.abs(img_angle).min() / max_rot
-
-    # Dice loss: Turn the dice coefficient into a loss in [0, 1]
-    loss_dice = 1 - np.max(dice)
-
-    # Now all terms are in [0, 1], combine with weights (by default, loss is
-    # in [0, 100]):
-    loss = w_scale * loss_scale + w_rot * loss_rot + w_dice * loss_dice
-    if return_raw:
-        loss_terms = {'loss_scale': loss_scale, 'loss_rot': loss_rot,
-                      'loss_dice': loss_dice}
-        params = {'scale': img_scale, 'angle': img_angle, 'dice': np.max(dice)}
-        return loss, loss_terms, params
-    else:
-        return loss

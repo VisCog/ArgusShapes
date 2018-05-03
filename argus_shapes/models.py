@@ -20,6 +20,7 @@ import skimage
 
 from .argus_shapes import *
 from . import imgproc
+from . import utils
 from . import fast_models as fm
 
 
@@ -382,7 +383,7 @@ class AxonMapMixin(BaseModel):
         # Remove short axon bundles:
         bundles = list(filter(lambda x: len(x) > 10, bundles))
         # Convert to um:
-        bundles = [dva2ret(b) for b in bundles]
+        bundles = [utils.dva2ret(b) for b in bundles]
         return bundles
 
     def _finds_closest_axons(self, bundles):
@@ -498,18 +499,6 @@ class RetinalCoordTrafoMixin(BaseModel):
         return params
 
     @staticmethod
-    def _cart2pol(x, y):
-        theta = np.arctan2(y, x)
-        rho = np.hypot(x, y)
-        return theta, rho
-
-    @staticmethod
-    def _pol2cart(theta, rho):
-        x = rho * np.cos(theta)
-        y = rho * np.sin(theta)
-        return x, y
-
-    @staticmethod
     def _watson_displacement(r, meridian='temporal'):
         if (not isinstance(meridian, (np.ndarray, six.string_types)) or
                 not np.all([m in ['temporal', 'nasal']
@@ -538,17 +527,17 @@ class RetinalCoordTrafoMixin(BaseModel):
             raise NotImplementedError
 
         # Convert x, y (dva) into polar coordinates
-        theta, rho_dva = self._cart2pol(xy[:, 0], xy[:, 1])
+        theta, rho_dva = utils.cart2pol(xy[:, 0], xy[:, 1])
 
         # Add displacement
         meridian = np.where(xy[:, 0] < 0, 'temporal', 'nasal')
         rho_dva += self._watson_displacement(rho_dva, meridian=meridian)
 
         # Convert back to x, y (dva)
-        x, y = self._pol2cart(theta, rho_dva)
+        x, y = utils.pol2cart(theta, rho_dva)
 
         # Convert to retinal coords
-        return dva2ret(x), dva2ret(y)
+        return utils.dva2ret(x), utils.dva2ret(y)
 
     def build_ganglion_cell_layer(self):
         # Build the grid from `x_range`, `y_range`:
@@ -589,133 +578,8 @@ class RetinalGridMixin(BaseModel):
                                  np.linspace(*self.yrange, num=ny),
                                  indexing='xy')
 
-        self.xret = dva2ret(xdva)
-        self.yret = dva2ret(ydva)
-
-
-class ImageMomentsLossMixin(BaseModel):
-
-    def _sets_default_params(self):
-        super(ImageMomentsLossMixin, self)._sets_default_params()
-        self.greater_is_better = False
-
-    def get_params(self, deep=True):
-        params = super(ImageMomentsLossMixin, self).get_params(deep=deep)
-        params.update(greater_is_better=self.greater_is_better)
-        return params
-
-    def _predicts_target_values(self, electrode, img):
-        if not isinstance(img, np.ndarray):
-            raise TypeError("`img` must be a NumPy array.")
-        # The image has already been thresholded using `self.img_thresh`:
-        props = imgproc.get_region_props(img, thresh=0.5)
-        if props is None:
-            return {'area': 0, 'orientation': 0}
-        return {'area': props.area, 'orientation': props.orientation}
-
-    def _scores_props(self, ytyp, w_area=0.001, w_orient=1):
-        (_, yt), (_, yp) = ytyp
-        if not isinstance(yt, pd.core.series.Series):
-            raise TypeError("`yt` must be a pandas Series")
-        if not isinstance(yp, pd.core.series.Series):
-            raise TypeError("`yp` must be a pandas Series")
-        # Extract props from ground-truth image:
-        img_yt = imgproc.center_phosphene(skimage.img_as_float(yt['image']))
-        props_yt = imgproc.get_region_props(img_yt, thresh=0.5)
-        assert props_yt is not None
-        # Calculate area error:
-        err_area = (props_yt.area - yp['area']) ** 2
-        # Calculate orient error (degrees, < 180 deg):
-        err_orient = np.abs(props_yt.orientation - yp['orientation'])
-        err_orient = np.rad2deg(err_orient)
-        if err_orient > 180:
-            err_orient = 360 - err_orient
-        err_orient = err_orient ** 2
-        # Return weighted sum of area and orient errors:
-        return w_area * err_area + w_orient * err_orient
-
-    def score(self, X, y, sample_weight=None):
-        """Score the model using the new loss function"""
-        if not isinstance(X, pd.core.frame.DataFrame):
-            raise TypeError("'X' must be a pandas DataFrame, not %s" % type(X))
-        if not isinstance(y, pd.core.frame.DataFrame):
-            raise TypeError("'y' must be a pandas DataFrame, not %s" % type(y))
-
-        y_pred = self.predict(X)
-
-        # `y` and `y_pred` must have the same index, otherwise subtraction
-        # produces nan
-        assert np.allclose(y_pred.index, y.index)
-
-        # Compute the scaling factor / rotation angle / dice coefficient loss:
-        # The loss function expects a tupel of two DataFrame rows
-        engine = 'serial' if self.engine == 'cython' else self.engine
-        losses = p2pu.parfor(self._scores_props,
-                             zip(y.iterrows(), y_pred.iterrows()),
-                             engine=engine, scheduler=self.scheduler,
-                             n_jobs=self.n_jobs)
-        return np.mean(losses)
-
-
-class SRDLossMixin(BaseModel):
-    """Scale-Rotation-Dice (SRD) loss
-
-    This class provides a ``score`` method that calculates a loss in [0, 100]
-    made of three components:
-    - the scaling factor needed to match the area of predicted and target
-      percept
-    - the rotation angle needed to achieve the greatest dice coefficient
-      between predicted and target percept
-    - the dice coefficient between (adjusted) predicted and target percept
-    """
-
-    def _sets_default_params(self):
-        super(SRDLossMixin, self)._sets_default_params()
-        # The new scoring function is actually a loss function, so that
-        # greater values do *not* imply that the estimator is better (required
-        # for ParticleSwarmOptimizer)
-        self.greater_is_better = False
-        # By default, the loss function will return values in [0, 100], scoring
-        # the scaling factor, rotation angle, and dice coefficient of precition
-        # vs ground truth with the following weights:
-        self.w_scale = 34
-        self.w_rot = 33
-        self.w_dice = 34
-
-    def get_params(self, deep=True):
-        params = super(SRDLossMixin, self).get_params(deep=deep)
-        params.update(greater_is_better=self.greater_is_better,
-                      w_scale=self.w_scale, w_rot=self.w_rot,
-                      w_dice=self.w_dice)
-        return params
-
-    def _predicts_target_values(self, electrode, img):
-        return {'image': img}
-
-    def score(self, X, y, sample_weight=None):
-        """Score the model using the new loss function"""
-        if not isinstance(X, pd.core.frame.DataFrame):
-            raise TypeError("'X' must be a pandas DataFrame, not %s" % type(X))
-        if not isinstance(y, pd.core.frame.DataFrame):
-            raise TypeError("'y' must be a pandas DataFrame, not %s" % type(y))
-
-        y_pred = self.predict(X)
-
-        # `y` and `y_pred` must have the same index, otherwise subtraction
-        # produces nan
-        assert np.allclose(y_pred.index, y.index)
-
-        # Compute the scaling factor / rotation angle / dice coefficient loss:
-        # The loss function expects a tupel of two DataFrame rows
-        engine = 'serial' if self.engine == 'cython' else self.engine
-        losses = p2pu.parfor(imgproc.srd_loss,
-                             zip(y.iterrows(), y_pred.iterrows()),
-                             func_kwargs={'w_scale': self.w_scale,
-                                          'w_rot': self.w_rot,
-                                          'w_dice': self.w_dice},
-                             engine=engine, scheduler=self.scheduler,
-                             n_jobs=self.n_jobs)
-        return np.mean(losses)
+        self.xret = utils.dva2ret(xdva)
+        self.yret = utils.dva2ret(ydva)
 
 
 class ShapeLossMixin(BaseModel):
@@ -729,53 +593,14 @@ class ShapeLossMixin(BaseModel):
         params.update(greater_is_better=self.greater_is_better)
         return params
 
-    def _periodic_corr(self, alpha1, alpha2, axis=None):
-        # https://github.com/jhamrick/python-snippets
-        # snippets/circstats.py
-        if axis is not None and alpha1.shape[axis] != alpha2.shape[axis]:
-            raise(ValueError, "shape mismatch")
-        # Compute mean directions:
-        if axis is None:
-            n = alpha1.size
-        else:
-            n = alpha1.shape[axis]
-        c1 = np.cos(alpha1)
-        c1_2 = np.cos(2 * alpha1)
-        c2 = np.cos(alpha2)
-        c2_2 = np.cos(2 * alpha2)
-        s1 = np.sin(alpha1)
-        s1_2 = np.sin(2 * alpha1)
-        s2 = np.sin(alpha2)
-        s2_2 = np.sin(2 * alpha2)
-        sumfunc = lambda x: np.nansum(x, axis=axis)
-        num = 4 * (sumfunc(c1 * c2) * sumfunc(s1 * s2) -
-                   sumfunc(c1 * s2) * sumfunc(s1 * c2))
-        den = np.sqrt((n**2 - sumfunc(c1_2)**2 - sumfunc(s1_2)**2) *
-                      (n**2 - sumfunc(c2_2)**2 - sumfunc(s2_2)**2))
-        rho = num / den
-        return rho
-
     def _predicts_target_values(self, electrode, img):
         if not isinstance(img, np.ndarray):
             raise TypeError("`img` must be a NumPy array.")
         # The image has already been thresholded using `self.img_thresh`:
-        props = imgproc.get_region_props(img, thresh=0.5)
-        area = 0 if props is None else props.area
-        if np.isclose(area, 0):
-            orientation = 0
-            eccentricity = 0  # assume circle
-            compactness = 4 * np.pi  # assume circle
-        else:
-            orientation = np.nan_to_num(props.orientation)
-            eccentricity = np.nan_to_num(props.eccentricity)
-            compactness = np.nan_to_num(props.perimeter ** 2 / props.area)
-        return {'image': img,
-                'electrode': electrode,
-                'area': area,
-                'orientation': orientation,
-                'eccentricity': eccentricity,
-                'compactness': compactness}
-
+        descriptors = imgproc.calc_shape_descriptors(img)
+        target = {'image': img, 'electrode': electrode}
+        target.update(descriptors)
+        return target
 
     def score(self, X, y, sample_weight=None):
         """Score the model in [0, 8] by correlating shape descriptors"""
@@ -797,8 +622,9 @@ class ShapeLossMixin(BaseModel):
             yp = np.array(y_pred.loc[:, col], dtype=float)
             if col == 'orientation':
                 # Use circular error:
-                err = np.abs(yt - np.nan_to_num(yp))
-                err = np.where(err > np.pi / 2, np.pi - err, err)
+                err = np.abs(utils.angle_diff(yt, np.nan_to_num(yp)))
+                # err = np.abs(yt - np.nan_to_num(yp))
+                # err = np.where(err > np.pi / 2, np.pi - err, err)
                 # Use circular variance in `ss_tot`, which divides by len(yt).
                 # Therefore, we also need to divide `ss_res` by len(yt), which
                 # is the same as taking the mean instead of the sum.

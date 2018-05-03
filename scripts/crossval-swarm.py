@@ -178,8 +178,8 @@ def main():
     now = datetime.now().strftime('%Y-%m-%d_%H-%M-%S')
     filename = '%s_%s_%s%s-swarm_%s.pickle' % (
         subject, modelname, ("adjust_" if adjust_bias else "_"),
-        ("shape7fit" if n_folds == 1
-         else ("shape7cv%s%s" % (str(n_folds) if n_folds > 0 else "LOO",
+        ("shape8fit" if n_folds == 1
+         else ("shape8cv%s%s" % (str(n_folds) if n_folds > 0 else "LOO",
                                  ("-" + str(idx_fold)) if idx_fold > -1 else ""))),
         now
     )

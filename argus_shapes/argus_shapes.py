@@ -29,7 +29,7 @@ from . import imgproc
 
 p2p.console.setLevel(logging.ERROR)
 
-__all__ = ["load_data_raw", "load_data", "load_subjects", "ret2dva", "dva2ret",
+__all__ = ["load_data_raw", "load_data", "load_subjects",
            "exclude_bistables",
            "adjust_drawing_bias", "calc_mean_images"]
 
@@ -175,17 +175,14 @@ def _loads_data_row(df_row, subject, electrodes, amplitude, frequency, date):
         return None
     img = skio.imread(os.path.join(feat['folder'], feat['filename']),
                       as_grey=True)
-    props = imgproc.get_region_props(img, thresh=0.5)
     feat.update(img_shape=img.shape)
 
     target = {'image': img,
-              'electrode': feat['electrode'],
-              'x_center': props.centroid[1],
-              'y_center': props.centroid[0],
-              'area': props.area,
-              'orientation': props.orientation,
-              'eccentricity': props.eccentricity,
-              'compactness': props.perimeter ** 2 / props.area}
+              'electrode': feat['electrode']}
+    # Calculate shape descriptors:
+    descriptors = imgproc.calc_shape_descriptors(img)
+    target.update(descriptors)
+
     return feat, target
 
 
@@ -340,19 +337,13 @@ def adjust_drawing_bias(X, y, scale_major=(1, 1), scale_minor=(1, 1),
         # Put them all together:
         newimg = skit.warp(img, (ts + (tr + (tp + (tri + tsi)))).inverse)
 
-        # Now we could adjust the size further using a scaling factor for the
-        # overall area...
-
-        # Calculate new props:
-        props = imgproc.get_region_props(newimg)
         target = {'image': newimg,
-                  'electrode': row['electrode'],
-                  'x_center': props.centroid[1],
-                  'y_center': props.centroid[0],
-                  'area': props.area,
-                  'orientation': props.orientation,
-                  'eccentricity': props.eccentricity,
-                  'compactness': props.perimeter ** 2 / props.area}
+                  'electrode': row['electrode']}
+
+        # Calculate shape descriptors:
+        descriptors = imgproc.calc_shape_descriptors(newimg)
+        target.update(descriptors)
+
         targets.append(target)
     return pd.DataFrame(targets, index=X.index)
 
@@ -383,21 +374,20 @@ def _calcs_mean_image(Xy, thresh=True, max_area=2):
     # Move back to its original position:
     img_avg = imgproc.center_phosphene(img_avg, center=(np.mean(Xy.y_center),
                                                         np.mean(Xy.x_center)))
-    # Calculate props:
-    props = imgproc.get_region_props(img_avg)
+
+    # Calculate shape descriptors:
+    descriptors = imgproc.calc_shape_descriptors(img_avg)
 
     # Compare area of mean image to the mean of trial images: If smaller than
-    # some fraction, skip: 
-    if props.area > max_area * np.mean(Xy.area):
+    # some fraction, skip:
+    if descriptors['area'] > max_area * np.mean(Xy.area):
         return None, None
 
     # Remove ambiguous (trial-related) parameters:
     target = {'electrode': electrode,
-              'image': img_avg,
-              'area': props.area,
-              'orientation': props.orientation,
-              'eccentricity': props.eccentricity,
-              'compactness': props.perimeter ** 2 / props.area}
+              'image': img_avg}
+    target.update(descriptors)
+
     feat = {'subject': subject,
             'amplitude': amplitude,
             'electrode': electrode,
@@ -455,44 +445,3 @@ def calc_mean_images(Xraw, yraw, thresh=True, max_area=2):
     # Xout = list(filter(None, Xout))
     # yout = list(filter(None, yout))
     return pd.DataFrame(Xout), pd.DataFrame(yout)
-
-
-def ret2dva(r_um):
-    """Converts retinal distances (um) to visual angles (deg)
-
-    This function converts an eccentricity measurement on the retinal
-    surface(in micrometers), measured from the optic axis, into degrees
-    of visual angle.
-    Source: Eq. A6 in Watson(2014), J Vis 14(7): 15, 1 - 17
-    """
-    sign = np.sign(r_um)
-    r_mm = 1e-3 * np.abs(r_um)
-    r_deg = 3.556 * r_mm + 0.05993 * r_mm ** 2 - 0.007358 * r_mm ** 3
-    r_deg += 3.027e-4 * r_mm ** 4
-    return sign * r_deg
-
-
-def dva2ret(r_deg):
-    """Converts visual angles (deg) into retinal distances (um)
-
-    This function converts a retinal distancefrom the optic axis(um)
-    into degrees of visual angle.
-    Source: Eq. A5 in Watson(2014), J Vis 14(7): 15, 1 - 17
-    """
-    sign = np.sign(r_deg)
-    r_deg = np.abs(r_deg)
-    r_mm = 0.268 * r_deg + 3.427e-4 * r_deg ** 2 - 8.3309e-6 * r_deg ** 3
-    r_um = 1e3 * r_mm
-    return sign * r_um
-
-
-def cart2pol(x, y):
-    theta = np.arctan2(y, x)
-    rho = np.hypot(x, y)
-    return theta, rho
-
-
-def pol2cart(theta, rho):
-    x = rho * np.cos(theta)
-    y = rho * np.sin(theta)
-    return x, y

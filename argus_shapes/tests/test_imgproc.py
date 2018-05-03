@@ -7,8 +7,10 @@ import numpy.testing as npt
 
 import skimage.measure as skim
 import skimage.transform as skit
+import skimage.draw as skid
 
 from .. import imgproc
+from .. import utils
 
 
 def test_get_thresholded_image():
@@ -50,6 +52,51 @@ def test_get_region_props():
         regions = imgproc.get_region_props(img, return_all=return_all)
         npt.assert_equal(regions.area, img.sum())
         npt.assert_almost_equal(regions.orientation, np.pi / 4)
+
+
+def test_calc_shape_descriptors():
+    img_shape = (200, 400)
+    shape_center = (100, 200)
+
+    # Make sure circles work:
+    for radius in [5, 7, 9, 11]:
+        circle = np.zeros(img_shape, dtype=float)
+        rr, cc = skid.circle(shape_center[0], shape_center[1], radius,
+                             shape=img_shape)
+        circle[rr, cc] = 1.0
+        props = imgproc.calc_shape_descriptors(circle)
+        npt.assert_almost_equal(props['orientation'], 0)
+        npt.assert_almost_equal(props['eccentricity'], 0)
+        npt.assert_almost_equal(props['compactness'], 1)
+        npt.assert_almost_equal(props['x_center'], shape_center[1])
+        npt.assert_almost_equal(props['y_center'], shape_center[0])
+
+    # Make sure ellipses work:
+    for rot in [-0.2, 0, 0.2]:
+        for c_radius, r_radius in [(17, 13), (19, 16), (25, 21)]:
+            ellipse = np.zeros(img_shape, dtype=float)
+            rr, cc = skid.ellipse(shape_center[0], shape_center[1],
+                                  r_radius, c_radius,
+                                  rotation=rot, shape=img_shape)
+            ellipse[rr, cc] = 1.0
+            props = imgproc.calc_shape_descriptors(ellipse)
+            angle = utils.angle_diff(props['orientation'], rot)
+            npt.assert_almost_equal(angle, 0, decimal=1)
+            npt.assert_equal(props['eccentricity'] > 0.5, True)
+            npt.assert_equal(props['compactness'] > 0.5, True)
+            npt.assert_almost_equal(props['x_center'], shape_center[1])
+            npt.assert_almost_equal(props['y_center'], shape_center[0])
+
+    # Thin line:
+    line = np.zeros(img_shape, dtype=float)
+    rr, cc = skid.line(0, 0, img_shape[0] - 1, img_shape[1] - 1)
+    line[rr, cc] = 1.0
+    props = imgproc.calc_shape_descriptors(line)
+    npt.assert_equal(props['area'], img_shape[1])
+    npt.assert_almost_equal(props['eccentricity'], 1, decimal=3)
+    npt.assert_almost_equal(props['orientation'], -np.arctan2(img_shape[0],
+                                                              img_shape[1]),
+                            decimal=3)
 
 
 def test_center_phosphene():
@@ -115,40 +162,3 @@ def test_dice_coeff():
     npt.assert_almost_equal(imgproc.dice_coeff(img1, img1), 1)
     npt.assert_almost_equal(imgproc.dice_coeff(img0, img1), 40 / 110.0)
     npt.assert_almost_equal(imgproc.dice_coeff(img1, img0), 40 / 110.0)
-
-
-def test_srd_loss():
-    # `images` must be a tuple of images or rows in a pandas DataFrame:
-    for images in [0, [1, 2], (1, 2), [[3, 4]], ((0, 1), (1, 2))]:
-        with pytest.raises(TypeError):
-            imgproc.srd_loss(images)
-    # Even if a DataFrame is passed, it needs to have a valid 'image' column
-    # with an np.ndarray in it:
-    X = pd.DataFrame([[1], [2]], columns=['image'])
-    with pytest.raises(TypeError):
-        imgproc.srd_loss(([0, X], [1, X]))
-
-    # Two identical images have zero loss, except when they are empty:
-    img = np.zeros((200, 200), dtype=np.double)
-    npt.assert_almost_equal(imgproc.srd_loss([img, img]), 100)
-    img[90:110, 90:120] = 1
-    img[130, 140] = 1
-    npt.assert_almost_equal(imgproc.srd_loss([img, img]), 0)
-
-    # Scale term should be symmetric around 1: scaling with 0.5 and 2.0 should
-    # give the same error
-    for scale in [1, 2, 4]:
-        img_scaled = imgproc.scale_phosphene(img, scale)
-        npt.assert_almost_equal(
-            imgproc.srd_loss((img, img_scaled), w_rot=0, w_dice=0),
-            imgproc.srd_loss((img_scaled, img), w_rot=0, w_dice=0)
-        )
-
-    # Rotation term should be symmetric around 0: rotation by +10deg and -10deg
-    # should give the same error
-    for rot in [0, 5, 10, 20]:
-        img_rot = imgproc.rotate_phosphene(img, rot)
-        npt.assert_almost_equal(
-            imgproc.srd_loss((img, img_rot), w_scale=0, w_dice=0),
-            imgproc.srd_loss((img_rot, img), w_scale=0, w_dice=0)
-        )
