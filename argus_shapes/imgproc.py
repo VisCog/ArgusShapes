@@ -118,31 +118,39 @@ def calc_shape_descriptors(img, thresh=0.5):
     """Calculates shape descriptors of a grayscale phosphene image"""
     props = get_region_props(img, thresh=thresh)
 
-    # If no region is found, set area to 0:
-    area = 0 if props is None else props.area
-
-    # Avoid division by zero when calculating compactness:
-    if np.isclose(props.perimeter, 0):
-        # Undefined: Assume tiny circle
-        compactness = 1
-    else:
-        # The most compact shape is a circle, it has compactness 1/(4*pi). All
-        # other shapes have smaller values. We therefore multiply with 4*pi
-        # to confine the metric to [0, 1], where 1=most compact:
-        compactness = 4 * np.pi * props.area / props.perimeter ** 2
-        compactness = np.minimum(1, np.maximum(0, compactness))
-
-    if np.isclose(compactness, 1):
-        # For circles, orientation is not defined, and eccentricity in skimage
-        # is buggy, so manually set to 0:
+    if props is None:
+        # If no region is found, use dummy values:
+        area = 0
         orientation = 0
         eccentricity = 0
+        compactness = 1
+        centroid = (img.shape[0] // 2, img.shape[1] // 2)
     else:
-        orientation = props.orientation
-        eccentricity = props.eccentricity
+        # Region is found, calculate calculate descriptors:
+        area = props.area
+        centroid = props.centroid
+        # Avoid division by zero when calculating compactness:
+        if np.isclose(props.perimeter, 0):
+            # Undefined: Assume tiny circle
+            compactness = 1
+        else:
+            # The most compact shape is a circle, it has compactness 1/(4*pi).
+            # All other shapes have smaller values. We therefore multiply with
+            # 4*pi to confine the metric to [0, 1], where 1=most compact:
+            compactness = 4 * np.pi * area / props.perimeter ** 2
+            compactness = np.minimum(1, np.maximum(0, compactness))
+        # Calculate orientation and eccentricity:
+        if np.isclose(compactness, 1):
+            # For circles, orientation is not defined, and eccentricity in
+            # skimage is buggy, so manually set to 0:
+            orientation = 0
+            eccentricity = 0
+        else:
+            orientation = props.orientation
+            eccentricity = props.eccentricity
 
-    descriptors = {'x_center': props.centroid[1],
-                   'y_center': props.centroid[0],
+    descriptors = {'x_center': centroid[1],
+                   'y_center': centroid[0],
                    'area': area,
                    'orientation': orientation,
                    'eccentricity': eccentricity,

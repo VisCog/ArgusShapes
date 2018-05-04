@@ -58,6 +58,15 @@ def test_calc_shape_descriptors():
     img_shape = (200, 400)
     shape_center = (100, 200)
 
+    # Make sure function works when no region is found:
+    props = imgproc.calc_shape_descriptors(np.zeros(img_shape))
+    npt.assert_almost_equal(props['area'], 0)
+    npt.assert_almost_equal(props['orientation'], 0)
+    npt.assert_almost_equal(props['eccentricity'], 0)
+    npt.assert_almost_equal(props['compactness'], 1)
+    npt.assert_almost_equal(props['x_center'], img_shape[1] // 2)
+    npt.assert_almost_equal(props['y_center'], img_shape[0] // 2)
+
     # Make sure circles work:
     for radius in [5, 7, 9, 11]:
         circle = np.zeros(img_shape, dtype=float)
