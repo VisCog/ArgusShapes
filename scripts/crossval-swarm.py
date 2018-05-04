@@ -204,7 +204,6 @@ def main():
                  'model_params': model_params,
                  'search_params': search_params,
                  'fit_params': fit_params,
-                 'drawing': drawing[subject],
                  'now': now,
                  'avg_img': avg_img,
                  'exetime': t_end - t_start,
