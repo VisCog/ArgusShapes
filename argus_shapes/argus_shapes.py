@@ -29,9 +29,7 @@ from . import imgproc
 
 p2p.console.setLevel(logging.ERROR)
 
-__all__ = ["load_data_raw", "load_data", "load_subjects",
-           "exclude_bistables",
-           "adjust_drawing_bias", "calc_mean_images"]
+__all__ = ["load_data_raw", "load_data", "load_subjects", "calc_mean_images"]
 
 
 # Use duecredit (duecredit.org) to provide a citation to relevant work to
@@ -186,9 +184,10 @@ def _loads_data_row(df_row, subject, electrodes, amplitude, frequency, date):
     return feat, target
 
 
-def load_data_raw(folder, subject=None, electrodes=None,
-                  amplitude=2.0, frequency=20.0, n_min_trials=5, n_max_trials=5,
-                  date=None, verbose=False, random_state=None,
+def load_data_raw(folder, subject=None, electrodes=None, date=None,
+                  amplitude=2.0, frequency=20.0,
+                  n_min_trials=5, n_max_trials=5,
+                  verbose=False, random_state=None,
                   engine='joblib', scheduler='threading', n_jobs=-1):
     # Recursive search for all files whose name contains the string
     # '_rawDataFileList_': These contain the paths to the raw bmp images
@@ -257,98 +256,65 @@ def load_data_raw(folder, subject=None, electrodes=None,
 
 
 def load_subjects(fname):
-    return pd.read_csv(fname)
+    df = pd.read_csv(fname, index_col='subject_id')
+    df['xrange'] = pd.Series([(a, b) for a, b in zip(df['xmin'], df['xmax'])],
+                             index=df.index)
+    df['yrange'] = pd.Series([(a, b) for a, b in zip(df['ymin'], df['ymax'])],
+                             index=df.index)
+    df['implant_type'] = pd.Series([(p2p.implants.ArgusI if i == 'ArgusI'
+                                     else p2p.implants.ArgusII)
+                                    for i in df['implant_type_str']],
+                                   index=df.index) 
+    return df.drop(columns=['xmin', 'xmax', 'ymin', 'ymax', 'implant_type_str'])
 
 
-def load_data(fname, subject=None, electrodes=None):
+def load_data(fname, subject=None, electrodes=None, amp=None, random_state=42):
     data = pd.read_csv(fname)
     if subject is not None:
-        data = data[data.subject == subject]
+        data = data[data.subject_id == subject]
     if electrodes is not None:
         idx = np.zeros(len(data), dtype=np.bool)
         for e in electrodes:
             idx = np.logical_or(idx, data.electrode == e)
         data = data[idx]
+    if amp is not None:
+        data = data[np.isclose(data.amp, amp)]
 
-    # Load images
+    if random_state is not None:
+        data = sklu.shuffle(data, random_state=random_state)
+
+    # Build feature and target matrices:
     features = []
     targets = []
     for _, row in data.iterrows():
+        # Extract shape descriptors from phosphene drawing:
         imgfile = os.path.join(os.path.dirname(fname), row['filepath'],
                                row['filename'])
-        img = skio.imread(imgfile)
-
-    for idx, row in data.iterrows():
-        data.loc[idx, 'filepath'] = os.path.join(fpath, row['filepath'])
-    return data
-
-
-def exclude_bistables(X, y, std_compact=0.8):
-    gb = y.groupby('electrode', as_index=False)['compactness'].agg(['mean',
-                                                                    'std'])
-    el_excl = gb[gb['std'] > std_compact * gb['mean']].index
-    for el in el_excl:
-        idx = y[y['electrode'] == el].index
-        X.drop(index=idx, inplace=True)
-        y.drop(index=idx, inplace=True)
-    assert np.allclose(X.index, y.index)
-    return X, y
-
-
-def adjust_drawing_bias(X, y, scale_major=(1, 1), scale_minor=(1, 1),
-                        rotate=0):
-    targets = []
-    for _, row in y.iterrows():
-        # Compact and elongated shapes are processed differently:
-        img = row['image']
-        if row['eccentricity'] > np.sqrt(0.5):
-            # props = imgproc.get_region_props(img)
-            # if props.major_axis_length / props.minor_axis_length > 2:
-
-            # Phosphene is elongated:
-            smajor = scale_major[1]
-            sminor = scale_minor[1]
-            rot = np.deg2rad(rotate)
-        else:
-            # Phosphene is compact:
-            smajor = scale_major[0]
-            sminor = scale_minor[0]
-            rot = 0
-
-        # Shift phosphene to (0, 0) and back
-        mom = skime.moments(img, order=1)
-        transl = np.array([-mom[1, 0] / mom[0, 0], -mom[0, 1] / mom[0, 0]])
-        ts = skit.SimilarityTransform(translation=transl)
-        tsi = skit.SimilarityTransform(translation=-transl)
-
-        # Rotate the phosphene so the major axis is oriented along the
-        # horizontal:
-        tr = skit.SimilarityTransform(rotation=row['orientation'])
-        # When undoing the rotation, add the specified extra rotation:
-        tri = skit.SimilarityTransform(rotation=-row['orientation'] - rot)
-
-        # Scale the phosphene with two different scaling factors along the
-        # major and minor axes using a homogeneous transformation matrix:
-        mat = np.array([[smajor, 0, 0],
-                        [0, sminor, 0],
-                        [0, 0, 1]])
-        tp = skit.ProjectiveTransform(matrix=mat)
-
-        # Put them all together:
-        newimg = skit.warp(img, (ts + (tr + (tp + (tri + tsi)))).inverse)
-
-        target = {'image': newimg,
-                  'electrode': row['electrode']}
-
-        # Calculate shape descriptors:
-        descriptors = imgproc.calc_shape_descriptors(newimg)
-        target.update(descriptors)
-
+        img = skio.imread(imgfile, as_grey=True)
+        props = imgproc.calc_shape_descriptors(img)
+        target = {'image': img, 'electrode': row['electrode']}
+        target.update(props)
         targets.append(target)
-    return pd.DataFrame(targets, index=X.index)
+
+        # Save additional attributes:
+        feat = {
+            'subject': row['subject_id'],
+            'electrode': row['electrode'],
+            'filename': row['filename'],
+            'folder': os.path.join(os.path.dirname(fname), row['filepath']),
+            'img_shape': img.shape,
+            'stim_class': row['stim_class'],
+            'amp': row['amp'],
+            'freq': row['freq'],
+            'date': row['date']
+        }
+        features.append(feat)
+    features = pd.DataFrame(features, index=data.index)
+    targets = pd.DataFrame(targets, index=data.index)
+    return features, targets
 
 
-def _calcs_mean_image(Xy, thresh=True, max_area=2):
+def _calcs_mean_image(Xy, thresh=True, max_area=1.5):
     assert len(Xy.subject.unique()) == 1
     subject = Xy.subject.unique()[0]
     assert len(Xy.amp.unique()) == 1
@@ -389,14 +355,14 @@ def _calcs_mean_image(Xy, thresh=True, max_area=2):
     target.update(descriptors)
 
     feat = {'subject': subject,
-            'amplitude': amplitude,
+            'amp': amplitude,
             'electrode': electrode,
             'img_shape': img_avg.shape}
 
     return feat, target
 
 
-def calc_mean_images(Xraw, yraw, thresh=True, max_area=2):
+def calc_mean_images(Xraw, yraw, thresh=True, max_area=1.5):
     """Extract mean images on an electrode from all raw trial drawings
 
     Parameters
@@ -422,26 +388,31 @@ def calc_mean_images(Xraw, yraw, thresh=True, max_area=2):
     """
     Xy = pd.concat((Xraw, yraw.drop(columns='electrode')), axis=1)
     assert np.allclose(Xy.index, Xraw.index)
-    subjects = Xy.subject.unique()
+
     Xout = []
     yout = []
-    for subject in subjects:
-        X = Xy[Xy.subject == subject]
-        amplitudes = X.amp.unique()
+    groupcols = ['subject', 'amp', 'electrode']
+    for (subject, amp, electrode), data in Xy.groupby(groupcols):
+        f, t = _calcs_mean_image(data, thresh=thresh, max_area=max_area)
+        if f is not None and t is not None:
+            Xout.append(f)
+            yout.append(t)
+    # for subject in subjects:
+    #     print(subject)
+    #     X = Xy[Xy.subject == subject]
+    #     amplitudes = X.amp.unique()
 
-        for amp in amplitudes:
-            Xamp = X[np.isclose(X.amp, amp)]
-            electrodes = np.unique(Xamp.electrode)
+    #     for amp in amplitudes:
+    #         print(amp)
+    #         Xamp = X[np.isclose(X.amp, amp)]
+    #         electrodes = np.unique(Xamp.electrode)
 
-            Xel = [Xamp[Xamp.electrode == e] for e in electrodes]
-            feat_target = p2p.utils.parfor(_calcs_mean_image, Xel,
-                                           func_kwargs={'thresh': thresh,
-                                                        'max_area': max_area})
-            # feat_target = filter(None, feat_target)
-            Xout += [ft[0] for ft in feat_target if ft[0] is not None]
-            yout += [ft[1] for ft in feat_target if ft[1] is not None]
+    #         Xel = [Xamp[Xamp.electrode == e] for e in electrodes]
+    #         feat_target = p2p.utils.parfor(_calcs_mean_image, Xel,
+    #                                        func_kwargs={'thresh': thresh,
+    #                                                     'max_area': max_area})
+    #         # feat_target = filter(None, feat_target)
+    #         Xout += [ft[0] for ft in feat_target if ft[0] is not None]
+    #         yout += [ft[1] for ft in feat_target if ft[1] is not None]
 
-    # Return feature matrix and target values as DataFrames
-    # Xout = list(filter(None, Xout))
-    # yout = list(filter(None, yout))
     return pd.DataFrame(Xout), pd.DataFrame(yout)
