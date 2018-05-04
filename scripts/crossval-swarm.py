@@ -61,80 +61,6 @@ search_param_ranges = {
     'implant_rot': (-np.deg2rad(65), -np.deg2rad(25))
 }
 
-subject_params = {
-    'TB': {
-        'implant_type': p2pi.ArgusI,
-        'implant_x': -1527,
-        'implant_y': -556,
-        'implant_rot': -1.13,
-        'loc_od_x': 13.6,
-        'loc_od_y': 0.0,
-        'xrange': (-36.9, 36.9),
-        'yrange': (-36.9, 36.9)
-    },
-    '12-005': {
-        'implant_type': p2pi.ArgusII,
-        'implant_x': -1761,
-        'implant_y': -212,
-        'implant_rot': -0.188,
-        'loc_od_x': 15.4,
-        'loc_od_y': 1.86,
-        'xrange': (-30, 30),
-        'yrange': (-22.5, 22.5)
-    },
-    '51-009': {
-        'implant_type': p2pi.ArgusII,
-        'implant_x': -799,
-        'implant_y': 93,
-        'implant_rot': -1.09,
-        'loc_od_x': 15.7,
-        'loc_od_y': 0.75,
-        'xrange': (-32.5, 32.5),
-        'yrange': (-24.4, 24.4)
-    },
-    '52-001': {
-        'implant_type': p2pi.ArgusII,
-        'implant_x': -1230,
-        'implant_y': 415,
-        'implant_rot': -0.457,
-        'loc_od_x': 15.9,
-        'loc_od_y': 1.96,
-        'xrange': (-32, 32),
-        'yrange': (-24, 24)
-    }
-}
-
-drawing = {
-    'TB': {
-        'major': (1 / 1.34, 1 / 0.939),
-        'minor': (1 / 1.19, 1 / 1.62),
-        'orient': -9
-    },
-    '12-005': {
-        'major': (1 / 0.632, 1 / 0.686),
-        'minor': (1 / 0.704, 1 / 1.35),
-        'orient': -16
-    },
-    '51-009': {
-        'major': (1 / 1.38, 1 / 1.34),
-        'minor': (1 / 1.06, 1 / 1.94),
-        'orient': 4
-    },
-    '52-001': {
-        'major': (1 / 1.39, 1 / 1.47),
-        'minor': (1 / 1.76, 1 / 1.61),
-        'orient': -14
-    }
-}
-
-use_electrodes = {
-    'TB': ['A4', 'C2', 'C3', 'C4', 'D2', 'D3', 'B3', 'D4', 'B1'],
-    '12-005': ['A04', 'A06', 'B03', 'C07', 'C10', 'D07', 'D08', 'D10', 'F06'],
-    '51-009': ['A02', 'C01', 'C06', 'D03', 'E01', 'E05', 'E07', 'F04', 'F06'],
-    '52-001': ['A05', 'A07', 'B09', 'A10', 'C10', 'D05', 'D07', 'E04', 'E09',
-               'E10', 'F06', 'F07', 'F08', 'F09', 'F10']
-}
-
 
 def main():
     # Default values
@@ -143,17 +69,20 @@ def main():
     n_folds = 5
     n_jobs = -1
     avg_img = False
-    adjust_bias = False
+
+    datafolder = os.path.join(os.environ['DATA_ROOT'], 'argus_shapes')
+    subjects = argus_shapes.load_subjects(os.path.join(datafolder,
+                                                       'subjects.csv'))
 
     # Parse input arguments
     assert len(sys.argv) >= 3
     modelname = sys.argv[1]
     assert modelname in models
     subject = sys.argv[2]
-    assert subject in subject_params
+    assert subject in subjects.index
     try:
-        longopts = ["n_folds=", "idx_fold=", "n_jobs=", "amplitude=", "avg_img",
-                    "adjust_bias"]
+        longopts = ["n_folds=", "idx_fold=", "n_jobs=", "amplitude=",
+                    "avg_img"]
         opts, args = getopt.getopt(sys.argv[3:], "", longopts=longopts)
     except getopt.GetoptError as err:
         raise RuntimeError(err)
@@ -168,16 +97,14 @@ def main():
             amplitude = float(a)
         elif o == "--avg_img":
             avg_img = True
-        elif o == "--adjust_bias":
-            adjust_bias = True
         else:
             raise ValueError("Unknown option '%s'='%s'" % (o, a))
 
     # Generate filename
     t_start = time()
     now = datetime.now().strftime('%Y-%m-%d_%H-%M-%S')
-    filename = '%s_%s_%s%s-swarm_%s.pickle' % (
-        subject, modelname, ("adjust_" if adjust_bias else "_"),
+    filename = '%s_%s_%s-swarm_%s.pickle' % (
+        subject, modelname,
         ("shape8fit" if n_folds == 1
          else ("shape8cv%s%s" % (str(n_folds) if n_folds > 0 else "LOO",
                                  ("-" + str(idx_fold)) if idx_fold > -1 else ""))),
@@ -191,7 +118,6 @@ def main():
     print("Amplitude: %.2fx Th" % amplitude)
     print("Processing: %s (n_jobs=%d)" % ("serial" if n_jobs == 1 else "parallel", n_jobs))
     print("Average image: %s" % ("on" if avg_img else "off"))
-    print("Adjust bias: %s" % ("on" if adjust_bias else "off"))
     if n_folds == -1:
         print("Leave-one-out cross-validation (idx_fold=%d)" % idx_fold)
     elif n_folds == 1:
@@ -200,33 +126,12 @@ def main():
         print("%d-fold cross-validation (idx_fold=%d)" % (n_folds, idx_fold))
 
     # Load data
-    rootfolder = os.path.join(os.environ['SECOND_SIGHT_DATA'], 'shape')
-    X, y = argus_shapes.load_data_raw(rootfolder, subject=subject, electrodes=None,
-                                      amplitude=amplitude, random_state=42,
-                                      n_jobs=n_jobs, verbose=False)
-
-    # Adjust for drawing bias:
-    if adjust_bias:
-        y = argus_shapes.adjust_drawing_bias(X, y,
-                                             scale_major=drawing[subject]['major'],
-                                             scale_minor=drawing[subject]['minor'],
-                                             rotate=drawing[subject]['orient'])
-        print('Adjusted for drawing bias:', X.shape, y.shape)
+    X, y = argus_shapes.load_data(os.path.join(datafolder,
+                                               'drawings_single.csv'),
+                                  subject=subject, electrodes=None,
+                                  amp=amplitude, random_state=42)
     if len(X) == 0:
         raise ValueError('No data found. Abort.')
-
-    # Use only electrodes in the list (includes only stable ones):
-    idx = np.zeros(len(X), dtype=np.bool)
-    for e in use_electrodes[subject]:
-        idx = np.logical_or(idx, X['electrode'] == e)
-    # X = X[idx]
-    # y = y[idx]
-    # for e in use_electrodes[subject]:
-    #     assert e in X.electrode.unique()
-    # assert len(X.electrode.unique()) == len(use_electrodes[subject])
-
-    #X, y = argus_shapes.exclude_bistables(X, y)
-    # print(X.electrode.unique())
 
     # Calculate mean images:
     if avg_img:
@@ -248,7 +153,8 @@ def main():
     if 'C' in modelname or 'D' in modelname:
         model_params.update({'axon_pickle': 'axons-%s.pickle' % now})
     for key in model['subject_params']:
-        model_params.update({key: subject_params[subject][key]})
+        value = subjects.loc[subject, key]
+        model_params.update({key: value})
     regressor = model['object'](**model_params)
     print('regressor:', regressor)
 
@@ -301,7 +207,6 @@ def main():
                  'drawing': drawing[subject],
                  'now': now,
                  'avg_img': avg_img,
-                 'adjust_bias': adjust_bias,
                  'exetime': t_end - t_start,
                  'random_state': 42}
     pickle.dump((y_test, y_pred, best_params, specifics), open(filename, 'wb'))
