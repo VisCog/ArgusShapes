@@ -103,10 +103,10 @@ def main():
     # Generate filename
     t_start = time()
     now = datetime.now().strftime('%Y-%m-%d_%H-%M-%S')
-    filename = '%s_%s_%s-swarm_%s.pickle' % (
+    filename = '%s_%s_%s-scipy_%s.pickle' % (
         subject, modelname,
-        ("shape8fit" if n_folds == 1
-         else ("shape8cv%s%s" % (str(n_folds) if n_folds > 0 else "LOO",
+        ("shape9fit" if n_folds == 1
+         else ("shape9cv%s%s" % (str(n_folds) if n_folds > 0 else "LOO",
                                  ("-" + str(idx_fold)) if idx_fold > -1 else ""))),
         now
     )
