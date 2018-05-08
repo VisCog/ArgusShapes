@@ -138,7 +138,7 @@ def main():
         X, y = argus_shapes.calc_mean_images(X, y, max_area=1.5)
 
     print('Data extracted:', X.shape, y.shape)
-    print(X.electrode.unique())
+    print('Electrodes:', X.electrode.unique())
 
     if n_folds == -1:
         n_folds = len(X)
@@ -163,11 +163,15 @@ def main():
     for key in model['search_params']:
         search_params.update({key: search_param_ranges[key]})
     print('search_params:', search_params)
-    pso_options = {'max_iter': 50,
-                   'min_func': 0.1,
-                   'min_step': 0.1}
-    pso = argus_shapes.model_selection.ParticleSwarmOptimizer(
-        regressor, search_params, **pso_options
+    # pso_options = {'max_iter': 50,
+    #                'min_func': 0.1,
+    #                'min_step': 0.1}
+    # pso = argus_shapes.model_selection.ParticleSwarmOptimizer(
+    #     regressor, search_params, **pso_options
+    # )
+    opt_options = {'max_iter': 50, 'print_iter': 1}
+    pso = argus_shapes.model_selection.SciPyOptimizer(
+        regressor, search_params, **opt_options
     )
 
     # Launch cross-validation
