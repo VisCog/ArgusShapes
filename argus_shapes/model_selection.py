@@ -95,7 +95,7 @@ class SciPyOptimizer(sklb.BaseEstimator):
         for k, v in zip(list(self.search_params.keys()), res['x']):
             self.best_params_[k] = v
         self.best_train_score_ = res['fun']
-        print('Best err:', best_err, 'Best params:', self.best_params_)
+        print('Best err:', res['fun'], 'Best params:', self.best_params_)
 
         # Fit the class attribute with best params
         self.estimator.set_params(**self.best_params_)
