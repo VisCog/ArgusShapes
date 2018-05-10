@@ -318,6 +318,7 @@ def load_data(fname, subject=None, electrodes=None, amp=None, random_state=42):
 def _calcs_mean_image(Xy, groupcols, thresh=True, max_area=1.5):
     for col in groupcols:
         assert len(Xy[col].unique()) == 1
+    assert len(Xy.electrode.unique()) == 1
 
     # Calculate mean image
     images = Xy.image
@@ -347,7 +348,7 @@ def _calcs_mean_image(Xy, groupcols, thresh=True, max_area=1.5):
         return None, None
 
     # Remove ambiguous (trial-related) parameters:
-    target = {'electrode': electrode,
+    target = {'electrode': Xy.electrode.unique()[0],
               'image': img_avg}
     target.update(descriptors)
 
