@@ -264,7 +264,7 @@ def load_subjects(fname):
     df['implant_type'] = pd.Series([(p2p.implants.ArgusI if i == 'ArgusI'
                                      else p2p.implants.ArgusII)
                                     for i in df['implant_type_str']],
-                                   index=df.index) 
+                                   index=df.index)
     return df.drop(columns=['xmin', 'xmax', 'ymin', 'ymax', 'implant_type_str'])
 
 
@@ -288,24 +288,25 @@ def load_data(fname, subject=None, electrodes=None, amp=None, random_state=42):
     targets = []
     for _, row in data.iterrows():
         # Extract shape descriptors from phosphene drawing:
-        imgfile = os.path.join(os.path.dirname(fname), row['filepath'],
-                               row['filename'])
-        img = skio.imread(imgfile, as_grey=True)
+        if pd.isnull(row['PTS_FILE']):
+            img = np.zeros((10, 10))
+        else:
+            img = skio.imread(row['PTS_FILE'], as_grey=True)
         props = imgproc.calc_shape_descriptors(img)
-        target = {'image': img, 'electrode': row['electrode']}
+        target = {'image': img, 'electrode': row['PTS_ELECTRODE']}
         target.update(props)
         targets.append(target)
 
         # Save additional attributes:
         feat = {
             'subject': row['subject_id'],
-            'electrode': row['electrode'],
-            'filename': row['filename'],
-            'folder': os.path.join(os.path.dirname(fname), row['filepath']),
+            'electrode': row['PTS_ELECTRODE'],
+            'filename': row['PTS_FILE'],
             'img_shape': img.shape,
             'stim_class': row['stim_class'],
-            'amp': row['amp'],
-            'freq': row['freq'],
+            'amp': row['PTS_AMP'],
+            'freq': row['PTS_FREQ'],
+            'pdur': row['PTS_PULSE_DUR'],
             'date': row['date']
         }
         features.append(feat)
@@ -314,13 +315,9 @@ def load_data(fname, subject=None, electrodes=None, amp=None, random_state=42):
     return features, targets
 
 
-def _calcs_mean_image(Xy, thresh=True, max_area=1.5):
-    assert len(Xy.subject.unique()) == 1
-    subject = Xy.subject.unique()[0]
-    assert len(Xy.amp.unique()) == 1
-    amplitude = Xy.amp.unique()[0]
-    assert len(Xy.electrode.unique()) == 1
-    electrode = Xy.electrode.unique()[0]
+def _calcs_mean_image(Xy, groupcols, thresh=True, max_area=1.5):
+    for col in groupcols:
+        assert len(Xy[col].unique()) == 1
 
     # Calculate mean image
     images = Xy.image
@@ -354,15 +351,15 @@ def _calcs_mean_image(Xy, thresh=True, max_area=1.5):
               'image': img_avg}
     target.update(descriptors)
 
-    feat = {'subject': subject,
-            'amp': amplitude,
-            'electrode': electrode,
-            'img_shape': img_avg.shape}
+    feat = {'img_shape': img_avg.shape}
+    for col in groupcols:
+        feat[col] = Xy[col].unique()[0]
 
     return feat, target
 
 
-def calc_mean_images(Xraw, yraw, thresh=True, max_area=1.5):
+def calc_mean_images(Xraw, yraw, groupcols=['subject', 'amp', 'electrode'],
+                     thresh=True, max_area=1.5):
     """Extract mean images on an electrode from all raw trial drawings
 
     Parameters
@@ -391,28 +388,11 @@ def calc_mean_images(Xraw, yraw, thresh=True, max_area=1.5):
 
     Xout = []
     yout = []
-    groupcols = ['subject', 'amp', 'electrode']
-    for (subject, amp, electrode), data in Xy.groupby(groupcols):
-        f, t = _calcs_mean_image(data, thresh=thresh, max_area=max_area)
+    for _, data in Xy.groupby(groupcols):
+        f, t = _calcs_mean_image(data, groupcols, thresh=thresh,
+                                 max_area=max_area)
         if f is not None and t is not None:
             Xout.append(f)
             yout.append(t)
-    # for subject in subjects:
-    #     print(subject)
-    #     X = Xy[Xy.subject == subject]
-    #     amplitudes = X.amp.unique()
-
-    #     for amp in amplitudes:
-    #         print(amp)
-    #         Xamp = X[np.isclose(X.amp, amp)]
-    #         electrodes = np.unique(Xamp.electrode)
-
-    #         Xel = [Xamp[Xamp.electrode == e] for e in electrodes]
-    #         feat_target = p2p.utils.parfor(_calcs_mean_image, Xel,
-    #                                        func_kwargs={'thresh': thresh,
-    #                                                     'max_area': max_area})
-    #         # feat_target = filter(None, feat_target)
-    #         Xout += [ft[0] for ft in feat_target if ft[0] is not None]
-    #         yout += [ft[1] for ft in feat_target if ft[1] is not None]
 
     return pd.DataFrame(Xout), pd.DataFrame(yout)

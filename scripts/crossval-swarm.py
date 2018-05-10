@@ -61,6 +61,11 @@ search_param_ranges = {
     'implant_rot': (-np.deg2rad(65), -np.deg2rad(25))
 }
 
+opt_methods = {
+    'swarm': argus_shapes.model_selection.ParticleSwarmOptimizer,
+    'fmin': argus_shapes.model_selection.FunctionMinimizer
+}
+
 
 def main():
     # Default values
@@ -69,6 +74,7 @@ def main():
     n_folds = 5
     n_jobs = -1
     avg_img = False
+    method = "swarm"
 
     datafolder = os.path.join(os.environ['DATA_ROOT'], 'argus_shapes')
     subjects = argus_shapes.load_subjects(os.path.join(datafolder,
@@ -82,7 +88,7 @@ def main():
     assert subject in subjects.index
     try:
         longopts = ["n_folds=", "idx_fold=", "n_jobs=", "amplitude=",
-                    "avg_img"]
+                    "method=", "avg_img"]
         opts, args = getopt.getopt(sys.argv[3:], "", longopts=longopts)
     except getopt.GetoptError as err:
         raise RuntimeError(err)
@@ -95,6 +101,9 @@ def main():
             n_jobs = int(a)
         elif o == "--amplitude":
             amplitude = float(a)
+        elif o == "--method":
+            assert a in opt_methods.keys()
+            method = a
         elif o == "--avg_img":
             avg_img = True
         else:
@@ -103,11 +112,12 @@ def main():
     # Generate filename
     t_start = time()
     now = datetime.now().strftime('%Y-%m-%d_%H-%M-%S')
-    filename = '%s_%s_%s-scipy_%s.pickle' % (
+    filename = '%s_%s_%s-%s_%s.pickle' % (
         subject, modelname,
         ("shape9fit" if n_folds == 1
          else ("shape9cv%s%s" % (str(n_folds) if n_folds > 0 else "LOO",
                                  ("-" + str(idx_fold)) if idx_fold > -1 else ""))),
+        method,
         now
     )
     print("")
@@ -163,31 +173,23 @@ def main():
     for key in model['search_params']:
         search_params.update({key: search_param_ranges[key]})
     print('search_params:', search_params)
-    # pso_options = {'max_iter': 50,
-    #                'min_func': 0.1,
-    #                'min_step': 0.1}
-    # pso = argus_shapes.model_selection.ParticleSwarmOptimizer(
-    #     regressor, search_params, **pso_options
-    # )
-    opt_options = {'max_iter': 50, 'print_iter': 1}
-    pso = argus_shapes.model_selection.SciPyOptimizer(
-        regressor, search_params, **opt_options
-    )
+    opt_options = {'max_iter': 50}
+    opt = opt_methods[method](regressor, search_params, **opt_options)
 
     # Launch cross-validation
     fit_params = {}
     if n_folds > 1:
         result = argus_shapes.model_selection.crossval_predict(
-            pso, X, y, fit_params=fit_params, n_folds=n_folds,
+            opt, X, y, fit_params=fit_params, n_folds=n_folds,
             idx_fold=idx_fold,
         )
         y_test, y_pred, best_params, best_train_score, best_test_score = result
     else:
-        pso.fit(X, y, fit_params=fit_params)
-        best_params = pso.best_params_
-        y_pred = pso.predict(X)
+        opt.fit(X, y, fit_params=fit_params)
+        best_params = opt.best_params_
+        y_pred = opt.predict(X)
         y_test = y
-        best_train_score = pso.score(X, y)
+        best_train_score = opt.score(X, y)
         best_test_score = None
 
     t_end = time()
@@ -201,8 +203,8 @@ def main():
                  'n_folds': n_folds,
                  'idx_fold': idx_fold,
                  'regressor': regressor,
-                 'optimizer': pso,
-                 'optimizer_options': pso_options,
+                 'optimizer': opt,
+                 'optimizer_options': opt_options,
                  'best_train_score': best_train_score,
                  'best_test_score': best_test_score,
                  'model_params': model_params,

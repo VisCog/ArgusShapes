@@ -9,11 +9,12 @@ import sklearn.metrics as sklm
 import sklearn.utils.validation as skluv
 
 
-class SciPyOptimizer(sklb.BaseEstimator):
+class FunctionMinimizer(sklb.BaseEstimator):
 
     def __init__(self, estimator, search_params, search_params_init=None,
-                 method='L-BFGS-B', max_iter=100, print_iter=10, verbose=True):
-        """Performs particle swarm optimization
+                 method='SLSQP', max_iter=50, print_iter=1, min_step=1e-5,
+                 verbose=True):
+        """Performs function minimization
 
         Parameters
         ----------
@@ -31,6 +32,8 @@ class SciPyOptimizer(sklb.BaseEstimator):
             Maximum number of iterations for the swarm to search.
         print_iter : int, optional, default: 10
             Print status message every x iterations
+        min_step : float, optional, default: 0.1
+            Minimum gradient change before termination.
         verbose : bool, optional, default: True
             Flag whether to print more stuff
         """
@@ -45,6 +48,7 @@ class SciPyOptimizer(sklb.BaseEstimator):
         self.method = method
         self.max_iter = max_iter
         self.print_iter = print_iter
+        self.min_step = min_step
         self.verbose = verbose
 
     def calc_error(self, search_vals, X, y, fit_params={}):
@@ -71,7 +75,7 @@ class SciPyOptimizer(sklb.BaseEstimator):
         loss = -loss if estimator.greater_is_better else loss
         if np.mod(self.iter, self.print_iter) == 0:
             print("Iter %d: Loss=%f, %s" % (
-                self.iter, loss, ', '.join(['%s: %.3f' % (k, v)
+                self.iter, loss, ', '.join(['%s: %f' % (k, v)
                                             for k, v
                                             in six.iteritems(search_params)])))
         self.iter += 1
@@ -83,7 +87,7 @@ class SciPyOptimizer(sklb.BaseEstimator):
         # (lower, upper) bounds for every parameter
         bounds = [v for v in self.search_params.values()]
         init = [v for v in self.search_params_init.values()]
-        options = {'maxiter': self.max_iter}
+        options = {'maxfun': self.max_iter, 'gtol': self.min_step, 'eps': 500}
         res = spo.minimize(self.calc_error, init, args=(X, y, fit_params),
                            bounds=bounds, options=options)
         if not res['success']:
@@ -148,8 +152,8 @@ class GridSearchOptimizer(sklb.BaseEstimator):
 
 class ParticleSwarmOptimizer(sklb.BaseEstimator):
 
-    def __init__(self, estimator, search_params, swarm_size=None, max_iter=100,
-                 min_func=0.01, min_step=0.01, verbose=True):
+    def __init__(self, estimator, search_params, swarm_size=None, max_iter=50,
+                 min_func=0.1, min_step=0.1, verbose=True):
         """Performs particle swarm optimization
 
         Parameters
