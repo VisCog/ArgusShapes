@@ -12,7 +12,7 @@ import sklearn.utils.validation as skluv
 class FunctionMinimizer(sklb.BaseEstimator):
 
     def __init__(self, estimator, search_params, search_params_init=None,
-                 method='SLSQP', max_iter=50, print_iter=1, min_step=1e-5,
+                 method='L-BFGS-B', max_iter=50, print_iter=1, min_step=1e-5,
                  verbose=True):
         """Performs function minimization
 
@@ -87,7 +87,7 @@ class FunctionMinimizer(sklb.BaseEstimator):
         # (lower, upper) bounds for every parameter
         bounds = [v for v in self.search_params.values()]
         init = [v for v in self.search_params_init.values()]
-        options = {'maxfun': self.max_iter, 'gtol': self.min_step, 'eps': 500}
+        options = {'maxfun': self.max_iter, 'gtol': self.min_step, 'eps': 100}
         res = spo.minimize(self.calc_error, init, args=(X, y, fit_params),
                            bounds=bounds, options=options)
         if not res['success']:
@@ -153,7 +153,7 @@ class GridSearchOptimizer(sklb.BaseEstimator):
 class ParticleSwarmOptimizer(sklb.BaseEstimator):
 
     def __init__(self, estimator, search_params, swarm_size=None, max_iter=50,
-                 min_func=0.1, min_step=0.1, verbose=True):
+                 min_func=0.01, min_step=0.01, verbose=True):
         """Performs particle swarm optimization
 
         Parameters

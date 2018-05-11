@@ -273,12 +273,14 @@ def load_data(fname, subject=None, electrodes=None, amp=None, random_state=42):
     if subject is not None:
         data = data[data.subject_id == subject]
     if electrodes is not None:
+        if not isinstance(electrodes, (list, np.ndarray)):
+            raise ValueError("`electrodes` must be a list or NumPy array")
         idx = np.zeros(len(data), dtype=np.bool)
         for e in electrodes:
-            idx = np.logical_or(idx, data.electrode == e)
+            idx = np.logical_or(idx, data.PTS_ELECTRODE == e)
         data = data[idx]
     if amp is not None:
-        data = data[np.isclose(data.amp, amp)]
+        data = data[np.isclose(data.PTS_AMP, amp)]
 
     if random_state is not None:
         data = sklu.shuffle(data, random_state=random_state)
@@ -291,7 +293,17 @@ def load_data(fname, subject=None, electrodes=None, amp=None, random_state=42):
         if pd.isnull(row['PTS_FILE']):
             img = np.zeros((10, 10))
         else:
-            img = skio.imread(row['PTS_FILE'], as_grey=True)
+            try:
+                img = skio.imread(os.path.join(os.path.dirname(fname),
+                                               row['PTS_FILE']), as_grey=True)
+            except FileNotFoundError:
+                try:
+                    img = skio.imread(row['PTS_FILE'], as_grey=True)
+                except FileNotFoundError:
+                    s = ('Column "PTS_FILE" must either specify an absolute '
+                         'path or a relative path that starts in the '
+                         'directory of `fname`.')
+                    raise FileNotFoundError(s)
         props = imgproc.calc_shape_descriptors(img)
         target = {'image': img, 'electrode': row['PTS_ELECTRODE']}
         target.update(props)

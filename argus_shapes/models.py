@@ -615,7 +615,7 @@ class ShapeLossMixin(BaseModel):
         # produces nan:
         assert np.allclose(y_pred.index, y.index)
 
-        cols = ['area', 'orientation', 'eccentricity', 'compactness']
+        cols = ['area', 'orientation', 'eccentricity']
         loss = np.zeros(len(cols))
         for i, col in enumerate(cols):
             yt = np.array(y.loc[:, col], dtype=float)
