@@ -36,11 +36,12 @@ models = {
                            'loc_od_x', 'loc_od_y',
                            'implant_x', 'implant_y', 'implant_rot']
     },
-    'C2': {  # Axon map model: search OD location
-        'object': argus_shapes.models.ModelC,
-        'search_params': ['rho', 'axlambda', 'loc_od_x', 'loc_od_y',
-                          'implant_x', 'implant_y', 'implant_rot'],
-        'subject_params': ['implant_type', 'xrange', 'yrange']
+    'C2': {  # Axon map model with RD loss
+        'object': argus_shapes.models.ModelC2,
+        'search_params': ['rho', 'axlambda'],
+        'subject_params': ['implant_type', 'xrange', 'yrange',
+                           'loc_od_x', 'loc_od_y',
+                           'implant_x', 'implant_y', 'implant_rot']
     },
     'D': {  # Axon map model with perspective transform + predict area/orient
         'object': argus_shapes.models.ModelD,

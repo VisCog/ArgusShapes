@@ -638,6 +638,40 @@ class ShapeLossMixin(BaseModel):
         return np.sum(loss)
 
 
+class RDLossMixin(BaseModel):
+
+    def _sets_default_params(self):
+        super(RDLossMixin, self)._sets_default_params()
+        self.greater_is_better = False
+
+    def get_params(self, deep=True):
+        params = super(RDLossMixin, self).get_params(deep=deep)
+        params.update(greater_is_better=self.greater_is_better)
+        return params
+
+    def _predicts_target_values(self, electrode, img):
+        if not isinstance(img, np.ndarray):
+            raise TypeError("`img` must be a NumPy array.")
+        target = {'image': img, 'electrode': electrode} 
+        return target
+
+    def score(self, X, y, sample_weight=None):
+        """Score the model in [0, 8] by correlating shape descriptors"""
+        if not isinstance(X, pd.core.frame.DataFrame):
+            raise TypeError("'X' must be a pandas DataFrame, not %s" % type(X))
+        if not isinstance(y, pd.core.frame.DataFrame):
+            raise TypeError("'y' must be a pandas DataFrame, not %s" % type(y))
+        # Predict images:
+        y_pred = self.predict(X)
+        # `y` and `y_pred` must have the same index, otherwise subtraction
+        # produces nan:
+        assert np.allclose(y_pred.index, y.index)
+        # Calculate RD loss (in [0, 2] for each image):
+        loss = [imgproc.rd_loss(yt['image'], yp['image'])
+                for (_, yt), (_, yp) in zip(y.iterrows(), y_pred.iterrows())]
+        return np.sum(loss)
+
+
 class ModelA(ShapeLossMixin, RetinalGridMixin, ScoreboardMixin):
     """Scoreboard model with shape descriptor loss"""
 
@@ -672,3 +706,14 @@ class ModelD(ShapeLossMixin, RetinalCoordTrafoMixin, AxonMapMixin):
         params = super(ModelD, self).get_params(deep=deep)
         params.update(name="Axon map")
         return params
+
+
+class ModelC2(RDLossMixin, RetinalGridMixin, AxonMapMixin):
+    """Axon map model with RD loss"""
+
+    def get_params(self, deep=True):
+        params = super(ModelC2, self).get_params(deep=deep)
+        params.update(name="Axon map Ione loss")
+        return params
+
+
