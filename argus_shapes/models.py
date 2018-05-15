@@ -140,12 +140,12 @@ class BaseModel(sklb.BaseEstimator):
         self._is_fitted = True
         return self
 
-    def _predicts_image(self, Xrow):
+    def predict_image(self, electrode):
         """Predicts a single data point"""
-        _, row = Xrow
-        assert isinstance(row, pd.core.series.Series)
+        if not isinstance(electrode, six.string_types):
+            raise TypeError("`electrode` must be a string.")
         # Calculate current map with method from derived class:
-        curr_map = self._curr_map[self._ename(row['electrode'])]
+        curr_map = self._curr_map[self._ename(electrode)]
         if not isinstance(curr_map, np.ndarray):
             raise TypeError(("Method '_curr_map' must return a np.ndarray, "
                              "not '%s'." % type(curr_map)))
@@ -157,8 +157,8 @@ class BaseModel(sklb.BaseEstimator):
         raise NotImplementedError
 
     def _predicts(self, Xrow):
-        curr_map = self._predicts_image(Xrow)
         _, row = Xrow
+        curr_map = self.predict_image(row['electrode'])
         # Rescale output if specified:
         out_shape = None
         if hasattr(row, 'img_shape'):
@@ -652,7 +652,7 @@ class RDLossMixin(BaseModel):
     def _predicts_target_values(self, electrode, img):
         if not isinstance(img, np.ndarray):
             raise TypeError("`img` must be a NumPy array.")
-        target = {'image': img, 'electrode': electrode} 
+        target = {'image': img, 'electrode': electrode}
         return target
 
     def score(self, X, y, sample_weight=None):
@@ -715,5 +715,3 @@ class ModelC2(RDLossMixin, RetinalGridMixin, AxonMapMixin):
         params = super(ModelC2, self).get_params(deep=deep)
         params.update(name="Axon map Ione loss")
         return params
-
-

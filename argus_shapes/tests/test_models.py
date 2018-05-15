@@ -319,6 +319,13 @@ def test_BaseModel_predict():
         with pytest.raises(TypeError):
             model.predict(XX)
 
+    # Instead of target values, we can predict images:
+    for _, row in X.iterrows():
+        el = model._ename(row['electrode'])
+        npt.assert_almost_equal(model.predict_image(el), model._curr_map[el])
+    with pytest.raises(TypeError):
+        model.predict_image(X.loc[0, :])
+
 
 def test_BaseModel_score():
     # Model must be fitted first
