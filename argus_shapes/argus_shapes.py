@@ -296,6 +296,7 @@ def load_data(fname, subject=None, electrodes=None, amp=None, random_state=42):
             try:
                 img = skio.imread(os.path.join(os.path.dirname(fname),
                                                row['PTS_FILE']), as_grey=True)
+                img = skimage.img_as_float(img)
             except FileNotFoundError:
                 try:
                     img = skio.imread(row['PTS_FILE'], as_grey=True)
