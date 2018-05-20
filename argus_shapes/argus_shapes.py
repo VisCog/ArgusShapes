@@ -29,7 +29,8 @@ from . import imgproc
 
 p2p.console.setLevel(logging.ERROR)
 
-__all__ = ["load_data_raw", "load_data", "load_subjects", "calc_mean_images"]
+__all__ = ["load_data_raw", "load_data", "load_subjects", "calc_mean_images",
+           "is_singlestim_dataframe"]
 
 
 # Use duecredit (duecredit.org) to provide a citation to relevant work to
@@ -41,6 +42,7 @@ due.cite(Doi("10.1167/13.9.30"),
          path='argus_shapes')
 
 
+# deprecated
 def _loads_data_row_a16(row):
     # Electrodes have legacy names in datafiles:
     old_names = names = ['L6', 'L2', 'M8', 'M4', 'L5', 'L1', 'M7', 'M3',
@@ -91,6 +93,7 @@ def _loads_data_row_a16(row):
     return feat
 
 
+# deprecated
 def _loads_data_row_a60(row):
     # Split the data strings to extract subject, electrode, etc.
     fname = row['Filename']
@@ -133,6 +136,7 @@ def _loads_data_row_a60(row):
     return feat
 
 
+# deprecated
 def _loads_data_row(df_row, subject, electrodes, amplitude, frequency, date):
     _, row = df_row
 
@@ -184,6 +188,7 @@ def _loads_data_row(df_row, subject, electrodes, amplitude, frequency, date):
     return feat, target
 
 
+# deprecated
 def load_data_raw(folder, subject=None, electrodes=None, date=None,
                   amplitude=2.0, frequency=20.0,
                   n_min_trials=5, n_max_trials=5,
@@ -268,16 +273,35 @@ def load_subjects(fname):
     return df.drop(columns=['xmin', 'xmax', 'ymin', 'ymax', 'implant_type_str'])
 
 
+def is_singlestim_dataframe(data):
+    if not np.any([c in data.columns for c in ['PTS_ELECTRODE',
+                                               'PTS_ELECTRODE1',
+                                               'PTS_ELECTRODE2']]):
+        raise ValueError(('Incompatible csv file "%s". Must contain one of '
+                          'these columns: PTS_ELECTRODE, PTS_ELECTRODE1, '
+                          'PTS_ELECTRODE2'))
+    is_singlestim = ('PTS_ELECTRODE' in data.columns and
+                     'PTS_ELECTRODE1' not in data.columns and
+                     'PTS_ELECTRODE2' not in data.columns)
+    return is_singlestim
+
+
 def load_data(fname, subject=None, electrodes=None, amp=None, random_state=42):
     data = pd.read_csv(fname)
+    is_singlestim = is_singlestim_dataframe(data)
     if subject is not None:
         data = data[data.subject_id == subject]
     if electrodes is not None:
         if not isinstance(electrodes, (list, np.ndarray)):
             raise ValueError("`electrodes` must be a list or NumPy array")
         idx = np.zeros(len(data), dtype=np.bool)
-        for e in electrodes:
-            idx = np.logical_or(idx, data.PTS_ELECTRODE == e)
+        if is_singlestim:
+            for e in electrodes:
+                idx = np.logical_or(idx, data.PTS_ELECTRODE == e)
+        else:
+            for e in electrodes:
+                idx = np.logical_or(idx, data.PTS_ELECTRODE1 == e)
+                idx = np.logical_or(idx, data.PTS_ELECTRODE2 == e)
         data = data[idx]
     if amp is not None:
         data = data[np.isclose(data.PTS_AMP, amp)]
@@ -306,14 +330,17 @@ def load_data(fname, subject=None, electrodes=None, amp=None, random_state=42):
                          'directory of `fname`.')
                     raise FileNotFoundError(s)
         props = imgproc.calc_shape_descriptors(img)
-        target = {'image': img, 'electrode': row['PTS_ELECTRODE']}
+        if is_singlestim:
+            target = {'image': img, 'electrode': row['PTS_ELECTRODE']}
+        else:
+            target = {'image': img, 'electrode1': row['PTS_ELECTRODE1'],
+                      'electrode2': row['PTS_ELECTRODE2']}
         target.update(props)
         targets.append(target)
 
         # Save additional attributes:
         feat = {
             'subject': row['subject_id'],
-            'electrode': row['PTS_ELECTRODE'],
             'filename': row['PTS_FILE'],
             'img_shape': img.shape,
             'stim_class': row['stim_class'],
@@ -322,6 +349,11 @@ def load_data(fname, subject=None, electrodes=None, amp=None, random_state=42):
             'pdur': row['PTS_PULSE_DUR'],
             'date': row['date']
         }
+        if is_singlestim:
+            feat.update({'electrode': row['PTS_ELECTRODE']})
+        else:
+            feat.update({'electrode1': row['PTS_ELECTRODE1'],
+                         'electrode2': row['PTS_ELECTRODE2']})
         features.append(feat)
     features = pd.DataFrame(features, index=data.index)
     targets = pd.DataFrame(targets, index=data.index)
@@ -331,7 +363,13 @@ def load_data(fname, subject=None, electrodes=None, amp=None, random_state=42):
 def _calcs_mean_image(Xy, groupcols, thresh=True, max_area=1.5):
     for col in groupcols:
         assert len(Xy[col].unique()) == 1
-    assert len(Xy.electrode.unique()) == 1
+
+    is_singlestim = is_singlestim_dataframe(Xy)
+    if is_singlestim:
+        assert len(Xy.electrode.unique()) == 1
+    else:
+        assert len(Xy.electrode1.unique()) == 1
+        assert len(Xy.electrode2.unique()) == 1
 
     # Calculate mean image
     images = Xy.image
@@ -361,8 +399,13 @@ def _calcs_mean_image(Xy, groupcols, thresh=True, max_area=1.5):
         return None, None
 
     # Remove ambiguous (trial-related) parameters:
-    target = {'electrode': Xy.electrode.unique()[0],
-              'image': img_avg}
+    if is_singlestim:
+        target = {'electrode': Xy.electrode.unique()[0],
+                  'image': img_avg}
+    else:
+        target = {'electrode1': Xy.electrode1.unique()[0],
+                  'electrode2': Xy.electrode2.unique()[0],
+                  'image': img_avg}
     target.update(descriptors)
 
     feat = {'img_shape': img_avg.shape}
@@ -397,7 +440,12 @@ def calc_mean_images(Xraw, yraw, groupcols=['subject', 'amp', 'electrode'],
     yout : pd.DataFrame
         Target values, single entry per electrode
     """
-    Xy = pd.concat((Xraw, yraw.drop(columns='electrode')), axis=1)
+    is_singlestim = is_singlestim_dataframe(Xy)
+    if is_singlestim:
+        Xy = pd.concat((Xraw, yraw.drop(columns='electrode')), axis=1)
+    else:
+        Xy = pd.concat((Xraw, yraw.drop(columns=['electrode1', 'electrode2'])),
+                       axis=1)
     assert np.allclose(Xy.index, Xraw.index)
 
     Xout = []

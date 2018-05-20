@@ -87,3 +87,17 @@ def test_load_data():
 
     os.remove(csvfile)
     os.remove(imgfile)
+
+
+def test_is_singlestim_dataframe():
+    df = pd.DataFrame([
+        {'PTS_ELECTRODE': 'A01'},
+        {'PTS_ELECTRODE': 'A02'}
+    ])
+    npt.assert_equal(argus_shapes.is_singlestim_dataframe(df), True)
+
+    df = pd.DataFrame([
+        {'PTS_ELECTRODE1': 'A01', 'PTS_ELECTRODE2': 'A03'},
+        {'PTS_ELECTRODE1': 'A02', 'PTS_ELECTRODE2': 'A04'}
+    ])
+    npt.assert_equal(argus_shapes.is_singlestim_dataframe(df), False)
