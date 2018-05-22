@@ -274,15 +274,15 @@ def load_subjects(fname):
 
 
 def is_singlestim_dataframe(data):
-    if not np.any([c in data.columns for c in ['PTS_ELECTRODE',
-                                               'PTS_ELECTRODE1',
-                                               'PTS_ELECTRODE2']]):
+    if not np.any([c in data.columns for c in ['PTS_ELECTRODE', 'electrode',
+                                               'PTS_ELECTRODE1', 'electrode1',
+                                               'PTS_ELECTRODE2', 'electrode2']]):
         raise ValueError(('Incompatible csv file "%s". Must contain one of '
                           'these columns: PTS_ELECTRODE, PTS_ELECTRODE1, '
-                          'PTS_ELECTRODE2'))
-    is_singlestim = ('PTS_ELECTRODE' in data.columns and
-                     'PTS_ELECTRODE1' not in data.columns and
-                     'PTS_ELECTRODE2' not in data.columns)
+                          'PTS_ELECTRODE2, electrode, electrode1, electrode2'))
+    is_singlestim = (('PTS_ELECTRODE' in data.columns or 'electrode' in data.columns) and
+                     ('PTS_ELECTRODE1' not in data.columns or 'electrode1' in data.columns) and
+                     ('PTS_ELECTRODE2' not in data.columns or 'electrode2' in data.columns))
     return is_singlestim
 
 
