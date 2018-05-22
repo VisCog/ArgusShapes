@@ -108,7 +108,11 @@ class BaseModel(sklb.BaseEstimator):
         has_el = set([self._ename(k) for k in self._curr_map.keys()])
         # - Compare with electrodes in `X` to find the ones we don't have,
         #   but trim the zeros:
-        wants_el = set([self._ename(e) for e in set(X.electrode)])
+        if is_singlestim_dataframe(X):
+            wants_el = set([self._ename(e) for e in set(X.electrode)])
+        else:
+            wants_el = set([self._ename(e) for e in set(X.electrode1)])
+            wants_el += set([self._ename(e) for e in set(X.electrode2)])
         needs_el = wants_el.difference(has_el)
         # - Calculate the current maps for the missing electrodes (parallel
         #   makes things worse - overhead?)

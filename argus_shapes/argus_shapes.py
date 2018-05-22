@@ -440,7 +440,7 @@ def calc_mean_images(Xraw, yraw, groupcols=['subject', 'amp', 'electrode'],
     yout : pd.DataFrame
         Target values, single entry per electrode
     """
-    is_singlestim = is_singlestim_dataframe(Xy)
+    is_singlestim = is_singlestim_dataframe(Xraw)
     if is_singlestim:
         Xy = pd.concat((Xraw, yraw.drop(columns='electrode')), axis=1)
     else:
