@@ -115,8 +115,8 @@ def main():
     now = datetime.now().strftime('%Y-%m-%d_%H-%M-%S')
     filename = '%s_%s_%s-%s_%s.pickle' % (
         subject, modelname,
-        ("shape9fit" if n_folds == 1
-         else ("shape9cv%s%s" % (str(n_folds) if n_folds > 0 else "LOO",
+        ("shape1fit" if n_folds == 1
+         else ("shape1cv%s%s" % (str(n_folds) if n_folds > 0 else "LOO",
                                  ("-" + str(idx_fold)) if idx_fold > -1 else ""))),
         method,
         now
