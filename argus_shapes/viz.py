@@ -3,7 +3,7 @@ import scipy.stats as spst
 
 
 def scatter_correlation(xvals, yvals, ax, xticks=[], yticks=[], marker=None,
-                        color=None, textloc='upper right'):
+                        color=None, textloc='top right'):
     """Scatter plots some data points and fits a regression curve to them"""
     xvals = np.asarray(xvals)
     yvals = np.asarray(yvals)
@@ -35,19 +35,17 @@ def scatter_correlation(xvals, yvals, ax, xticks=[], yticks=[], marker=None,
             fit(np.min(xvals)), fit(np.max(xvals))], 'k--')
 
     # Annotate with fitting results:
-    if textloc == 'lower right':
-        a = ax.axis()
-        xt = np.max(xticks) if len(xticks) > 0 else a[1]
-        yt = np.min(yticks) if len(yticks) > 0 else a[2]
+    va, ha = textloc.split(' ')
+    assert ha == 'left' or ha == 'right'
+    assert va == 'top' or va == 'bottom'
+    a = ax.axis()
+    xt = np.max(xticks) if len(xticks) > 0 else a[1]
+    yt = np.min(yticks) if len(yticks) > 0 else (a[3] if va == 'top' else a[2])
+    if pval >= 0.001:
         ax.text(xt, yt,
-                "$N$=%d\n$r$=%.3f\n$p$=%.2e" % (len(yvals), rval, pval),
-                va='bottom', ha='right')
-    elif textloc == 'upper right':
-        a = ax.axis()
-        xt = np.max(xticks) if len(xticks) > 0 else a[1]
-        yt = np.max(yticks) if len(yticks) > 0 else a[3]
+                "$N$=%d\n$r$=%.3f\n$p$=%.3f" % (len(yvals), rval, pval),
+                va='top', ha='right')
+    else:
         ax.text(xt, yt,
                 "$N$=%d\n$r$=%.3f\n$p$=%.2e" % (len(yvals), rval, pval),
                 va='top', ha='right')
-    else:
-        raise ValueError('Unknown text location "%s"' % textloc)

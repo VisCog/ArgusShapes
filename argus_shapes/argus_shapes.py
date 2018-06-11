@@ -96,8 +96,25 @@ def _loads_data_row_a16(row):
 # deprecated
 def _loads_data_row_a60(row):
     # Split the data strings to extract subject, electrode, etc.
+    if 'Filename' not in row:
+        print('No Filename:')
+        print(row)
+        return None
     fname = row['Filename']
+    if not isinstance(fname, six.string_types):
+        print('Wrong Filename type')
+        print(row)
+        return None
     date = fname.split('_')[0]
+
+    if 'Params' not in row:
+        print('No Params:')
+        print(row)
+        return None
+    if not isinstance(row['Params'], six.string_types):
+        print('Wrong Params type')
+        print(row)
+        return None
     params = row['Params'].split(' ')
     stim = params[0].split('_')
     if len(params) < 2 or len(stim) < 2:
@@ -137,13 +154,15 @@ def _loads_data_row_a60(row):
 
 
 # deprecated
-def _loads_data_row(df_row, subject, electrodes, amplitude, frequency, date):
+def _loads_data_row(df_row, subject, electrodes, amp, freq, stim_class, date):
     _, row = df_row
 
-    if np.all([c in row for c in ['Filename', 'Params']]):
+    if (np.all([c in row for c in ['Filename', 'Params']]) and
+        np.all(pd.notnull([row[c] for c in ['Filename', 'Params']]))):
         # Found all relevant Argus II fields:
         feat = _loads_data_row_a60(row)
-    elif np.all([c in row for c in ['filename', 'notes']]):
+    elif (np.all([c in row for c in ['filename', 'notes']]) and
+          np.all(pd.notnull([row[c] for c in ['filename', 'notes']]))):
         # Found all relevant Argus I fields:
         feat = _loads_data_row_a16(row)
     else:
@@ -156,21 +175,23 @@ def _loads_data_row(df_row, subject, electrodes, amplitude, frequency, date):
     if subject is not None and feat['subject'] != subject:
         return None
     # Electrode string mismatch:
-    if electrodes is not None and feat['electrode'] not in electrodes:
-        return None
+    #if electrodes is not None and feat['electrode'] not in electrodes:
+    #    return None
     # Date string mismatch:
     if date is not None and feat['date'] != date:
         return None
-    # Multiple electrodes mentioned:
-    if '_' in feat['stim_class']:
-        return None
     # Stimulus class mismatch:
-    if feat['stim_class'] != 'SingleElectrode':
-        return None
-    if amplitude is not None and not np.isclose(feat['amp'], amplitude):
-        return None
-    if frequency is not None and not np.isclose(feat['freq'], frequency):
-        return None
+    #if stim_class is not None:
+    #    if feat['stim_class'] != stim_class:
+    #        return None
+    #if amp is not None:
+    #    if (isinstance(feat['amp'], (list, np.ndarray)) and
+    #        np.all(np.isclose(feat['amp'], amp))) or
+    #       (not isinstance(feat['amp'], (list, np.ndarray)) and
+    #        np.isclose(feat['amp'], amp)):
+    #        return None
+    #if freq is not None and not np.isclose(feat['freq'], freq):
+    #    return None
 
     # Load image
     if not os.path.isfile(os.path.join(feat['folder'], feat['filename'])):
@@ -190,7 +211,7 @@ def _loads_data_row(df_row, subject, electrodes, amplitude, frequency, date):
 
 # deprecated
 def load_data_raw(folder, subject=None, electrodes=None, date=None,
-                  amplitude=2.0, frequency=20.0,
+                  amplitude=2.0, frequency=20.0, stim_class='SingleElectrode',
                   n_min_trials=5, n_max_trials=5,
                   verbose=False, random_state=None,
                   engine='joblib', scheduler='threading', n_jobs=-1):
@@ -230,9 +251,8 @@ def load_data_raw(folder, subject=None, electrodes=None, date=None,
     if verbose:
         print('Parsing data')
     feat_target = p2p.utils.parfor(_loads_data_row, df.iterrows(),
-                                   func_args=[subject, electrodes,
-                                              amplitude, frequency,
-                                              date],
+                                   func_args=[subject, electrodes, amplitude,
+                                              frequency, stim_class, date],
                                    engine=engine, scheduler=scheduler,
                                    n_jobs=n_jobs)
     # Invalid rows are returned as None, filter them out:
