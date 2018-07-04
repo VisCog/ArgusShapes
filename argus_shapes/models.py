@@ -390,7 +390,10 @@ class AxonMapMixin(BaseModel):
         bundles = [utils.dva2ret(b) for b in bundles]
         return bundles
 
-    def _finds_closest_axons(self, bundles):
+    def _finds_closest_axons(self, bundles, xret=None, yret=None):
+        """Finds the closest axon segment for every point (`xret`, `yret`)"""
+        xret = self.xret if xret is None else np.asarray(xret, dtype=float)
+        yret = self.yret if yret is None else np.asarray(yret, dtype=float)
         # For every axon segment, store the corresponding axon ID:
         axon_idx = [[idx] * len(ax) for idx, ax in enumerate(bundles)]
         axon_idx = [item for sublist in axon_idx for item in sublist]
@@ -401,13 +404,13 @@ class AxonMapMixin(BaseModel):
         # For every pixel on the grid, find the closest axon segment:
         if self.engine == 'cython':
             closest_seg = fm.fast_finds_closest_axons(flat_bundles,
-                                                      self.xret.ravel(),
-                                                      self.yret.ravel())
+                                                      xret.ravel(),
+                                                      yret.ravel())
         else:
             closest_seg = [np.argmin((flat_bundles[:, 0] - x) ** 2 +
                                      (flat_bundles[:, 1] - y) ** 2)
-                           for x, y in zip(self.xret.ravel(),
-                                           self.yret.ravel())]
+                           for x, y in zip(xret.ravel(),
+                                           yret.ravel())]
         # Look up the axon ID for every axon segment:
         closest_axon = axon_idx[closest_seg]
         return [bundles[n] for n in closest_axon]
