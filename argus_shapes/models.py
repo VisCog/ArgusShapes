@@ -391,7 +391,7 @@ class AxonMapMixin(BaseModel):
         return bundles
 
     def _finds_closest_axons(self, bundles, xret=None, yret=None):
-        """Finds closest axon for every point (`xret`, `yret`)"""
+        """Finds the closest axon segment for every point (`xret`, `yret`)"""
         xret = self.xret if xret is None else np.asarray(xret, dtype=float)
         yret = self.yret if yret is None else np.asarray(yret, dtype=float)
         # For every axon segment, store the corresponding axon ID:
