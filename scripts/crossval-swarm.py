@@ -29,7 +29,7 @@ models = {
         'subject_params': ['implant_type', 'implant_x', 'implant_y', 'implant_rot',
                            'xrange', 'yrange']
     },
-    'C': {  # Axon map model: search OD location
+    'C': {  # Axon map model with shape loss
         'object': argus_shapes.models.ModelC,
         'search_params': ['rho', 'axlambda'],
         'subject_params': ['implant_type', 'xrange', 'yrange',
@@ -39,6 +39,14 @@ models = {
     'C2': {  # Axon map model with RD loss
         'object': argus_shapes.models.ModelC2,
         'search_params': ['rho', 'axlambda'],
+        'subject_params': ['implant_type', 'xrange', 'yrange',
+                           'loc_od_x', 'loc_od_y',
+                           'implant_x', 'implant_y', 'implant_rot']
+    },
+    'C3': {  # Axon map model with shape loss and flexible array loc
+        'object': argus_shapes.models.ModelC,
+        'search_params': ['rho', 'axlambda', 'loc_od_x', 'loc_od_y',
+                          'implant_x', 'implant_y', 'implant_rot'],
         'subject_params': ['implant_type', 'xrange', 'yrange',
                            'loc_od_x', 'loc_od_y',
                            'implant_x', 'implant_y', 'implant_rot']
@@ -55,11 +63,11 @@ models = {
 search_param_ranges = {
     'rho': (50, 3000),
     'axlambda': (10, 3000),
-    'loc_od_x': (13, 17),
-    'loc_od_y': (0, 5),
-    'implant_x': (-2000, 500),
+    'loc_od_x': (14, 18),
+    'loc_od_y': (0.5, 3),
+    'implant_x': (-2000, 0),
     'implant_y': (-1500, 500),
-    'implant_rot': (-np.deg2rad(65), -np.deg2rad(25))
+    'implant_rot': (-np.deg2rad(50), -np.deg2rad(20))
 }
 
 opt_methods = {
@@ -74,6 +82,7 @@ def main():
     idx_fold = -1
     n_folds = 5
     n_jobs = -1
+    groups = None
     avg_img = False
     method = "swarm"
 
@@ -115,8 +124,8 @@ def main():
     now = datetime.now().strftime('%Y-%m-%d_%H-%M-%S')
     filename = '%s_%s_%s-%s_%s.pickle' % (
         subject, modelname,
-        ("shape1fit" if n_folds == 1
-         else ("shape1cv%s%s" % (str(n_folds) if n_folds > 0 else "LOO",
+        ("trial1fit" if n_folds == 1
+         else ("trial1cv%s%s" % (str(n_folds) if n_folds > 0 else "LOO",
                                  ("-" + str(idx_fold)) if idx_fold > -1 else ""))),
         method,
         now
@@ -152,8 +161,11 @@ def main():
     print('Electrodes:', X.electrode.unique())
 
     if n_folds == -1:
-        n_folds = len(X)
-        print('Leave-one-out cross-validation: n_folds=%d' % n_folds)
+        if not avg_img:
+            # Grouped CV
+            groups = 'electrode'
+            n_folds = len(X.electrode.unique())
+        print('Leave-one-electrode-out cross-validation: n_folds=%d' % n_folds)
     if idx_fold != -1:
         print('Processing fold ID %d' % idx_fold)
 
@@ -182,7 +194,7 @@ def main():
     if n_folds > 1:
         result = argus_shapes.model_selection.crossval_predict(
             opt, X, y, fit_params=fit_params, n_folds=n_folds,
-            idx_fold=idx_fold,
+            idx_fold=idx_fold, groups=groups
         )
         y_test, y_pred, best_params, best_train_score, best_test_score = result
     else:
