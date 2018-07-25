@@ -290,8 +290,6 @@ def crossval_predict(estimator, X, y, fit_params={}, n_folds=5, idx_fold=-1,
         n_folds = len(groups)
         assert idx_fold < n_folds
 
-    print(groups)
-
     y_true = []
     y_pred = []
     best_params = []
