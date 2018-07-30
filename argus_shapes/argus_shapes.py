@@ -4,6 +4,7 @@ import six
 import copy
 import glob
 import logging
+import pickle
 
 import numpy as np
 import pandas as pd
@@ -30,7 +31,7 @@ from . import imgproc
 p2p.console.setLevel(logging.ERROR)
 
 __all__ = ["load_data_raw", "load_data", "load_subjects", "calc_mean_images",
-           "is_singlestim_dataframe"]
+           "is_singlestim_dataframe", "load_pickle_files"]
 
 
 # Use duecredit (duecredit.org) to provide a citation to relevant work to
@@ -478,3 +479,36 @@ def calc_mean_images(Xraw, yraw, groupcols=['subject', 'amp', 'electrode'],
             yout.append(t)
 
     return pd.DataFrame(Xout), pd.DataFrame(yout)
+
+def load_pickle_files(pickle_files, verbose=True):
+    data = []
+    for pickle_file in pickle_files:
+        if verbose:
+            print('- Processing %s' % pickle_file)
+        y, y_pred, best_params, specifics = pickle.load(open(pickle_file, 'rb'))
+        if isinstance(y, list):
+            y = pd.concat(y)
+        if isinstance(y_pred, list):
+            y_pred = pd.concat(y_pred)
+            
+        if not isinstance(best_params, list):
+            print('%s has single fold, skip' % pickle_file)
+            continue
+            
+        row = {
+            'subject': specifics['subject'],
+            'model': specifics['modelname'],
+            'exetime': specifics['exetime'],
+            'best_train_cost': specifics['best_train_score'][0],
+            'idx_fold': specifics['idx_fold'],
+            'y_test': y,
+            'y_pred': y_pred,
+            'n_samples': len(y),
+            'n_folds': specifics['n_folds'],
+            'filepath': os.path.dirname(pickle_file),
+            'filename': os.path.basename(pickle_file)
+        }
+        [row.update(bp) for bp in best_params]
+        data.append(row)
+    return pd.DataFrame(data)
+
