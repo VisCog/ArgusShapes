@@ -241,7 +241,8 @@ class ParticleSwarmOptimizer(sklb.BaseEstimator):
         return self.estimator.score(X, y, sample_weight=None)
 
 
-def crossval_predict(estimator, X, y, fit_params={}, n_folds=5, idx_fold=-1):
+def crossval_predict(estimator, X, y, fit_params={}, n_folds=5, idx_fold=-1,
+                     groups=None, verbose=True):
     """Performs cross-validation
 
     Parameters
@@ -256,6 +257,10 @@ def crossval_predict(estimator, X, y, fit_params={}, n_folds=5, idx_fold=-1):
         Target relative to `X` for classification or regression
     n_folds : int, optional, default: 2
         Number of cross-validation folds.
+    groups : str
+        Column name of `X` to be used as groups. If `groups` is given,
+        `n_folds` will be ignored, and the result is leave-one-group-out
+        cross-validation.
 
     Returns
     -------
@@ -269,7 +274,21 @@ def crossval_predict(estimator, X, y, fit_params={}, n_folds=5, idx_fold=-1):
     assert idx_fold >= -1 and idx_fold < n_folds
     # Manual partitioning of X
     all_idx = np.arange(len(X))
-    groups = np.array_split(all_idx, n_folds)
+    if groups is None:
+        # No groups given: manually partition
+        groups = np.array_split(all_idx, n_folds)
+    else:
+        # `groups` must be a column of `X`
+        assert isinstance(groups, six.string_types)
+        assert groups in X.columns
+        # Transform into a list of folds, each of which has an array of
+        # data sample indices, thus mimicking np.array split; i.e. from
+        # ['S1', 'S1', 'S2, 'S2', 'S3', 'S3']
+        # to
+        # [np.array([0, 1]), np.array([2, 3]), np.array([4, 5])]:
+        groups = [np.where(X[groups] == i)[0] for i in np.unique(X[groups])]
+        n_folds = len(groups)
+        assert idx_fold < n_folds
 
     y_true = []
     y_pred = []
@@ -280,7 +299,8 @@ def crossval_predict(estimator, X, y, fit_params={}, n_folds=5, idx_fold=-1):
         if idx_fold != -1 and idx_fold != i:
             # Process only one fold, not all
             continue
-        print('Fold %d / %d' % (i + 1, n_folds))
+        if verbose:
+            print('Fold %d / %d' % (i + 1, n_folds))
         train_idx = np.delete(all_idx, test_idx)
         est = sklb.clone(estimator)
         est.fit(X.iloc[train_idx, :], y.iloc[train_idx, :], fit_params=fit_params)
