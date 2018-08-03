@@ -31,7 +31,7 @@ from . import imgproc
 p2p.console.setLevel(logging.ERROR)
 
 __all__ = ["load_data_raw", "load_data", "load_subjects", "calc_mean_images",
-           "is_singlestim_dataframe", "load_pickle_files"]
+           "is_singlestim_dataframe", "extract_best_pickle_files"]
 
 
 # Use duecredit (duecredit.org) to provide a citation to relevant work to
@@ -480,35 +480,38 @@ def calc_mean_images(Xraw, yraw, groupcols=['subject', 'amp', 'electrode'],
 
     return pd.DataFrame(Xout), pd.DataFrame(yout)
 
-def load_pickle_files(pickle_files, verbose=True):
-    data = []
-    for pickle_file in pickle_files:
-        if verbose:
-            print('- Processing %s' % pickle_file)
-        y, y_pred, best_params, specifics = pickle.load(open(pickle_file, 'rb'))
-        if isinstance(y, list):
-            y = pd.concat(y)
-        if isinstance(y_pred, list):
-            y_pred = pd.concat(y_pred)
-            
-        if not isinstance(best_params, list):
-            print('%s has single fold, skip' % pickle_file)
-            continue
-            
-        row = {
-            'subject': specifics['subject'],
-            'model': specifics['modelname'],
-            'exetime': specifics['exetime'],
-            'best_train_cost': specifics['best_train_score'][0],
-            'idx_fold': specifics['idx_fold'],
-            'y_test': y,
-            'y_pred': y_pred,
-            'n_samples': len(y),
-            'n_folds': specifics['n_folds'],
-            'filepath': os.path.dirname(pickle_file),
-            'filename': os.path.basename(pickle_file)
-        }
-        [row.update(bp) for bp in best_params]
-        data.append(row)
-    return pd.DataFrame(data)
 
+def _extracts_score_from_pickle(file, col_score, col_groupby):
+    _, _, _, specifics = pickle.load(open(file, 'rb'))
+    assert np.all([g in specifics for g in col_groupby])
+    assert col_score in specifics
+    params = specifics['optimizer'].get_params()
+    # TODO: make this work for n_folds > 1
+    row = {
+        'file': file,
+        'greater_is_better': params['estimator__greater_is_better'],
+        col_score: specifics[col_score][0]
+    }
+    for g in col_groupby:
+        row.update({g: specifics[g]})
+    return row
+
+
+def extract_best_pickle_files(results_dir, col_score, col_groupby):
+    # Extract relevant info from pickle files:
+    pickle_files = np.sort(glob.glob(os.path.join(results_dir, '*.pickle')))
+    data = p2p.utils.parfor(_extracts_score_from_pickle, pickle_files,
+                            func_args=[col_score, col_groupby])
+    # Convert to DataFrame:
+    df = pd.DataFrame(data)
+    # Make sure all estimator use the same scoring logic:
+    assert np.isclose(np.var(df.greater_is_better), 0)
+    # Find the rows that minimize/maximize the score:
+    if df.loc[0, 'greater_is_better']:
+        # greater score is better: maximize
+        res = df.loc[df.groupby(col_groupby)[col_score].idxmax()]
+    else:
+        # greater is worse: minimize
+        res = df.loc[df.groupby(col_groupby)[col_score].idxmin()]
+    # Return list of files:
+    return res.file.tolist()
