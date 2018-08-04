@@ -52,7 +52,7 @@ def get_thresholded_image(img, thresh=0.5, out_shape=None, verbose=True):
                               "'%s'." % (thresh, "', '".join(methods.keys()))))
         try:
             th = methods[thresh](img)
-        except RuntimeError:
+        except (ValueError, RuntimeError):
             # If fancy thresholding fails, drop back to simple method
             th = (img.max() - img.min()) / 2.0
             if verbose:
