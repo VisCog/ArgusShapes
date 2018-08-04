@@ -62,22 +62,21 @@ def scatter_correlation(xvals, yvals, ax, xticks=[], yticks=[], marker=None,
                 va='top', ha='right')
 
 
-def plot_phosphenes_on_array(ax, subject, Xymu, subjectdata):
+def plot_phosphenes_on_array(ax, subject, Xymu, subjectdata, alpha_bg=0.5,
+                             thresh_fg=0.95, show_fovea=True):
     """Plots phosphenes centered over the corresponding electrodes"""
     img_argus1 = skio.imread(osp.join(data_path, 'argus_i.png'))
     img_argus2 = skio.imread(osp.join(data_path, 'argus_ii.png'))
     px_argus1 = np.array([
-        [93.12857037,  162.32202802], [138.00952276,  163.7029804],
-        [178.74761799,  163.01250421], [227.77142752,  161.63155183],
-        [93.12857037,  208.58393279], [143.53333228,  207.8934566],
-        [182.89047514,  207.2029804], [227.77142752,  206.51250421],
-        [93.12857037,  251.3934566], [137.31904657,  251.3934566],
-        [180.81904657,  251.3934566], [227.08095133,  251.3934566],
-        [93.81904657,  296.27440898], [140.08095133,  296.27440898],
-        [182.89047514,  297.65536136], [227.08095133,  297.65536136]
+        [163.12857037,  92.32202802], [208.00952276,  93.7029804],
+        [248.74761799,  93.01250421], [297.77142752,  91.63155183],
+        [163.12857037,  138.58393279], [213.53333228,  137.8934566],
+        [252.89047514,  137.2029804], [297.77142752,  136.51250421],
+        [163.12857037,  181.3934566], [207.31904657,  181.3934566],
+        [250.81904657,  181.3934566], [297.08095133,  181.3934566],
+        [163.81904657,  226.27440898], [210.08095133,  226.27440898],
+        [252.89047514,  227.65536136], [297.08095133,  227.65536136]
     ])
-    # px_argus1[:, 0] += 70
-    # px_argus1[:, 1] -= 70
 
     px_argus2 = np.array([
         [296.94026284,  140.58506571], [328.48148148,  138.4823178],
@@ -130,7 +129,7 @@ def plot_phosphenes_on_array(ax, subject, Xymu, subjectdata):
                p2pr.ret2dva(np.max([e.x_center for e in argus]) + padding))
     y_range = (p2pr.ret2dva(np.min([e.y_center for e in argus]) - padding),
                p2pr.ret2dva(np.max([e.y_center for e in argus]) + padding))
-    # (np.diff(y_range)[0] * 10, np.diff(x_range)[0] * 10)
+
     out_shape = Xymu.img_shape.unique()[0]
     pts_in = []
     pts_dva = []
@@ -161,6 +160,7 @@ def plot_phosphenes_on_array(ax, subject, Xymu, subjectdata):
     draw2dva = skit.estimate_transform(
         'similarity', np.array(pts_draw), np.array(pts_dva))
 
+    # Calculate average drawings, but don't binarize:
     all_imgs = np.zeros(out_shape)
     for _, row in Xymu.iterrows():
         e_pos = p2pr.ret2dva((argus[row['electrode']].x_center,
@@ -173,12 +173,23 @@ def plot_phosphenes_on_array(ax, subject, Xymu, subjectdata):
             img_drawing, center=align_center[::-1]
         )
         all_imgs += img_drawing
-    all_imgs = np.maximum(0, np.minimum(1, 1 - all_imgs))
-    ax.imshow(skit.warp(img_argus, argus2out.inverse, cval=1.0,
-                        output_shape=out_shape), alpha=0.3)
-    # ax.imshow(np.ma.masked_where(all_imgs > 0.5, all_imgs), vmin=0, vmax=1,
-    #           cmap='gray')
-    ax.imshow(all_imgs, vmin=0, vmax=1, cmap='gray', alpha=0.7)
+    all_imgs = 1 - np.minimum(1, np.maximum(0, all_imgs))
 
-    fovea = fovea = dva2out([0, 0])[0]
-    ax.scatter(fovea[0], fovea[1], s=100, marker='s', c='w', edgecolors='k')
+    # Draw array schematic with specific alpha level:
+    img_arr = skit.warp(img_argus, argus2out.inverse, cval=1.0,
+                        output_shape=out_shape)
+    img_arr[:, :, 3] = alpha_bg
+
+    # Replace pixels where drawings are dark enough, set alpha=1:
+    rr, cc = np.unravel_index(np.where(all_imgs.ravel() < thresh_fg)[0],
+                              all_imgs.shape)
+    for channel in range(3):
+        img_arr[rr, cc, channel] = all_imgs[rr, cc]
+    img_arr[rr, cc, 3] = 1
+
+    ax.imshow(img_arr, cmap='gray')
+
+    if show_fovea:
+        fovea = fovea = dva2out([0, 0])[0]
+        ax.scatter(fovea[0], fovea[1], s=100, marker='s', c='w', edgecolors='k')
+
