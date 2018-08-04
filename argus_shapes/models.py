@@ -609,14 +609,15 @@ class ShapeLossMixin(BaseModel):
         target.update(descriptors)
         return target
 
-    def score(self, X, y, sample_weight=None):
-        """Score the model in [0, 8] by correlating shape descriptors"""
-        if not isinstance(X, pd.core.frame.DataFrame):
-            raise TypeError("'X' must be a pandas DataFrame, not %s" % type(X))
+    def calc_shape_loss(self, y, y_pred, suffix=''):
+        """Calculate the shape loss"""
         if not isinstance(y, pd.core.frame.DataFrame):
-            raise TypeError("'y' must be a pandas DataFrame, not %s" % type(y))
-
-        y_pred = self.predict(X)
+            raise TypeError("'y' must be a pandas DataFrame, not %s" % type(X))
+        if not isinstance(y_pred, pd.core.frame.DataFrame):
+            raise TypeError(("'y_pred' must be a pandas DataFrame, "
+                             "not %s" % type(y)))
+        if not isinstance(suffix, six.string_types):
+            raise TypeError("'suffix' must be a string, not %s" % type(suffix))
 
         # `y` and `y_pred` must have the same index, otherwise subtraction
         # produces nan:
@@ -626,7 +627,7 @@ class ShapeLossMixin(BaseModel):
         loss = np.zeros(len(cols))
         for i, col in enumerate(cols):
             yt = np.array(y.loc[:, col], dtype=float)
-            yp = np.array(y_pred.loc[:, col], dtype=float)
+            yp = np.array(y_pred.loc[:, col + suffix], dtype=float)
             if col == 'orientation':
                 # Use circular error:
                 err = np.abs(utils.angle_diff(yt, np.nan_to_num(yp)))
@@ -643,6 +644,14 @@ class ShapeLossMixin(BaseModel):
                 ll = 1 - sklm.r2_score(yt, np.nan_to_num(yp))
             loss[i] = 2 if np.isnan(ll) else ll
         return np.sum(loss)
+
+    def score(self, X, y, sample_weight=None):
+        """Score the model in [0, 8] by correlating shape descriptors"""
+        if not isinstance(X, pd.core.frame.DataFrame):
+            raise TypeError("'X' must be a pandas DataFrame, not %s" % type(X))
+        if not isinstance(y, pd.core.frame.DataFrame):
+            raise TypeError("'y' must be a pandas DataFrame, not %s" % type(y))
+        return self.calc_shape_loss(y, self.predict(X))
 
 
 class RDLossMixin(BaseModel):
