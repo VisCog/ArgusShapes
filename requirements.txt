@@ -1,8 +1,10 @@
 numpy
 scipy
+pandas
+cython
 matplotlib
 scikit-learn
 scikit-image
-pandas
+pulse2percept
 pyswarm
 xlrd
