@@ -1,7 +1,17 @@
-# 2018-beyeler-shapes
+# ArgusShapes
 
-Code for predicting the shape of electrical stimulation in epiretinal prostheses.
-Can also produce all the figures in the paper.
+`ArgusShapes` is a package used to predict phosphene shape in epiretinal prostheses.
+
+Please cite as:
+
+> M. Beyeler, D. Nanduri, J. D. Weiland, A. Rokem, G. M. Boynton, I. Fine.
+> A model of ganglion axon pathways accounts for the shape of percepts
+> elicited by retinal implants.
+
+This code is based on [pulse2percept](https://github.com/uwescience/pulse2percept),
+a Python-based simulation framework for bionic vision
+[Beyeler et al. 2017](https://doi.org/10.25080/shinma-7f4c6e7-00c).
+
 
 
 ## Installation
