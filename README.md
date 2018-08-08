@@ -10,14 +10,14 @@ Please cite as:
 
 This code is based on [pulse2percept](https://github.com/uwescience/pulse2percept),
 a Python-based simulation framework for bionic vision
-[Beyeler et al. 2017](https://doi.org/10.25080/shinma-7f4c6e7-00c).
+[(Beyeler et al. 2017)](https://doi.org/10.25080/shinma-7f4c6e7-00c).
 
 
 
 ## Installation
 
 Required packages listed in `requirements.txt`.
-Automatically install all requirements plus package `argus_shape`:
+Automatically install all requirements plus package `argus_shapes`:
 
 ```
     $ pip install -e .
