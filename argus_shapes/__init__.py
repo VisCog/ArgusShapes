@@ -7,3 +7,4 @@ from . import model_selection
 from . import imgproc
 from . import utils
 from . import viz
+from . import internal

@@ -30,7 +30,7 @@ from . import imgproc
 
 p2p.console.setLevel(logging.ERROR)
 
-__all__ = ["load_data_raw", "load_data", "load_subjects", "calc_mean_images",
+__all__ = ["load_data", "load_subjects", "calc_mean_images",
            "is_singlestim_dataframe", "extract_best_pickle_files"]
 
 
@@ -43,275 +43,113 @@ due.cite(Doi("10.1167/13.9.30"),
          path='argus_shapes')
 
 
-# deprecated
-def _loads_data_row_a16(row):
-    # Electrodes have legacy names in datafiles:
-    old_names = names = ['L6', 'L2', 'M8', 'M4', 'L5', 'L1', 'M7', 'M3',
-                         'L8', 'L4', 'M6', 'M2', 'L7', 'L3', 'M5', 'M1']
-    # In newer papers, they go by A-D: A1, B1, C1, D1, A1, B2, ..., D4
-    # Shortcut: Use `chr` to go from int to char
-    new_names = [chr(i) + str(j) for j in range(1, 5)
-                 for i in range(65, 69)]
-    electrodes = row['electrode'].split('_')
-    electrodes = [new_names[old_names.index(e)] for e in electrodes]
-    electrodes = '_'.join(electrodes)
-
-    # Date in folder name should match date in filename:
-    date = row['exp_file'].split('_')[1].replace(".xls", "")
-    if date != os.path.basename(row['exp_folder']):
-        raise ValueError(("Inconsistent date: %s vs "
-                          "%s.") % (date,
-                                    os.path.basename(row['exp_folder'])))
-
-    # Subject is in path name:
-    subject = os.path.basename(os.path.dirname(row['exp_folder']))
-
-    # Amp is followed by '_' as in '1.5_'. Multiple amps are like '1.5_2_':
-    amp = [float(a) for a in row['amplitude'].split('_') if a != '']
-    if len(amp) == 1:
-        stim_class = "SingleElectrode"
-        amp = amp[0]
-    else:
-        stim_class = "MultiElectrode"
-
-    params = row['notes'].split('_')
-    freq = params[4]
-    if freq[:5] == "Freq:" and freq[-2:] == "Hz":
-        freq = float(freq[5:-2])
-    else:
-        freq = 0.0
-
-    # Assemble all feature values in a dict
-    feat = {'filename': row['filename'],
-            'folder': os.path.join(row['exp_folder'], row['foldername']),
-            'subject': subject,
-            'electrode': electrodes,
-            'param_str': row['notes'],
-            'stim_class': stim_class,
-            'amp': amp,
-            'freq': freq,
-            'date': date}
-    return feat
-
-
-# deprecated
-def _loads_data_row_a60(row):
-    # Split the data strings to extract subject, electrode, etc.
-    if 'Filename' not in row:
-        print('No Filename:')
-        print(row)
-        return None
-    fname = row['Filename']
-    if not isinstance(fname, six.string_types):
-        print('Wrong Filename type')
-        print(row)
-        return None
-    date = fname.split('_')[0]
-
-    if 'Params' not in row:
-        print('No Params:')
-        print(row)
-        return None
-    if not isinstance(row['Params'], six.string_types):
-        print('Wrong Params type')
-        print(row)
-        return None
-    params = row['Params'].split(' ')
-    stim = params[0].split('_')
-    if len(params) < 2 or len(stim) < 2:
-        return None
-
-    # Find the current amplitude in the folder name
-    # It could have any of the following formats: '/3xTh', '_2.5xTh',
-    # ' 2xTh'. Idea: Find the string 'xTh', then walk backwards to
-    # find the last occurrence of '_', ' ', or '/'
-    idx_end = row['exp_folder'].find('xTh')
-    if idx_end == -1:
-        return None
-    idx_start = np.max([row['exp_folder'].rfind('_', 0, idx_end),
-                        row['exp_folder'].rfind(' ', 0, idx_end),
-                        row['exp_folder'].rfind(os.sep, 0, idx_end)])
-    if idx_start == -1:
-        return None
-    amp = float(row['exp_folder'][idx_start + 1:idx_end])
-
-    freq = stim[2]
-    if freq[0] == 'f':
-        freq = float(freq[1:])
-    else:
-        freq = 0
-
-    # Assemble all feature values in a dict
-    feat = {'filename': fname,
-            'folder': row['exp_folder'],
-            'subject': stim[0],
-            'param_str': row['Params'],
-            'electrode': params[1],
-            'stim_class': stim[1],
-            'amp': amp,
-            'freq': freq,
-            'date': date}
-    return feat
-
-
-# deprecated
-def _loads_data_row(df_row, subject, electrodes, amp, freq, stim_class, date):
-    _, row = df_row
-
-    if (np.all([c in row for c in ['Filename', 'Params']]) and
-        np.all(pd.notnull([row[c] for c in ['Filename', 'Params']]))):
-        # Found all relevant Argus II fields:
-        feat = _loads_data_row_a60(row)
-    elif (np.all([c in row for c in ['filename', 'notes']]) and
-          np.all(pd.notnull([row[c] for c in ['filename', 'notes']]))):
-        # Found all relevant Argus I fields:
-        feat = _loads_data_row_a16(row)
-    else:
-        raise ValueError("row is neither Argus I or Argus II data.")
-
-    if feat is None:
-        return None
-
-    # Subject string mismatch:
-    if subject is not None and feat['subject'] != subject:
-        return None
-    # Electrode string mismatch:
-    #if electrodes is not None and feat['electrode'] not in electrodes:
-    #    return None
-    # Date string mismatch:
-    if date is not None and feat['date'] != date:
-        return None
-    # Stimulus class mismatch:
-    #if stim_class is not None:
-    #    if feat['stim_class'] != stim_class:
-    #        return None
-    #if amp is not None:
-    #    if (isinstance(feat['amp'], (list, np.ndarray)) and
-    #        np.all(np.isclose(feat['amp'], amp))) or
-    #       (not isinstance(feat['amp'], (list, np.ndarray)) and
-    #        np.isclose(feat['amp'], amp)):
-    #        return None
-    #if freq is not None and not np.isclose(feat['freq'], freq):
-    #    return None
-
-    # Load image
-    if not os.path.isfile(os.path.join(feat['folder'], feat['filename'])):
-        return None
-    img = skio.imread(os.path.join(feat['folder'], feat['filename']),
-                      as_grey=True)
-    feat.update(img_shape=img.shape)
-
-    target = {'image': img,
-              'electrode': feat['electrode']}
-    # Calculate shape descriptors:
-    descriptors = imgproc.calc_shape_descriptors(img)
-    target.update(descriptors)
-
-    return feat, target
-
-
-# deprecated
-def load_data_raw(folder, subject=None, electrodes=None, date=None,
-                  amplitude=2.0, frequency=20.0, stim_class='SingleElectrode',
-                  n_min_trials=5, n_max_trials=5,
-                  verbose=False, random_state=None,
-                  engine='joblib', scheduler='threading', n_jobs=-1):
-    # Recursive search for all files whose name contains the string
-    # '_rawDataFileList_': These contain the paths to the raw bmp images
-    sstr = '*' if subject is None else subject
-    search_patterns = [os.path.join(folder, sstr, '**', '*_rawDataFileList_*'),
-                       os.path.join(folder, sstr, '**', 'VIDFileListNew_*')]
-    dfs = []
-    n_samples = 0
-    for search_pattern in search_patterns:
-        for fname in glob.iglob(search_pattern, recursive=True):
-            if fname.endswith('.csv'):
-                tmp = pd.read_csv(fname)
-            elif fname.endswith('.xls'):
-                tmp = pd.read_excel(fname)
-            else:
-                raise TypeError("Unknown file type for file '%s'." % fname)
-            tmp['exp_folder'] = os.path.dirname(fname)
-            tmp['exp_file'] = os.path.basename(fname)
-            n_samples += len(tmp)
-            if verbose:
-                print('Found %d files in %s' % (len(tmp),
-                                                tmp['exp_folder'].values[0]))
-            dfs.append(tmp)
-    if n_samples == 0:
-        print('No data found in %s' % folder)
-        return pd.DataFrame([]), pd.DataFrame([])
-
-    df = pd.concat(dfs)
-    if random_state is not None:
-        if verbose:
-            print('Shuffling data')
-        df = sklu.shuffle(df, random_state=random_state)
-
-    # Process rows of the data frame in parallel:
-    if verbose:
-        print('Parsing data')
-    feat_target = p2p.utils.parfor(_loads_data_row, df.iterrows(),
-                                   func_args=[subject, electrodes, amplitude,
-                                              frequency, stim_class, date],
-                                   engine=engine, scheduler=scheduler,
-                                   n_jobs=n_jobs)
-    # Invalid rows are returned as None, filter them out:
-    feat_target = list(filter(None, feat_target))
-    # For all other rows, a tuple (X, y) is returned:
-    features = pd.DataFrame([ft[0] for ft in feat_target])
-    targets = pd.DataFrame([ft[1] for ft in feat_target], index=features.index)
-
-    for electrode in features.electrode.unique():
-        idx = features.electrode == electrode
-
-        # Drop trials if we have more than `n_max_trials`
-        features.drop(index=features[idx].index[n_max_trials:], inplace=True)
-        targets.drop(index=targets[idx].index[n_max_trials:], inplace=True)
-
-        # Drop electrodes if we have less than `n_min_trials`
-        if n_min_trials > 0 and np.sum(idx) < n_min_trials:
-            features.drop(index=features[idx].index, inplace=True)
-            targets.drop(index=targets[idx].index, inplace=True)
-
-    if verbose:
-        print('Found %d samples: %d feature values, %d target values' % (
-            features.shape[0], features.shape[1], targets.shape[1])
-        )
-    return features, targets
-
-
 def load_subjects(fname):
+    """Loads subject data
+
+    Subject data is supposed to live in a .csv file with the following columns:
+    - `subject_id`: must match the shape data .csv (e.g., 'S1')
+    - `second_sight_id`: corresponding identifier (e.g., '11-001')
+    - `implant_type_str`: either 'ArgusI' or 'ArgusII'
+    - (`implant_x`, `implant_y`): x, y coordinates of array center (um)
+    - (`loc_od_x`, `loc_od_y`): x, y coordinates of the optic disc center (deg)
+    - (`xmin`, `xmax`): screen width at arm's length (dva)
+    - (`ymin`, `ymax`): screen height at arm's length (dva)
+
+    Parameters
+    ----------
+    fname : str
+        Path to .csv file.
+
+    Returns
+    -------
+    df : pd.DataFrame
+        The parsed .csv file loaded as a DataFrame.
+
+    """
+    # Make sure all required columns are present:
     df = pd.read_csv(fname, index_col='subject_id')
+    has_cols = set(df.columns)
+    needs_cols = set(['implant_type_str', 'implant_x', 'implant_y', 'loc_od_x',
+                      'loc_od_y', 'xmin', 'xmax', 'ymin', 'ymax'])
+    if bool(needs_cols - has_cols):
+        err = "The following required columns are missing: "
+        err += ", ".join(needs_cols - has_cols)
+        raise ValueError(err)
+
+    # Make sure array types are valid:
+    if bool(set(df.implant_type_str.unique()) - set(['ArgusI', 'ArgusII'])):
+        raise ValueError(("'implant_type_str' must be either 'ArgusI' or "
+                          "'ArgusII' for all subjects."))
+
+    # Calculate screen ranges from (xmin, xmax), (ymin, ymax):
     df['xrange'] = pd.Series([(a, b) for a, b in zip(df['xmin'], df['xmax'])],
                              index=df.index)
     df['yrange'] = pd.Series([(a, b) for a, b in zip(df['ymin'], df['ymax'])],
                              index=df.index)
+
+    # Load array type from pulse2percept:
     df['implant_type'] = pd.Series([(p2p.implants.ArgusI if i == 'ArgusI'
                                      else p2p.implants.ArgusII)
                                     for i in df['implant_type_str']],
                                    index=df.index)
-    return df.drop(columns=['xmin', 'xmax', 'ymin', 'ymax', 'implant_type_str'])
-
-
-def is_singlestim_dataframe(data):
-    if not np.any([c in data.columns for c in ['PTS_ELECTRODE', 'electrode',
-                                               'PTS_ELECTRODE1', 'electrode1',
-                                               'PTS_ELECTRODE2', 'electrode2']]):
-        raise ValueError(('Incompatible csv file "%s". Must contain one of '
-                          'these columns: PTS_ELECTRODE, PTS_ELECTRODE1, '
-                          'PTS_ELECTRODE2, electrode, electrode1, electrode2'))
-    is_singlestim = (('PTS_ELECTRODE' in data.columns or 'electrode' in data.columns) and
-                     ('PTS_ELECTRODE1' not in data.columns or 'electrode1' in data.columns) and
-                     ('PTS_ELECTRODE2' not in data.columns or 'electrode2' in data.columns))
-    return is_singlestim
+    return df.drop(columns=['xmin', 'xmax', 'ymin', 'ymax',
+                            'implant_type_str'])
 
 
 def load_data(fname, subject=None, electrodes=None, amp=None, random_state=42):
+    """Loads shuffled shape data
+
+    Shape data is supposed to live in a .csv file with the following columns:
+    - `PTS_AMP`: Current amplitude as multiple of threshold current
+    - `PTS_ELECTRODE`: Name of the electrode (e.g., 'A1')
+    - `PTS_FILE`: Name of the drawing file
+    - `PTS_FREQ`: Stimulation frequency (Hz)
+    - `PTS_PULSE_DUR`: Stimulation pulse duration (ms)
+    - `date`: Date that data was recorded
+    - `stim_class`: 'SingleElectrode' or 'MultiElectrode'
+    - `subject_id`: must match the subject data .csv (e.g., 'S1')
+
+    If there
+
+    Parameters
+    ----------
+    fname : str
+        Path to .csv file.
+    subject : str or None, default: None
+        Only load data from a particular subject. Set to None to load data from
+        all subjects.
+    electrodes : list or None, default: None
+        Only load data from a particular set of electrodes. Set to None to load
+        data from all electrodes
+    amp : float or None, default: None
+        Only load data with a particular current amplitude. Set to None to load
+        data with all current amplitudes.
+    random_state : int or None, default: 42
+        Seed for the random number generator. Set to None to prevent shuffling.
+
+    Returns
+    -------
+    df : pd.DataFrame
+        The parsed .csv file loaded as a DataFrame, optionally with shuffled
+        rows.
+
+    """
+    # Make sure .csv file has all necessary columns:
     data = pd.read_csv(fname)
-    is_singlestim = is_singlestim_dataframe(data)
+    has_cols = set(data.columns)
+    needs_cols = set(['PTS_AMP', 'PTS_FILE', 'PTS_FREQ', 'PTS_PULSE_DUR',
+                      'date', 'stim_class', 'subject_id'])
+    if bool(needs_cols - has_cols):
+        err = "The following required columns are missing: "
+        err += ", ".join(needs_cols - has_cols)
+        raise ValueError(err)
+
+    # Only load data from a particular subject:
     if subject is not None:
         data = data[data.subject_id == subject]
+
+    # Only load data from a particular set of electrodes:
+    is_singlestim = is_singlestim_dataframe(data)
     if electrodes is not None:
         if not isinstance(electrodes, (list, np.ndarray)):
             raise ValueError("`electrodes` must be a list or NumPy array")
@@ -324,9 +162,12 @@ def load_data(fname, subject=None, electrodes=None, amp=None, random_state=42):
                 idx = np.logical_or(idx, data.PTS_ELECTRODE1 == e)
                 idx = np.logical_or(idx, data.PTS_ELECTRODE2 == e)
         data = data[idx]
+
+    # Only load data with a particular current amplitude:
     if amp is not None:
         data = data[np.isclose(data.PTS_AMP, amp)]
 
+    # Shuffle data if random seed is set:
     if random_state is not None:
         data = sklu.shuffle(data, random_state=random_state)
 
@@ -381,7 +222,37 @@ def load_data(fname, subject=None, electrodes=None, amp=None, random_state=42):
     return features, targets
 
 
+def is_singlestim_dataframe(data):
+    """Determines whether a DataFrame contains single or multi electrode stim
+
+    Parameters
+    ----------
+    data : pd.DataFrame
+        DataFrame containing the shape data
+
+    Returns
+    -------
+    is_singlestim : bool
+        Whether DataFrame contains single stim (True) or not (False).
+    """
+    if not np.any([c in data.columns for c in ['PTS_ELECTRODE', 'electrode',
+                                               'PTS_ELECTRODE1', 'electrode1',
+                                               'PTS_ELECTRODE2',
+                                               'electrode2']]):
+        raise ValueError(('Incompatible csv file "%s". Must contain one of '
+                          'these columns: PTS_ELECTRODE, PTS_ELECTRODE1, '
+                          'PTS_ELECTRODE2, electrode, electrode1, electrode2'))
+    is_singlestim = (('PTS_ELECTRODE' in data.columns or
+                      'electrode' in data.columns) and
+                     ('PTS_ELECTRODE1' not in data.columns or
+                      'electrode1' in data.columns) and
+                     ('PTS_ELECTRODE2' not in data.columns or
+                      'electrode2' in data.columns))
+    return is_singlestim
+
+
 def _calcs_mean_image(Xy, groupcols, thresh=True, max_area=1.5):
+    """Private helper function to calculate a mean image"""
     for col in groupcols:
         assert len(Xy[col].unique()) == 1
 
@@ -442,13 +313,13 @@ def calc_mean_images(Xraw, yraw, groupcols=['subject', 'amp', 'electrode'],
 
     Parameters
     ----------
-    Xraw : pd.DataFrame
+    Xraw: pd.DataFrame
         Feature matrix, raw trial data
-    yraw : pd.DataFrame
+    yraw: pd.DataFrame
         Target values, raw trial data
-    thresh : bool, optional, default: True
+    thresh: bool, optional, default: True
         Whether to binarize the averaged image.
-    max_area : float, optional, default: 2
+    max_area: float, optional, default: 2
         Skip if mean image has area larger than a factor `max_area`
         of the mean of the individual images. A large area of the mean
         image indicates poor averaging: instead of maintaining area,
@@ -456,9 +327,9 @@ def calc_mean_images(Xraw, yraw, groupcols=['subject', 'amp', 'electrode'],
 
     Returns
     =======
-    Xout : pd.DataFrame
+    Xout: pd.DataFrame
         Feature matrix, single entry per electrode
-    yout : pd.DataFrame
+    yout: pd.DataFrame
         Target values, single entry per electrode
     """
     is_singlestim = is_singlestim_dataframe(yraw)
@@ -482,6 +353,7 @@ def calc_mean_images(Xraw, yraw, groupcols=['subject', 'amp', 'electrode'],
 
 
 def _extracts_score_from_pickle(file, col_score, col_groupby):
+    """Private helper function to extract the score from a pickle file"""
     _, _, _, specifics = pickle.load(open(file, 'rb'))
     assert np.all([g in specifics for g in col_groupby])
     assert col_score in specifics
@@ -498,6 +370,31 @@ def _extracts_score_from_pickle(file, col_score, col_groupby):
 
 
 def extract_best_pickle_files(results_dir, col_score, col_groupby):
+    """Finds the fitted models with the best scores
+
+    For all pickle files in a directory (supposedly containing the results of
+    different parameter fits), this function returns a list of pickle files
+    that have the best score.
+
+    The `col_groupby` argument can be used to find the best scores for each
+    cross-validation fold (e.g., group by ['electrode', 'idx_fold']).
+
+    Parameters
+    ----------
+    results_dir : str
+        Path to results directory.
+    col_score : str
+        Name of the DataFrame column that contains the score.
+    col_groupby : list
+        List of columns by which to group the DataFrame
+        (e.g., ['electrode', 'idx_fold']).
+
+    Returns
+    -------
+    files : list
+        A list of pickle files with the best scores.
+
+    """
     # Extract relevant info from pickle files:
     pickle_files = np.sort(glob.glob(os.path.join(results_dir, '*.pickle')))
     data = p2p.utils.parfor(_extracts_score_from_pickle, pickle_files,
