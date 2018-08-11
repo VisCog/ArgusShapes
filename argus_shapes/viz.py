@@ -13,9 +13,25 @@ data_path = pkg_resources.resource_filename('argus_shapes', 'data/')
 from . import imgproc
 
 
-def scatter_correlation(xvals, yvals, ax, xticks=[], yticks=[], marker=None,
-                        color=None, textloc='top right'):
-    """Scatter plots some data points and fits a regression curve to them"""
+def scatter_correlation(xvals, yvals, ax, xticks=[], yticks=[], marker='o',
+                        color='k', textloc='top right'):
+    """Scatter plots some data points and fits a regression curve to them
+
+    Parameters
+    ----------
+    xvals, yvals : list
+        x, y coordinates of data points to scatter
+    ax : axis
+        Matplotlib axis
+    xticks, yticks : list
+        List of ticks on the x, y axes
+    marker : str
+        Matplotlib marker style
+    color : str
+        Matplotlib marker color
+    textloc : str
+        Location of regression result, top/bottom left/right
+    """
     xvals = np.asarray(xvals)
     yvals = np.asarray(yvals)
     assert np.all(xvals.shape == yvals.shape)
@@ -64,7 +80,27 @@ def scatter_correlation(xvals, yvals, ax, xticks=[], yticks=[], marker=None,
 
 def plot_phosphenes_on_array(ax, subject, Xymu, subjectdata, alpha_bg=0.5,
                              thresh_fg=0.95, show_fovea=True):
-    """Plots phosphenes centered over the corresponding electrodes"""
+    """Plots phosphenes centered over the corresponding electrodes
+
+    Parameters
+    ----------
+    ax : axis
+        Matplotlib axis
+    subject : str
+        Subject ID, must be a valid value for column 'subject' in `Xymu` and
+        `subjectdata`.
+    Xymu : pd.DataFrame
+        DataFrame with columns 'subject', 'electrode', 'image'
+    subjectdata : pd.DataFrame
+        DataFrame with Subject ID as index
+    alpha_bg : float
+        Alpha value for the array in the background
+    thresh_fg : float
+        Grayscale value above which to mask the drawings
+    show_fovea : bool
+        Whether to indicate the location of the fovea with a square
+
+    """
     img_argus1 = skio.imread(osp.join(data_path, 'argus_i.png'))
     img_argus2 = skio.imread(osp.join(data_path, 'argus_ii.png'))
     px_argus1 = np.array([
