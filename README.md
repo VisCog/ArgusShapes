@@ -20,6 +20,8 @@ Required packages listed in `requirements.txt`.
 Automatically install all requirements plus package `argus_shapes`:
 
 ```
+    $ pip install numpy
+    $ pip install cython
     $ pip install -e .
 ```
 
@@ -37,7 +39,7 @@ Run the test suite:
     - `fetch_data`: Download data from the web.
     - `load_data`: Load shape data from a local .csv file.
     - `load_subjects`: Load subject data from a local .csv file.
-    - `extract_best_pickle_files`: Return a list of pickle files with lowest train 
+    - `extract_best_pickle_files`: Return a list of pickle files with lowest train
       scores.
 - `models`: Code to run various versions of the scoreboard and axon map models.
     - `ModelA`: Scoreboard model with shape descriptor loss
@@ -79,7 +81,7 @@ Run the test suite:
 The code to reproduce figures in the paper can be found in the "figures/" folder:
 - `fig2-phosphene-shape.ipynb`: Phosphene drawings vary across electrodes.
 - `fig3-shape-descriptors.ipynb`: Shape descriptors used to measure phosphene variability.
-- `fig5-axon-map-orientation.ipynb`: Phosphene orientation is aligned with retinal nerve 
+- `fig5-axon-map-orientation.ipynb`: Phosphene orientation is aligned with retinal nerve
   fiber bundles.
 - `fig6-model-shapes.ipynb`: Cross-validated phosphene shape predictions.
 - `fig6-inset-models.ipynb`: Scoreboard and axon map model schematics.
@@ -93,4 +95,3 @@ The code to reproduce figures in the paper can be found in the "figures/" folder
 - `run_fit.sh`: Bash script to fit the models to all subject data.
 - `run_crossval.sh`: Bas script to run leave-one-electrode-out cross-validation.
 - `crossval_swarm.py`: Python file running the model fitting / cross-validation.
-
