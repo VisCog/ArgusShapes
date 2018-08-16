@@ -155,7 +155,7 @@ def _loads_data_row(df_row, subject, electrodes, amp, freq, stim_class, date):
     if not os.path.isfile(os.path.join(feat['folder'], feat['filename'])):
         return None
     img = skio.imread(os.path.join(feat['folder'], feat['filename']),
-                      as_grey=True)
+                      as_gray=True)
     feat.update(img_shape=img.shape)
 
     target = {'image': img,

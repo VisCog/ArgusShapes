@@ -293,7 +293,7 @@ class AxonMapMixin(BaseModel):
         The study did not include axons with phi0 in [-60, 60] deg.
 
         .. [1] N. M. Jansionus, J. Nevalainen, B. Selig, L.M. Zangwill, P.A.
-               Sample, W. M. Budde, J. B. Jonas, W. A. Lagrèze, P. J.
+               Sample, W. M. Budde, J. B. Jonas, W. A. Lagreze, P. J.
                Airaksinen, R. Vonthein, L. A. Levin, J. Paetzold, and U.
                Schieferd, "A mathematical description of nerve fiber bundle
                trajectories and their variability in the human retina. Vision

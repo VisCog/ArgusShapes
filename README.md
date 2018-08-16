@@ -18,13 +18,17 @@ a Python-based simulation framework for bionic vision
 
 Required packages listed in `requirements.txt`.
 
-To install all of the requirements and the `argus_shapes` package:
+First make sure you have NumPy and Cython installed:
 
 ```
-    $ pip install numpy
-    $ pip install cython
-    $ pip install -r requirements.txt
-    $ pip install -e .
+    $ pip3 install numpy==1.11
+    $ pip3 install cython==0.27
+```
+
+Then install all packages listed in `requirements.txt` and `argus_shapes`:
+
+    $ pip3 install -r requirements.txt
+    $ pip3 install -e .
 ```
 
 Run the test suite:

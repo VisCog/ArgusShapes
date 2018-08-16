@@ -21,7 +21,7 @@ def test_load_data():
 
     csvfile = "data.csv"
     imgfile = "test_image.png"
-    skio.imsave(imgfile, np.random.rand(10, 10))
+    skio.imsave(imgfile, np.random.randint(256, size=(10, 10)))
 
     subjects = ['S1', 'S2']
     electrodes = ['A1', 'F9']
