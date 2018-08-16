@@ -181,11 +181,11 @@ def load_data(fname, subject=None, electrodes=None, amp=None, random_state=42):
         else:
             try:
                 img = skio.imread(os.path.join(os.path.dirname(fname),
-                                               row['PTS_FILE']), as_gray=True)
+                                               row['PTS_FILE']), as_grey=True)
                 img = skimage.img_as_float(img)
             except FileNotFoundError:
                 try:
-                    img = skio.imread(row['PTS_FILE'], as_gray=True)
+                    img = skio.imread(row['PTS_FILE'], as_grey=True)
                 except FileNotFoundError:
                     s = ('Column "PTS_FILE" must either specify an absolute '
                          'path or a relative path that starts in the '

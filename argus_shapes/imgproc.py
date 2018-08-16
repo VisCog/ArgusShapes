@@ -34,7 +34,7 @@ def get_thresholded_image(img, thresh=0.5, out_shape=None, verbose=True):
     if out_shape is not None:
         if not isinstance(out_shape, (tuple, list, np.ndarray)):
             raise TypeError("'out_shape' must be a tuple, list, or np.ndarray")
-        img = skit.resize(img, out_shape, mode='reflect', anti_aliasing=True)
+        img = skit.resize(img, out_shape, mode='reflect')
 
     if not isinstance(thresh, (int, float, six.string_types)):
         raise TypeError(("'thresh' must be an int, float, a string, or None; "
@@ -72,7 +72,7 @@ def get_region_props(img, thresh=0.5, out_shape=None, return_all=False):
     if img is None:
         return None
 
-    regions = skim.regionprops(img.astype(np.int32), coordinates='xy')
+    regions = skim.regionprops(img.astype(np.int32))
     if len(regions) == 0:
         # print('No regions: min=%f max=%f' % (img.min(), img.max()))
         return None
