@@ -21,14 +21,14 @@ Required packages listed in `requirements.txt`.
 First make sure you have NumPy and Cython installed:
 
 ```
-    $ pip3 install numpy==1.11
-    $ pip3 install cython==0.27
+    $ pip install numpy==1.11
+    $ pip install cython==0.27
 ```
 
 Then install all packages listed in `requirements.txt` and `argus_shapes`:
 
-    $ pip3 install -r requirements.txt
-    $ pip3 install -e .
+    $ pip install -r requirements.txt
+    $ pip install -e .
 ```
 
 Run the test suite:
