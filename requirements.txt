@@ -8,3 +8,5 @@ scikit-image
 pulse2percept
 pyswarm
 xlrd
+jupyter
+notebook
