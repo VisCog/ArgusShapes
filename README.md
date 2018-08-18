@@ -27,6 +27,7 @@ First make sure you have NumPy and Cython installed:
 
 Then install all packages listed in `requirements.txt` and `argus_shapes`:
 
+```
     $ pip install -r requirements.txt
     $ pip install -e .
 ```
