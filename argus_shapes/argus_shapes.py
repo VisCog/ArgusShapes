@@ -186,7 +186,8 @@ def load_data(fname, subject=None, electrodes=None, amp=None, add_cols=[],
     for idx, row in data.iterrows():
         # Extract shape descriptors from phosphene drawing:
         if pd.isnull(row['PTS_FILE']):
-            raise FileNotFoundError("ID %d: 'PTS_FILE' is empty" % idx)
+            e_s = "ID %d %s: 'PTS_FILE' is empty" % (idx, row['PTS_ELECTRODE'])
+            raise FileNotFoundError(e_s)
         else:
             try:
                 img = skio.imread(os.path.join(os.path.dirname(fname),

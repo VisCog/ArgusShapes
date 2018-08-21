@@ -20,6 +20,7 @@ def test_load_data():
         argus_shapes.load_data("doesforsurenotexist.csv")
 
     csvfile = "data.csv"
+    csvfile2 = "data2.csv"
     imgfile = "test_image.png"
     skio.imsave(imgfile, np.random.randint(256, size=(10, 10)))
 
@@ -51,6 +52,14 @@ def test_load_data():
         npt.assert_equal(np.sort(X.subject.unique()), subjects)
         npt.assert_equal(np.sort(X.electrode.unique()), electrodes)
         npt.assert_equal(len(X), len(subjects) * len(electrodes) * len(amps))
+
+        with pytest.raises(ValueError):
+            XX = X.copy()
+            XX['PTS_ELECTRODE1'] = XX['electrode']
+            XX['PTS_ELECTRODE2'] = XX['electrode']
+            XX.drop(columns='electrode', inplace=True)
+            XX.to_csv(csvfile2, index=False)
+            X, _ = argus_shapes.load_data(csvfile2)
 
         for subject in subjects + ['nobody', 'S10']:
             X, _ = argus_shapes.load_data(csvfile, subject=subject)
@@ -86,6 +95,7 @@ def test_load_data():
             argus_shapes.load_data(csvfile, electrodes='A1')
 
     os.remove(csvfile)
+    os.remove(csvfile2)
     os.remove(imgfile)
 
 
