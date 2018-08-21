@@ -96,7 +96,8 @@ def load_subjects(fname):
                             'implant_type_str'])
 
 
-def load_data(fname, subject=None, electrodes=None, amp=None, random_state=42):
+def load_data(fname, subject=None, electrodes=None, amp=None, add_cols=[],
+              random_state=42):
     """Loads shuffled shape data
 
     Shape data is supposed to live in a .csv file with the following columns:
@@ -124,6 +125,8 @@ def load_data(fname, subject=None, electrodes=None, amp=None, random_state=42):
     amp : float or None, default: None
         Only load data with a particular current amplitude. Set to None to load
         data with all current amplitudes.
+    add_cols : list, optional, default: []
+        List specifying additional columns you want to extract.
     random_state : int or None, default: 42
         Seed for the random number generator. Set to None to prevent shuffling.
 
@@ -134,11 +137,16 @@ def load_data(fname, subject=None, electrodes=None, amp=None, random_state=42):
         rows.
 
     """
-    # Make sure .csv file has all necessary columns:
+    # Read data and make sure it's a single-stim file:
     data = pd.read_csv(fname)
+    is_singlestim = is_singlestim_dataframe(data)
+    if not is_singlestim:
+        raise ValueError("%s is not a single-electrode stim file." % fname)
+
+    # Make sure .csv file has all necessary columns:
     has_cols = set(data.columns)
     needs_cols = set(['PTS_AMP', 'PTS_FILE', 'PTS_FREQ', 'PTS_PULSE_DUR',
-                      'date', 'stim_class', 'subject_id'])
+                      'date', 'stim_class', 'subject_id'] + add_cols)
     if bool(needs_cols - has_cols):
         err = "The following required columns are missing: "
         err += ", ".join(needs_cols - has_cols)
@@ -149,18 +157,19 @@ def load_data(fname, subject=None, electrodes=None, amp=None, random_state=42):
         data = data[data.subject_id == subject]
 
     # Only load data from a particular set of electrodes:
-    is_singlestim = is_singlestim_dataframe(data)
     if electrodes is not None:
         if not isinstance(electrodes, (list, np.ndarray)):
             raise ValueError("`electrodes` must be a list or NumPy array")
         idx = np.zeros(len(data), dtype=np.bool)
-        if is_singlestim:
-            for e in electrodes:
-                idx = np.logical_or(idx, data.PTS_ELECTRODE == e)
-        else:
-            for e in electrodes:
-                idx = np.logical_or(idx, data.PTS_ELECTRODE1 == e)
-                idx = np.logical_or(idx, data.PTS_ELECTRODE2 == e)
+        for e in electrodes:
+            idx = np.logical_or(idx, data.PTS_ELECTRODE == e)
+        # if is_singlestim:
+        #     for e in electrodes:
+        #         idx = np.logical_or(idx, data.PTS_ELECTRODE == e)
+        # else:
+        #     for e in electrodes:
+        #         idx = np.logical_or(idx, data.PTS_ELECTRODE1 == e)
+        #         idx = np.logical_or(idx, data.PTS_ELECTRODE2 == e)
         data = data[idx]
 
     # Only load data with a particular current amplitude:
@@ -174,10 +183,10 @@ def load_data(fname, subject=None, electrodes=None, amp=None, random_state=42):
     # Build feature and target matrices:
     features = []
     targets = []
-    for _, row in data.iterrows():
+    for idx, row in data.iterrows():
         # Extract shape descriptors from phosphene drawing:
         if pd.isnull(row['PTS_FILE']):
-            img = np.zeros((10, 10))
+            raise FileNotFoundError("ID %d: 'PTS_FILE' is empty" % idx)
         else:
             try:
                 img = skio.imread(os.path.join(os.path.dirname(fname),
@@ -211,11 +220,14 @@ def load_data(fname, subject=None, electrodes=None, amp=None, random_state=42):
             'pdur': row['PTS_PULSE_DUR'],
             'date': row['date']
         }
-        if is_singlestim:
-            feat.update({'electrode': row['PTS_ELECTRODE']})
-        else:
-            feat.update({'electrode1': row['PTS_ELECTRODE1'],
-                         'electrode2': row['PTS_ELECTRODE2']})
+        feat.update({'electrode': row['PTS_ELECTRODE']})
+        for col in add_cols:
+            feat.update({col: row[col]})
+        # if is_singlestim:
+        #     feat.update({'electrode': row['PTS_ELECTRODE']})
+        # else:
+        #     feat.update({'electrode1': row['PTS_ELECTRODE1'],
+        #                  'electrode2': row['PTS_ELECTRODE2']})
         features.append(feat)
     features = pd.DataFrame(features, index=data.index)
     targets = pd.DataFrame(targets, index=data.index)
