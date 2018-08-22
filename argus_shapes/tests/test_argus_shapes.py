@@ -48,7 +48,7 @@ def test_load_data():
                     }
                     data.append(row)
         pd.DataFrame(data).to_csv(csvfile, index=False)
-        X, _ = argus_shapes.load_data(csvfile)
+        X = argus_shapes.load_data(csvfile)
         npt.assert_equal(np.sort(X.subject.unique()), subjects)
         npt.assert_equal(np.sort(X.electrode.unique()), electrodes)
         npt.assert_equal(len(X), len(subjects) * len(electrodes) * len(amps))
@@ -59,10 +59,10 @@ def test_load_data():
             XX['PTS_ELECTRODE2'] = XX['electrode']
             XX.drop(columns='electrode', inplace=True)
             XX.to_csv(csvfile2, index=False)
-            X, _ = argus_shapes.load_data(csvfile2)
+            X = argus_shapes.load_data(csvfile2)
 
         for subject in subjects + ['nobody', 'S10']:
-            X, _ = argus_shapes.load_data(csvfile, subject=subject)
+            X = argus_shapes.load_data(csvfile, subject=subject)
             if subject in subjects:
                 npt.assert_equal(np.sort(X.subject.unique()), subject)
                 npt.assert_equal(np.sort(X.electrode.unique()), electrodes)
@@ -72,7 +72,7 @@ def test_load_data():
                 npt.assert_equal(len(X.columns), 0)
 
         for electrode in electrodes + ['F10']:
-            X, _ = argus_shapes.load_data(csvfile, electrodes=[electrode])
+            X = argus_shapes.load_data(csvfile, electrodes=[electrode])
             if electrode in electrodes:
                 npt.assert_equal(np.sort(X.subject.unique()), subjects)
                 npt.assert_equal(np.sort(X.electrode.unique()), electrode)
@@ -82,7 +82,7 @@ def test_load_data():
                 npt.assert_equal(len(X.columns), 0)
 
         for amp in amps + [1.5]:
-            X, _ = argus_shapes.load_data(csvfile, amp=amp)
+            X = argus_shapes.load_data(csvfile, amp=amp)
             if np.any([np.isclose(a, amp) for a in amps]):
                 npt.assert_equal(np.sort(X.subject.unique()), subjects)
                 npt.assert_equal(np.sort(X.electrode.unique()), electrodes)

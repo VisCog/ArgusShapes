@@ -131,17 +131,20 @@ def main():
         print("%d-fold cross-validation (idx_fold=%d)" % (n_folds, idx_fold))
 
     # Load data
-    X, y = argus_shapes.load_data(os.path.join(datafolder,
-                                               'drawings_single.csv'),
-                                  subject=subject, electrodes=None,
-                                  amp=amplitude, random_state=42)
-    if len(X) == 0:
+    Xy = argus_shapes.load_data(os.path.join(datafolder,
+                                             'drawings_single.csv'),
+                                subject=subject, electrodes=None,
+                                amp=amplitude, random_state=42)
+    if len(Xy) == 0:
         raise ValueError('No data found. Abort.')
 
     # Calculate mean images:
     if avg_img:
-        X, y = argus_shapes.calc_mean_images(X, y, max_area=1.5)
+        Xy = argus_shapes.calc_mean_images(Xy, max_area=1.5)
 
+    y = Xy[['electrode', 'image', 'area', 'orientation', 'eccentricity']]
+    X = Xy.drop(columns=y.columns)
+    X['electrode'] = y['electrode']
     print('Data extracted:', X.shape, y.shape)
     print('Electrodes:', X.electrode.unique())
 

@@ -140,8 +140,6 @@ def load_data(fname, subject=None, electrodes=None, amp=None, add_cols=[],
     # Read data and make sure it's a single-stim file:
     data = pd.read_csv(fname)
     is_singlestim = is_singlestim_dataframe(data)
-    if not is_singlestim:
-        raise ValueError("%s is not a single-electrode stim file." % fname)
 
     # Make sure .csv file has all necessary columns:
     has_cols = set(data.columns)
@@ -161,15 +159,13 @@ def load_data(fname, subject=None, electrodes=None, amp=None, add_cols=[],
         if not isinstance(electrodes, (list, np.ndarray)):
             raise ValueError("`electrodes` must be a list or NumPy array")
         idx = np.zeros(len(data), dtype=np.bool)
-        for e in electrodes:
-            idx = np.logical_or(idx, data.PTS_ELECTRODE == e)
-        # if is_singlestim:
-        #     for e in electrodes:
-        #         idx = np.logical_or(idx, data.PTS_ELECTRODE == e)
-        # else:
-        #     for e in electrodes:
-        #         idx = np.logical_or(idx, data.PTS_ELECTRODE1 == e)
-        #         idx = np.logical_or(idx, data.PTS_ELECTRODE2 == e)
+        if is_singlestim:
+            for e in electrodes:
+                idx = np.logical_or(idx, data.PTS_ELECTRODE == e)
+        else:
+            for e in electrodes:
+                idx = np.logical_or(idx, data.PTS_ELECTRODE1 == e)
+                idx = np.logical_or(idx, data.PTS_ELECTRODE2 == e)
         data = data[idx]
 
     # Only load data with a particular current amplitude:
@@ -180,13 +176,18 @@ def load_data(fname, subject=None, electrodes=None, amp=None, add_cols=[],
     if random_state is not None:
         data = sklu.shuffle(data, random_state=random_state)
 
-    # Build feature and target matrices:
-    features = []
-    targets = []
+    # Build data matrix:
+    rows = []
     for idx, row in data.iterrows():
         # Extract shape descriptors from phosphene drawing:
         if pd.isnull(row['PTS_FILE']):
-            e_s = "ID %d %s: 'PTS_FILE' is empty" % (idx, row['PTS_ELECTRODE'])
+            if is_singlestim:
+                e_s = "ID %d %s: 'PTS_FILE' is empty" % (idx,
+                                                         row['PTS_ELECTRODE'])
+            else:
+                e_s = ("ID %d %s, %s: 'PTS_FILE' is "
+                       "empty") % (idx, row['PTS_ELECTRODE1'],
+                                   row['PTS_ELECTRODE2'])
             raise FileNotFoundError(e_s)
         else:
             try:
@@ -201,19 +202,10 @@ def load_data(fname, subject=None, electrodes=None, amp=None, add_cols=[],
                          'path or a relative path that starts in the '
                          'directory of `fname`.')
                     raise FileNotFoundError(s)
-        props = imgproc.calc_shape_descriptors(img)
-        if is_singlestim:
-            target = {'image': img, 'electrode': row['PTS_ELECTRODE']}
-        else:
-            target = {'image': img, 'electrode1': row['PTS_ELECTRODE1'],
-                      'electrode2': row['PTS_ELECTRODE2']}
-        target.update(props)
-        targets.append(target)
-
-        # Save additional attributes:
-        feat = {
+        columns = {
             'subject': row['subject_id'],
             'filename': row['PTS_FILE'],
+            'image': img,
             'img_shape': img.shape,
             'stim_class': row['stim_class'],
             'amp': row['PTS_AMP'],
@@ -221,18 +213,19 @@ def load_data(fname, subject=None, electrodes=None, amp=None, add_cols=[],
             'pdur': row['PTS_PULSE_DUR'],
             'date': row['date']
         }
-        feat.update({'electrode': row['PTS_ELECTRODE']})
+        if is_singlestim:
+            columns.update({'electrode': row['PTS_ELECTRODE']})
+        else:
+            columns.update({'electrode1': row['PTS_ELECTRODE1'],
+                            'electrode2': row['PTS_ELECTRODE2']})
+        # Add shape descriptors:
+        props = imgproc.calc_shape_descriptors(img)
+        columns.update(props)
+        # Add additional columns:
         for col in add_cols:
-            feat.update({col: row[col]})
-        # if is_singlestim:
-        #     feat.update({'electrode': row['PTS_ELECTRODE']})
-        # else:
-        #     feat.update({'electrode1': row['PTS_ELECTRODE1'],
-        #                  'electrode2': row['PTS_ELECTRODE2']})
-        features.append(feat)
-    features = pd.DataFrame(features, index=data.index)
-    targets = pd.DataFrame(targets, index=data.index)
-    return features, targets
+            columns.update({col: row[col]})
+        rows.append(columns)
+    return pd.DataFrame(rows, index=data.index)
 
 
 def is_singlestim_dataframe(data):
@@ -264,17 +257,10 @@ def is_singlestim_dataframe(data):
     return is_singlestim
 
 
-def _calcs_mean_image(Xy, groupcols, thresh=True, max_area=1.5):
+def _calcs_mean_image(Xy, groupcols, thresh=True, max_area=np.inf):
     """Private helper function to calculate a mean image"""
     for col in groupcols:
         assert len(Xy[col].unique()) == 1
-
-    is_singlestim = is_singlestim_dataframe(Xy)
-    if is_singlestim:
-        assert len(Xy.electrode.unique()) == 1
-    else:
-        assert len(Xy.electrode1.unique()) == 1
-        assert len(Xy.electrode2.unique()) == 1
 
     # Calculate mean image
     images = Xy.image
@@ -295,44 +281,39 @@ def _calcs_mean_image(Xy, groupcols, thresh=True, max_area=1.5):
     img_avg = imgproc.center_phosphene(img_avg, center=(np.mean(Xy.y_center),
                                                         np.mean(Xy.x_center)))
 
+    # Remove ambiguous (trial-related) parameters:
+    columns = {
+        'image': img_avg,
+        'img_shape': img_avg.shape
+    }
+    for col in groupcols:
+        columns.update({col: Xy[col].unique()[0]})
+
     # Calculate shape descriptors:
     descriptors = imgproc.calc_shape_descriptors(img_avg)
+    columns.update(descriptors)
 
     # Compare area of mean image to the mean of trial images: If smaller than
     # some fraction, skip:
     if descriptors['area'] > max_area * np.mean(Xy.area):
-        return None, None
+        return None
 
-    # Remove ambiguous (trial-related) parameters:
-    if is_singlestim:
-        target = {'electrode': Xy.electrode.unique()[0],
-                  'image': img_avg}
-    else:
-        target = {'electrode1': Xy.electrode1.unique()[0],
-                  'electrode2': Xy.electrode2.unique()[0],
-                  'image': img_avg}
-    target.update(descriptors)
-
-    feat = {'img_shape': img_avg.shape}
-    for col in groupcols:
-        feat[col] = Xy[col].unique()[0]
-
-    return feat, target
+    return columns
 
 
-def calc_mean_images(Xraw, yraw, groupcols=['subject', 'amp', 'electrode'],
-                     thresh=True, max_area=1.5):
+def calc_mean_images(Xy, groupby=['subject', 'amp', 'electrode'], thresh=True,
+                     max_area=np.inf):
     """Extract mean images on an electrode from all raw trial drawings
 
     Parameters
     ----------
-    Xraw: pd.DataFrame
-        Feature matrix, raw trial data
-    yraw: pd.DataFrame
-        Target values, raw trial data
+    Xy: pd.DataFrame
+        Data matrix, raw trial data
+    groupby : list
+        List of columns by which to group data matrix
     thresh: bool, optional, default: True
         Whether to binarize the averaged image.
-    max_area: float, optional, default: 2
+    max_area: float, optional, default: inf
         Skip if mean image has area larger than a factor `max_area`
         of the mean of the individual images. A large area of the mean
         image indicates poor averaging: instead of maintaining area,
@@ -340,29 +321,16 @@ def calc_mean_images(Xraw, yraw, groupcols=['subject', 'amp', 'electrode'],
 
     Returns
     =======
-    Xout: pd.DataFrame
-        Feature matrix, single entry per electrode
-    yout: pd.DataFrame
-        Target values, single entry per electrode
+    Xymu: pd.DataFrame
+        Data matrix, single entry per electrode
     """
-    is_singlestim = is_singlestim_dataframe(yraw)
-    if is_singlestim:
-        Xy = pd.concat((Xraw, yraw.drop(columns='electrode')), axis=1)
-    else:
-        Xy = pd.concat((Xraw, yraw.drop(columns=['electrode1', 'electrode2'])),
-                       axis=1)
-    assert np.allclose(Xy.index, Xraw.index)
+    Xymu = []
+    for _, data in Xy.groupby(groupby):
+        row = _calcs_mean_image(data, groupby, thresh=thresh, max_area=max_area)
+        if row is not None:
+            Xymu.append(row)
 
-    Xout = []
-    yout = []
-    for _, data in Xy.groupby(groupcols):
-        f, t = _calcs_mean_image(data, groupcols, thresh=thresh,
-                                 max_area=max_area)
-        if f is not None and t is not None:
-            Xout.append(f)
-            yout.append(t)
-
-    return pd.DataFrame(Xout), pd.DataFrame(yout)
+    return pd.DataFrame(Xymu)
 
 
 def _extracts_score_from_pickle(file, col_score, col_groupby):
