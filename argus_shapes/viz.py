@@ -229,3 +229,16 @@ def plot_phosphenes_on_array(ax, subject, Xymu, subjectdata, alpha_bg=0.5,
         fovea = fovea = dva2out([0, 0])[0]
         ax.scatter(fovea[0], fovea[1], s=100, marker='s', c='w', edgecolors='k')
 
+def plot_box(vals1, vals2, ax, is_signif=None):
+    ax.boxplot([vals1, vals2], widths=0.7)
+    x1, x2 = 1, 2
+    y, h, col = np.maximum(np.max(vals1), np.max(vals2)) + 10, 5, 'k'
+    ax.plot([x1, x1, x2, x2], [y, y+h, y+h, y], lw=1, c=col)
+
+    if is_signif is not None:
+        if is_signif:
+            txt = '*'
+        else:
+            txt = 'n.s.'
+        ax.text((x1+x2)*.5, y+h, txt, ha='center', va='bottom', color=col,
+                fontsize=14)
