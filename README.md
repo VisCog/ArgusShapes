@@ -5,7 +5,7 @@
 Please cite as:
 
 > M. Beyeler, D. Nanduri, J. D. Weiland, A. Rokem, G. M. Boynton, I. Fine.
-> A model of ganglion axon pathways accounts for the shape of percepts
+> A model of ganglion axon pathways accounts for percepts
 > elicited by retinal implants.
 
 This code is based on [pulse2percept](https://github.com/uwescience/pulse2percept),
