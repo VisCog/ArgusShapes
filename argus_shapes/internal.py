@@ -1,12 +1,21 @@
+from __future__ import absolute_import, division, print_function
+
+from . import imgproc
+
 import os
+import six
+import glob
 import numpy as np
+import pandas as pd
 import skimage.io as skio
+import sklearn.utils as sklu
+import pulse2percept as p2p
 
 
 def _loads_data_row_a16(row):
     # Electrodes have legacy names in datafiles:
-    old_names = names = ['L6', 'L2', 'M8', 'M4', 'L5', 'L1', 'M7', 'M3',
-                         'L8', 'L4', 'M6', 'M2', 'L7', 'L3', 'M5', 'M1']
+    old_names = ['L6', 'L2', 'M8', 'M4', 'L5', 'L1', 'M7', 'M3',
+                 'L8', 'L4', 'M6', 'M2', 'L7', 'L3', 'M5', 'M1']
     # In newer papers, they go by A-D: A1, B1, C1, D1, A1, B2, ..., D4
     # Shortcut: Use `chr` to go from int to char
     new_names = [chr(i) + str(j) for j in range(1, 5)

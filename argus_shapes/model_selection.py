@@ -217,8 +217,9 @@ class ParticleSwarmOptimizer(sklb.BaseEstimator):
         ub = [v[1] for v in self.search_params.values()]
         best_vals, best_err = pyswarm.pso(
             self.swarm_error, lb, ub, swarmsize=self.swarm_size,
-            maxiter=self.max_iter, minfunc=self.min_func, minstep=self.min_step,
-            debug=self.verbose, args=[X, y], kwargs={'fit_params': fit_params}
+            maxiter=self.max_iter, minfunc=self.min_func,
+            minstep=self.min_step, debug=self.verbose, args=[X, y],
+            kwargs={'fit_params': fit_params}
         )
 
         # Pair values of best params with their names to build a dict
@@ -303,7 +304,8 @@ def crossval_predict(estimator, X, y, fit_params={}, n_folds=5, idx_fold=-1,
             print('Fold %d / %d' % (i + 1, n_folds))
         train_idx = np.delete(all_idx, test_idx)
         est = sklb.clone(estimator)
-        est.fit(X.iloc[train_idx, :], y.iloc[train_idx, :], fit_params=fit_params)
+        est.fit(X.iloc[train_idx, :], y.iloc[
+                train_idx, :], fit_params=fit_params)
         if hasattr(est, 'best_params_'):
             best_params.append(est.best_params_)
         else:
@@ -314,7 +316,8 @@ def crossval_predict(estimator, X, y, fit_params={}, n_folds=5, idx_fold=-1,
             best_train_score.append(None)
         y_true.append(y.iloc[test_idx, :])
         y_pred.append(est.predict(X.iloc[test_idx, :]))
-        best_test_score.append(est.score(X.iloc[test_idx, :], y.iloc[test_idx, :]))
+        best_test_score.append(
+            est.score(X.iloc[test_idx, :], y.iloc[test_idx, :]))
     return y_true, y_pred, best_params, best_train_score, best_test_score
 
 

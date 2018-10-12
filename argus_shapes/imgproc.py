@@ -1,10 +1,9 @@
+from __future__ import absolute_import, division, print_function
+
 import numpy as np
-import pandas as pd
 import six
-import os.path
 
 import skimage
-import skimage.io as skio
 import skimage.filters as skif
 import skimage.transform as skit
 import skimage.measure as skim

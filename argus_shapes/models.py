@@ -1,7 +1,13 @@
+from __future__ import absolute_import, division, print_function
+
+from .argus_shapes import is_singlestim_dataframe
+from . import imgproc
+from . import utils
+from . import fast_models as fm
+
 import os
 import abc
 import six
-import time
 import pickle
 
 import numpy as np
@@ -16,13 +22,6 @@ import sklearn.base as sklb
 import sklearn.exceptions as skle
 import sklearn.metrics as sklm
 
-import skimage
-
-from .argus_shapes import *
-from . import imgproc
-from . import utils
-from . import fast_models as fm
-
 
 try:
     # Python 2
@@ -30,6 +29,7 @@ try:
 except NameError:
     # Python 3
     from functools import reduce
+    reduce(lambda x, y: x + y, [1, 2, 3])
 
 
 @six.add_metaclass(abc.ABCMeta)
@@ -612,7 +612,7 @@ class ShapeLossMixin(BaseModel):
     def calc_shape_loss(self, y, y_pred, suffix=''):
         """Calculate the shape loss"""
         if not isinstance(y, pd.core.frame.DataFrame):
-            raise TypeError("'y' must be a pandas DataFrame, not %s" % type(X))
+            raise TypeError("'y' must be a pandas DataFrame, not %s" % type(y))
         if not isinstance(y_pred, pd.core.frame.DataFrame):
             raise TypeError(("'y_pred' must be a pandas DataFrame, "
                              "not %s" % type(y)))
