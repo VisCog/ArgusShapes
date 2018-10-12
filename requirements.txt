@@ -8,3 +8,4 @@ pyswarm==0.6.*
 xlrd==1.*
 jupyter==1.*
 notebook==5.*
+requests==2.13.*

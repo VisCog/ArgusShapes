@@ -1,3 +1,7 @@
+from __future__ import absolute_import, division, print_function
+
+from . import imgproc
+
 import numpy as np
 import scipy.stats as spst
 import skimage.io as skio
@@ -9,8 +13,6 @@ import pulse2percept.retina as p2pr
 import os.path as osp
 import pkg_resources
 data_path = pkg_resources.resource_filename('argus_shapes', 'data/')
-
-from . import imgproc
 
 
 def scatter_correlation(xvals, yvals, ax, xticks=[], yticks=[], marker='o',
@@ -56,8 +58,9 @@ def scatter_correlation(xvals, yvals, ax, xticks=[], yticks=[], marker='o',
         return
 
     # Fit the regression curve:
+    def fit(x):
+        slope * x + intercept
     slope, intercept, rval, pval, _ = spst.linregress(xvals, yvals)
-    fit = lambda x: slope * x + intercept
     ax.plot([np.min(xvals), np.max(xvals)], [
             fit(np.min(xvals)), fit(np.max(xvals))], 'k--')
 
@@ -179,22 +182,16 @@ def plot_phosphenes_on_array(ax, subject, Xymu, subjectdata, alpha_bg=0.5,
         yout = (dva[1] - y_range[0]) / \
             (y_range[1] - y_range[0]) * (out_shape[0] - 1)
         pts_out.append([xout, yout])
-    argus2dva = skit.estimate_transform('similarity', np.array(pts_in),
-                                        np.array(pts_dva))
     dva2out = skit.estimate_transform('similarity', np.array(pts_dva),
                                       np.array(pts_out))
     argus2out = skit.estimate_transform('similarity', np.array(pts_in),
                                         np.array(pts_out))
 
     # top left, top right, bottom left, bottom right
-    pts_draw = [[0, 0], [0, out_shape[1] - 1],
-                [out_shape[0] - 1, 0], [out_shape[1] - 1, out_shape[0] - 1]]
     x_range = subjectdata.loc[subject, 'xrange']
     y_range = subjectdata.loc[subject, 'yrange']
     pts_dva = [[x_range[0], y_range[0]], [x_range[0], y_range[1]],
                [x_range[1], y_range[0]], [x_range[1], y_range[1]]]
-    draw2dva = skit.estimate_transform(
-        'similarity', np.array(pts_draw), np.array(pts_dva))
 
     # Calculate average drawings, but don't binarize:
     all_imgs = np.zeros(out_shape)
@@ -227,18 +224,20 @@ def plot_phosphenes_on_array(ax, subject, Xymu, subjectdata, alpha_bg=0.5,
 
     if show_fovea:
         fovea = fovea = dva2out([0, 0])[0]
-        ax.scatter(fovea[0], fovea[1], s=100, marker='s', c='w', edgecolors='k')
+        ax.scatter(fovea[0], fovea[1], s=100,
+                   marker='s', c='w', edgecolors='k')
+
 
 def plot_box(vals1, vals2, ax, is_signif=None):
     ax.boxplot([vals1, vals2], widths=0.7)
     x1, x2 = 1, 2
     y, h, col = np.maximum(np.max(vals1), np.max(vals2)) + 10, 5, 'k'
-    ax.plot([x1, x1, x2, x2], [y, y+h, y+h, y], lw=1, c=col)
+    ax.plot([x1, x1, x2, x2], [y, y + h, y + h, y], lw=1, c=col)
 
     if is_signif is not None:
         if is_signif:
             txt = '*'
         else:
             txt = 'n.s.'
-        ax.text((x1+x2)*.5, y+h, txt, ha='center', va='bottom', color=col,
-                fontsize=14)
+        ax.text((x1 + x2) * .5, y + h, txt, ha='center', va='bottom',
+                color=col, fontsize=14)

@@ -1,7 +1,8 @@
 from __future__ import absolute_import, division, print_function
+
+from . import imgproc
+
 import os
-import six
-import copy
 import glob
 import logging
 import pickle
@@ -9,91 +10,81 @@ import pickle
 import numpy as np
 import pandas as pd
 
-import scipy.interpolate as spi
-import scipy.stats as sps
+import requests
+from posixpath import join as urljoin
+import zipfile
 
 import pulse2percept as p2p
 
 import skimage
 import skimage.io as skio
-import skimage.filters as skif
-import skimage.transform as skit
-import skimage.morphology as skimo
-import skimage.measure as skime
 
-import sklearn.base as sklb
-import sklearn.metrics as sklm
 import sklearn.utils as sklu
 
-from .due import due, Doi
-from . import imgproc
 
 p2p.console.setLevel(logging.ERROR)
 
-__all__ = ["load_data", "load_subjects", "calc_mean_images",
-           "is_singlestim_dataframe", "extract_best_pickle_files"]
+__all__ = ["download_file", "fetch_data", "load_data", "load_subjects",
+           "calc_mean_images", "is_singlestim_dataframe",
+           "extract_best_pickle_files"]
 
 
-# Use duecredit (duecredit.org) to provide a citation to relevant work to
-# be cited. This does nothing, unless the user has duecredit installed,
-# And calls this with duecredit (as in `python -m duecredit script.py`):
-due.cite(Doi("10.1167/13.9.30"),
-         description="Template project for small scientific Python projects",
-         tags=["reference-implementation"],
-         path='argus_shapes')
-
-
-def load_subjects(fname):
-    """Loads subject data
-
-    Subject data is supposed to live in a .csv file with the following columns:
-    - `subject_id`: must match the shape data .csv (e.g., 'S1')
-    - `second_sight_id`: corresponding identifier (e.g., '11-001')
-    - `implant_type_str`: either 'ArgusI' or 'ArgusII'
-    - (`implant_x`, `implant_y`): x, y coordinates of array center (um)
-    - (`loc_od_x`, `loc_od_y`): x, y coordinates of the optic disc center (deg)
-    - (`xmin`, `xmax`): screen width at arm's length (dva)
-    - (`ymin`, `ymax`): screen height at arm's length (dva)
+def download_file(url, fname):
+    """Downloads a file from the web
 
     Parameters
     ----------
+    url : str
+        The URL of the file to be downloaded.
     fname : str
-        Path to .csv file.
-
-    Returns
-    -------
-    df : pd.DataFrame
-        The parsed .csv file loaded as a DataFrame.
-
+        Local file path where the downloaded content should be stored.
     """
-    # Make sure all required columns are present:
-    df = pd.read_csv(fname, index_col='subject_id')
-    has_cols = set(df.columns)
-    needs_cols = set(['implant_type_str', 'implant_x', 'implant_y', 'loc_od_x',
-                      'loc_od_y', 'xmin', 'xmax', 'ymin', 'ymax'])
-    if bool(needs_cols - has_cols):
-        err = "The following required columns are missing: "
-        err += ", ".join(needs_cols - has_cols)
-        raise ValueError(err)
+    with open(fname, 'wb') as file:
+        try:
+            response = requests.get(url)
+            response.raise_for_status()
+        except requests.exceptions.HTTPError as e:
+            print(e)
+            return
+        file.write(response.content)
+        print('Successfully created file "%s".' % fname)
 
-    # Make sure array types are valid:
-    if bool(set(df.implant_type_str.unique()) - set(['ArgusI', 'ArgusII'])):
-        raise ValueError(("'implant_type_str' must be either 'ArgusI' or "
-                          "'ArgusII' for all subjects."))
 
-    # Calculate screen ranges from (xmin, xmax), (ymin, ymax):
-    df['xrange'] = pd.Series([(a, b) for a, b in zip(df['xmin'], df['xmax'])],
-                             index=df.index)
-    df['yrange'] = pd.Series([(a, b) for a, b in zip(df['ymin'], df['ymax'])],
-                             index=df.index)
+def fetch_data(osf_zip_url='https://osf.io/yad7x', save_path=None):
+    """Fetches the dataset from the web
 
-    # Load array type from pulse2percept:
-    df['implant_type'] = pd.Series([(p2p.implants.ArgusI if i == 'ArgusI'
-                                     else p2p.implants.ArgusII)
-                                    for i in df['implant_type_str']],
-                                   index=df.index)
-    return df.drop(columns=['xmin', 'xmax', 'ymin', 'ymax',
-                            'implant_type_str'])
+    You can view the dataset online at the Open Science Framework (OSF).
+
+    To automatically fetch and unzip the data, click on 'argus_shapes.zip' in
+    the 'Files' tab and pass the URL to this function.
+
+    osf_zip_url : str
+        The URL to view the zip file at OSF.
+    save_path : str or None
+        Local file path where to store and unzip the data. If None, will look
+        for an environment variable named 'ARGUS_SHAPES_DATA' and store it
+        there.
+    """
+    if save_path is None:
+        # Look for environment variable
+        if not hasattr(os.environ, 'ARGUS_SHAPES_DATA'):
+            raise ValueError(('No such environment variable: '
+                              '"ARGUS_SHAPES_DATA". Please explicitly '
+                              'specify a path.'))
+        save_path = os.environ['ARGUS_SHAPES_DATA']
+
+    # Save to this zip file:
+    fzipname = os.path.join(save_path, 'argus_shapes.zip')
+
+    # Construct a download URL using forward slashes (via posixpath join)
+    # and download the data to a local file:
+    download_file(urljoin(osf_zip_url, 'download'), fzipname)
+
+    # Unzip the file:
+    fzip = zipfile.ZipFile(fzipname, 'r')
+    fzip.extractall(save_path)
+    fzip.close()
+    print('Successfully unzipped file "%s".' % fzipname)
 
 
 def load_data(fname, subject=None, electrodes=None, amp=None, add_cols=[],
@@ -228,6 +219,59 @@ def load_data(fname, subject=None, electrodes=None, amp=None, add_cols=[],
     return pd.DataFrame(rows, index=data.index)
 
 
+def load_subjects(fname):
+    """Loads subject data
+
+    Subject data is supposed to live in a .csv file with the following columns:
+    - `subject_id`: must match the shape data .csv (e.g., 'S1')
+    - `second_sight_id`: corresponding identifier (e.g., '11-001')
+    - `implant_type_str`: either 'ArgusI' or 'ArgusII'
+    - (`implant_x`, `implant_y`): x, y coordinates of array center (um)
+    - (`loc_od_x`, `loc_od_y`): x, y coordinates of the optic disc center (deg)
+    - (`xmin`, `xmax`): screen width at arm's length (dva)
+    - (`ymin`, `ymax`): screen height at arm's length (dva)
+
+    Parameters
+    ----------
+    fname : str
+        Path to .csv file.
+
+    Returns
+    -------
+    df : pd.DataFrame
+        The parsed .csv file loaded as a DataFrame.
+
+    """
+    # Make sure all required columns are present:
+    df = pd.read_csv(fname, index_col='subject_id')
+    has_cols = set(df.columns)
+    needs_cols = set(['implant_type_str', 'implant_x', 'implant_y', 'loc_od_x',
+                      'loc_od_y', 'xmin', 'xmax', 'ymin', 'ymax'])
+    if bool(needs_cols - has_cols):
+        err = "The following required columns are missing: "
+        err += ", ".join(needs_cols - has_cols)
+        raise ValueError(err)
+
+    # Make sure array types are valid:
+    if bool(set(df.implant_type_str.unique()) - set(['ArgusI', 'ArgusII'])):
+        raise ValueError(("'implant_type_str' must be either 'ArgusI' or "
+                          "'ArgusII' for all subjects."))
+
+    # Calculate screen ranges from (xmin, xmax), (ymin, ymax):
+    df['xrange'] = pd.Series([(a, b) for a, b in zip(df['xmin'], df['xmax'])],
+                             index=df.index)
+    df['yrange'] = pd.Series([(a, b) for a, b in zip(df['ymin'], df['ymax'])],
+                             index=df.index)
+
+    # Load array type from pulse2percept:
+    df['implant_type'] = pd.Series([(p2p.implants.ArgusI if i == 'ArgusI'
+                                     else p2p.implants.ArgusII)
+                                    for i in df['implant_type_str']],
+                                   index=df.index)
+    return df.drop(columns=['xmin', 'xmax', 'ymin', 'ymax',
+                            'implant_type_str'])
+
+
 def is_singlestim_dataframe(data):
     """Determines whether a DataFrame contains single or multi electrode stim
 
@@ -326,7 +370,8 @@ def calc_mean_images(Xy, groupby=['subject', 'amp', 'electrode'], thresh=True,
     """
     Xymu = []
     for _, data in Xy.groupby(groupby):
-        row = _calcs_mean_image(data, groupby, thresh=thresh, max_area=max_area)
+        row = _calcs_mean_image(
+            data, groupby, thresh=thresh, max_area=max_area)
         if row is not None:
             Xymu.append(row)
 
