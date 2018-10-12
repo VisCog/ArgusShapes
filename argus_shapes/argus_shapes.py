@@ -21,6 +21,11 @@ import skimage.io as skio
 
 import sklearn.utils as sklu
 
+try:
+    FileNotFoundError
+except NameError:
+    # Python 2
+    FileNotFoundError = IOError
 
 p2p.console.setLevel(logging.ERROR)
 
@@ -72,6 +77,11 @@ def fetch_data(osf_zip_url='https://osf.io/yad7x', save_path=None):
                               '"ARGUS_SHAPES_DATA". Please explicitly '
                               'specify a path.'))
         save_path = os.environ['ARGUS_SHAPES_DATA']
+
+    # Create save path if necessary:
+    if not os.path.exists(save_path):
+        os.makedirs(save_path)
+        print('Successfully created path %s' % save_path)
 
     # Save to this zip file:
     fzipname = os.path.join(save_path, 'argus_shapes.zip')
@@ -423,6 +433,8 @@ def extract_best_pickle_files(results_dir, col_score, col_groupby):
     """
     # Extract relevant info from pickle files:
     pickle_files = np.sort(glob.glob(os.path.join(results_dir, '*.pickle')))
+    if len(pickle_files) == 0:
+        raise FileNotFoundError("No pickle files found in %s" % results_dir)
     data = p2p.utils.parfor(_extracts_score_from_pickle, pickle_files,
                             func_args=[col_score, col_groupby])
     # Convert to DataFrame:
