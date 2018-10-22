@@ -299,7 +299,7 @@ def is_singlestim_dataframe(data):
                                                'PTS_ELECTRODE1', 'electrode1',
                                                'PTS_ELECTRODE2',
                                                'electrode2']]):
-        raise ValueError(('Incompatible csv file "%s". Must contain one of '
+        raise ValueError(('Incompatible DataFrame. Must contain one of '
                           'these columns: PTS_ELECTRODE, PTS_ELECTRODE1, '
                           'PTS_ELECTRODE2, electrode, electrode1, electrode2'))
     is_singlestim = (('PTS_ELECTRODE' in data.columns or

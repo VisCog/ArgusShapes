@@ -100,6 +100,9 @@ def test_load_data():
 
 
 def test_is_singlestim_dataframe():
+    with pytest.raises(ValueError):
+        argus_shapes.is_singlestim_dataframe(pd.DataFrame())
+
     df = pd.DataFrame([
         {'PTS_ELECTRODE': 'A01'},
         {'PTS_ELECTRODE': 'A02'}
