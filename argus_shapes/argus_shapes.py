@@ -55,7 +55,7 @@ def download_file(url, fname):
         print('Successfully created file "%s".' % fname)
 
 
-def fetch_data(osf_zip_url='https://osf.io/yad7x', save_path=None):
+def fetch_data(osf_zip_url='https://osf.io/rduj4', save_path=None):
     """Fetches the dataset from the web
 
     You can view the dataset online at the Open Science Framework (OSF).
@@ -89,6 +89,7 @@ def fetch_data(osf_zip_url='https://osf.io/yad7x', save_path=None):
     # Construct a download URL using forward slashes (via posixpath join)
     # and download the data to a local file:
     download_file(urljoin(osf_zip_url, 'download'), fzipname)
+    print('Successfully downloaded file from %s.' % osf_zip_url)
 
     # Unzip the file:
     fzip = zipfile.ZipFile(fzipname, 'r')
@@ -98,7 +99,7 @@ def fetch_data(osf_zip_url='https://osf.io/yad7x', save_path=None):
 
 
 def load_data(fname, subject=None, electrodes=None, amp=None, add_cols=[],
-              random_state=42):
+              auto_fetch=True, random_state=42):
     """Loads shuffled shape data
 
     Shape data is supposed to live in a .csv file with the following columns:
@@ -128,6 +129,9 @@ def load_data(fname, subject=None, electrodes=None, amp=None, add_cols=[],
         data with all current amplitudes.
     add_cols : list, optional, default: []
         List specifying additional columns you want to extract.
+    auto_fetch : bool, optional, default: True
+        If set to True, will automatically fetch data and install it in the
+        directory of `fname`.
     random_state : int or None, default: 42
         Seed for the random number generator. Set to None to prevent shuffling.
 
@@ -139,7 +143,18 @@ def load_data(fname, subject=None, electrodes=None, amp=None, add_cols=[],
 
     """
     # Read data and make sure it's a single-stim file:
-    data = pd.read_csv(fname)
+    try:
+        data = pd.read_csv(fname)
+    except FileNotFoundError:
+        if auto_fetch:
+            print("File not found. Auto-download from OSF.")
+            fetch_data(save_path=os.path.dirname(fname))
+            data = pd.read_csv(fname)
+        else:
+            e_s = ("File %s not found. Make sure you downloaded the data from "
+                   "OSF (see https://osf.io/dw9nz).") % fname
+            raise FileNotFoundError(e_s)
+
     is_singlestim = is_singlestim_dataframe(data)
 
     # Make sure .csv file has all necessary columns:
@@ -229,7 +244,7 @@ def load_data(fname, subject=None, electrodes=None, amp=None, add_cols=[],
     return pd.DataFrame(rows, index=data.index)
 
 
-def load_subjects(fname):
+def load_subjects(fname, auto_fetch=True):
     """Loads subject data
 
     Subject data is supposed to live in a .csv file with the following columns:
@@ -245,6 +260,9 @@ def load_subjects(fname):
     ----------
     fname : str
         Path to .csv file.
+    auto_fetch : bool, optional, default: True
+        If set to True, will automatically fetch data and install it in the
+        directory of `fname`.
 
     Returns
     -------
@@ -252,8 +270,19 @@ def load_subjects(fname):
         The parsed .csv file loaded as a DataFrame.
 
     """
+    try:
+        df = pd.read_csv(fname, index_col='subject_id')
+    except FileNotFoundError:
+        if auto_fetch:
+            print("File not found. Auto-download from OSF.")
+            fetch_data(save_path=os.path.dirname(fname))
+            df = pd.read_csv(fname, index_col='subject_id')
+        else:
+            e_s = ("File %s not found. Make sure you downloaded the data from "
+                   "OSF (see https://osf.io/dw9nz).") % fname
+            raise FileNotFoundError(e_s)
+
     # Make sure all required columns are present:
-    df = pd.read_csv(fname, index_col='subject_id')
     has_cols = set(df.columns)
     needs_cols = set(['implant_type_str', 'implant_x', 'implant_y', 'loc_od_x',
                       'loc_od_y', 'xmin', 'xmax', 'ymin', 'ymax'])

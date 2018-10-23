@@ -2,6 +2,7 @@ from __future__ import absolute_import, division, print_function
 import os
 import numpy as np
 import pandas as pd
+import shutil
 
 import numpy.testing as npt
 import pytest
@@ -10,9 +11,34 @@ import skimage.io as skio
 
 from .. import argus_shapes
 
+try:
+    FileNotFoundError
+except NameError:
+    # Python 2
+    FileNotFoundError = IOError
 
-def test_load_subjects():
-    pass
+
+def test_fetch_data():
+    test_dir = "test"
+    with pytest.raises(ValueError):
+        argus_shapes.fetch_data()
+    argus_shapes.fetch_data(save_path=test_dir)
+    npt.assert_equal(
+        os.path.exists(os.path.join(test_dir, 'argus_shapes.zip')),
+        True
+    )
+    npt.assert_equal(os.path.isdir(os.path.join(test_dir, 'argus_shapes')),
+                     True)
+    npt.assert_equal(
+        os.path.exists(os.path.join(test_dir, 'argus_shapes',
+                                    'drawings_single.csv')),
+        True
+    )
+    npt.assert_equal(
+        os.path.exists(os.path.join(test_dir, 'argus_shapes', 'subjects.csv')),
+        True
+    )
+    shutil.rmtree(test_dir)
 
 
 def test_load_data():
@@ -97,6 +123,10 @@ def test_load_data():
     os.remove(csvfile)
     os.remove(csvfile2)
     os.remove(imgfile)
+
+
+def test_load_subjects():
+    pass
 
 
 def test_is_singlestim_dataframe():
