@@ -54,7 +54,7 @@ class ValidBaseModel(m.BaseModel):
             raise TypeError("'X' must be a pandas DataFrame, not %s" % type(X))
         if not isinstance(y, pd.core.frame.DataFrame):
             raise TypeError("'y' must be a pandas DataFrame, not %s" % type(y))
-        y_pred = self.predict(X)
+        self.predict(X)
         return 0
 
 
@@ -334,8 +334,8 @@ def test_BaseModel_score():
     with pytest.raises(skle.NotFittedError):
         model.score(X, X)
 
-    # But then must pass through ``score`` just fine: ValidBaseModel returns input,
-    # so that predict(X) == X, and score(X, X) == 0
+    # But then must pass through ``score`` just fine: ValidBaseModel returns
+    # input, so that predict(X) == X, and score(X, X) == 0
     model.fit(X)
     npt.assert_almost_equal(model.score(X, X), 0.0)
 

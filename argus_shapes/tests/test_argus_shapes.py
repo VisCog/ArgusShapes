@@ -43,7 +43,7 @@ def test_fetch_data():
 
 def test_load_data():
     with pytest.raises(FileNotFoundError):
-        argus_shapes.load_data("doesforsurenotexist.csv")
+        argus_shapes.load_data("doesforsurenotexist.csv", auto_fetch=False)
 
     csvfile = "data.csv"
     csvfile2 = "data2.csv"

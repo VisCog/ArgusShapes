@@ -79,7 +79,7 @@ def fetch_data(osf_zip_url='https://osf.io/rduj4', save_path=None):
         save_path = os.environ['ARGUS_SHAPES_DATA']
 
     # Create save path if necessary:
-    if not os.path.exists(save_path):
+    if save_path and not os.path.exists(save_path):
         os.makedirs(save_path)
         print('Successfully created path %s' % save_path)
 

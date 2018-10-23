@@ -1,3 +1,6 @@
+[![Build Status](https://travis-ci.org/VisCog/ArgusShapes.svg?branch=master)](https://travis-ci.org/VisCog/ArgusShapes)
+[![license](https://img.shields.io/badge/License-BSD%203--Clause-blue.svg)](https://github.com/uwescience/pulse2percept/blob/master/LICENSE)
+
 # ArgusShapes
 
 `ArgusShapes` is a package used to predict phosphene shape in epiretinal prostheses.

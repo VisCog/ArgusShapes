@@ -1,12 +1,10 @@
 from __future__ import absolute_import, division, print_function
 import numpy as np
-import pandas as pd
 
 import pytest
 import numpy.testing as npt
 
 import skimage.measure as skim
-import skimage.transform as skit
 import skimage.draw as skid
 
 from .. import imgproc
