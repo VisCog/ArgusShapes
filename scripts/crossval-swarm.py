@@ -4,12 +4,10 @@ import os
 import getopt
 
 import numpy as np
-import pandas as pd
 import pickle
 from time import time
 from datetime import datetime
 
-import pulse2percept.implants as p2pi
 import argus_shapes
 
 
@@ -26,8 +24,8 @@ models = {
     'B': {  # Scoreboard model with perspective transform
         'object': argus_shapes.models.ModelB,
         'search_params': ['rho'],
-        'subject_params': ['implant_type', 'implant_x', 'implant_y', 'implant_rot',
-                           'xrange', 'yrange']
+        'subject_params': ['implant_type', 'implant_x', 'implant_y',
+                           'implant_rot', 'xrange', 'yrange']
     },
     'C': {  # Axon map model with shape loss
         'object': argus_shapes.models.ModelC,
@@ -111,7 +109,8 @@ def main():
         subject, modelname,
         ("trial1fit" if n_folds == 1
          else ("trial1cv%s%s" % (str(n_folds) if n_folds > 0 else "LOO",
-                                 ("-" + str(idx_fold)) if idx_fold > -1 else ""))),
+                                 ("-" + str(idx_fold))
+                                 if idx_fold > -1 else ""))),
         method,
         now
     )
@@ -121,7 +120,9 @@ def main():
     print("Subject: %s" % subject)
     print("Model: %s" % modelname)
     print("Amplitude: %.2fx Th" % amplitude)
-    print("Processing: %s (n_jobs=%d)" % ("serial" if n_jobs == 1 else "parallel", n_jobs))
+    print("Processing: %s (n_jobs=%d)" % ("serial"
+                                          if n_jobs == 1
+                                          else "parallel", n_jobs))
     print("Average image: %s" % ("on" if avg_img else "off"))
     if n_folds == -1:
         print("Leave-one-out cross-validation (idx_fold=%d)" % idx_fold)

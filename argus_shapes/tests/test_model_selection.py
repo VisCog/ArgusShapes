@@ -6,7 +6,6 @@ import sklearn.base as sklb
 from .. import model_selection as ms
 
 import numpy.testing as npt
-import pytest
 
 
 class DummyPredictor(sklb.BaseEstimator):
