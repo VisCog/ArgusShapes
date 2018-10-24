@@ -7,5 +7,5 @@ scikit-image==0.13.*
 pyswarm==0.6.*
 xlrd==1.*
 jupyter==1.*
-notebook==5.*
+notebook>=5.4.1
 requests==2.13.*
