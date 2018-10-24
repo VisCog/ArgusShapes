@@ -49,8 +49,7 @@ def download_file(url, fname):
             response = requests.get(url)
             response.raise_for_status()
         except requests.exceptions.HTTPError as e:
-            print(e)
-            return
+            raise requests.exceptions.HTTPError(e)
         file.write(response.content)
         print('Successfully created file "%s".' % fname)
 

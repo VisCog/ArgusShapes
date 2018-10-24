@@ -3,6 +3,7 @@ import os
 import numpy as np
 import pandas as pd
 import shutil
+import requests
 
 import numpy.testing as npt
 import pytest
@@ -16,6 +17,14 @@ try:
 except NameError:
     # Python 2
     FileNotFoundError = IOError
+
+
+def test_download_file():
+    fname = "test.zip"
+    with pytest.raises(requests.exceptions.HTTPError):
+        argus_shapes.download_file("https://github.com/VisCog/blah", fname)
+    argus_shapes.download_file("https://osf.io/rduj4", fname)
+    os.remove(fname)
 
 
 def test_fetch_data():
@@ -126,7 +135,8 @@ def test_load_data():
 
 
 def test_load_subjects():
-    pass
+    with pytest.raises(FileNotFoundError):
+        argus_shapes.load_subjects("forsuredoesntexist.csv", auto_fetch=False)
 
 
 def test_is_singlestim_dataframe():
