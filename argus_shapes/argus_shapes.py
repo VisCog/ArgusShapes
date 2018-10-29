@@ -341,6 +341,7 @@ def is_singlestim_dataframe(data):
 
 def _calcs_mean_image(Xy, groupcols, thresh=True, max_area=np.inf):
     """Private helper function to calculate a mean image"""
+    assert 'image' in Xy.columns
     for col in groupcols:
         assert len(Xy[col].unique()) == 1
 
@@ -360,8 +361,12 @@ def _calcs_mean_image(Xy, groupcols, thresh=True, max_area=np.inf):
     if thresh:
         img_avg = imgproc.get_thresholded_image(img_avg, thresh='otsu')
     # Move back to its original position:
-    img_avg = imgproc.center_phosphene(img_avg, center=(np.mean(Xy.y_center),
-                                                        np.mean(Xy.x_center)))
+    if 'x_center' in Xy.columns and 'y_center' in Xy.columns:
+        img_avg = imgproc.center_phosphene(img_avg,
+                                           center=(np.mean(Xy.y_center),
+                                                   np.mean(Xy.x_center)))
+    else:
+        img_avg = imgproc.center_phosphene(img_avg)
 
     # Remove ambiguous (trial-related) parameters:
     columns = {
@@ -408,8 +413,8 @@ def calc_mean_images(Xy, groupby=['subject', 'amp', 'electrode'], thresh=True,
     """
     Xymu = []
     for _, data in Xy.groupby(groupby):
-        row = _calcs_mean_image(
-            data, groupby, thresh=thresh, max_area=max_area)
+        row = _calcs_mean_image(data, groupby, thresh=thresh,
+                                max_area=max_area)
         if row is not None:
             Xymu.append(row)
 
@@ -423,10 +428,14 @@ def _extracts_score_from_pickle(file, col_score, col_groupby):
     assert col_score in specifics
     params = specifics['optimizer'].get_params()
     # TODO: make this work for n_folds > 1
+    if isinstance(specifics[col_score], (list, np.ndarray)):
+        score = specifics[col_score][0]
+    else:
+        score = specifics[col_score]
     row = {
         'file': file,
         'greater_is_better': params['estimator__greater_is_better'],
-        col_score: specifics[col_score][0]
+        col_score: score
     }
     for g in col_groupby:
         row.update({g: specifics[g]})

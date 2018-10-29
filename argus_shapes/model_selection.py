@@ -117,6 +117,22 @@ class FunctionMinimizer(sklb.BaseEstimator):
 class GridSearchOptimizer(sklb.BaseEstimator):
 
     def __init__(self, estimator, search_params, verbose=True):
+        """Performs a grid search
+
+        Parameters
+        ----------
+        estimator :
+            A scikit-learn estimator. Make sure it has an attribute called
+            `greater_is_better` that is set to True if greater values of
+            ``estimator.score`` mean that the score is better (else False).
+        search_params : sklearn.model_selection.ParameterGrid
+            Grid of parameters with a discrete number of values for each.
+            Can be generated from a dictionary:
+            ParameterGrid({'param1': np.linspace(lb, ub, num=11)}).
+        verbose : bool, optional, default: True
+            Flag whether to print more stuff
+
+        """
         self.estimator = estimator
         assert hasattr(estimator, 'greater_is_better')
         self.search_params = search_params
@@ -159,8 +175,9 @@ class ParticleSwarmOptimizer(sklb.BaseEstimator):
         Parameters
         ----------
         estimator :
-            A scikit-learn estimator. Make sure its scoring function has
-            greater equals better.
+            A scikit-learn estimator. Make sure it has an attribute called
+            `greater_is_better` that is set to True if greater values of
+            ``estimator.score`` mean that the score is better (else False).
         search_params : dict of tupels (lower bound, upper bound)
             Search parameters
         swarm_size : int, optional, default: 10 * number of search params
