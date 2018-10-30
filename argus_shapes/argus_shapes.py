@@ -271,6 +271,8 @@ def load_subjects(fname, auto_fetch=True):
     """
     try:
         df = pd.read_csv(fname, index_col='subject_id')
+    except ValueError:
+        raise ValueError("DataFrame must have a 'subject_id' column.")
     except FileNotFoundError:
         if auto_fetch:
             print("File not found. Auto-download from OSF.")
@@ -341,9 +343,11 @@ def is_singlestim_dataframe(data):
 
 def _calcs_mean_image(Xy, groupcols, thresh=True, max_area=np.inf):
     """Private helper function to calculate a mean image"""
-    assert 'image' in Xy.columns
+    if 'image' not in Xy.columns:
+        raise ValueError("Xy must contain a column 'image'.")
     for col in groupcols:
-        assert len(Xy[col].unique()) == 1
+        if len(Xy[col].unique()) != 1:
+            raise ValueError("Xy must contain a unique value for %s" % col)
 
     # Calculate mean image
     images = Xy.image
@@ -411,6 +415,14 @@ def calc_mean_images(Xy, groupby=['subject', 'amp', 'electrode'], thresh=True,
     Xymu: pd.DataFrame
         Data matrix, single entry per electrode
     """
+    # Need something to group by:
+    if len(groupby) == 0:
+        raise ValueError("groupby cannot be an empty list.")
+    # Make sure required columns are present:
+    for col in groupby:
+        if col not in Xy.columns:
+            raise ValueError("Xy does not contain a column '%s'" % col)
+    # Process each electrode in parallel:
     Xymu = []
     for _, data in Xy.groupby(groupby):
         row = _calcs_mean_image(data, groupby, thresh=thresh,

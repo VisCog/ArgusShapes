@@ -125,6 +125,8 @@ class BaseModel(sklb.BaseEstimator):
             raise TypeError("'X' must be a pandas DataFrame, not %s" % type(X))
         if y is not None and not isinstance(y, pd.core.frame.DataFrame):
             raise TypeError("'y' must be a pandas DataFrame, not %s" % type(y))
+        if np.abs(self.implant_rot) > 2 * np.pi:
+            raise ValueError("Implant rotation should be in radians.")
         # Set additional parameters:
         self.set_params(**fit_params)
         # Instantiate implant:

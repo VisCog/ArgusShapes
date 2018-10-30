@@ -258,13 +258,18 @@ def test_BaseModel_fit():
         model = ValidBaseModel(engine='serial')
         model.fit(X, implant_type=p2pi.ArgusII())
 
+    # Implant rotation must be in radians:
+    with pytest.raises(ValueError):
+        model = ValidBaseModel(implant_rot=180)
+        model.fit(X)
+
     # `fit_params` must take effect
     model = ValidBaseModel(engine='serial')
     model_params = model.get_params()
     for key, value in six.iteritems(model_params):
         npt.assert_equal(getattr(model, key), value)
         if isinstance(value, (int, float)):
-            set_param = {key: 1234}
+            set_param = {key: 0.1234}
         elif isinstance(value, (list, set, tuple, np.ndarray)):
             set_param = {key: np.array([0, 0])}
         else:

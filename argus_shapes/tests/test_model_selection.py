@@ -5,6 +5,7 @@ import sklearn.base as sklb
 from sklearn.exceptions import NotFittedError
 from sklearn.model_selection import ParameterGrid
 
+from . import test_argus_shapes as shapes
 from .. import model_selection as ms
 
 import numpy.testing as npt
@@ -27,23 +28,10 @@ class DummyPredictor(sklb.BaseEstimator):
         return np.sum((y['target'] - self.dummy_var * X['feature1']) ** 2)
 
 
-def generate_dummy_data():
-    X = pd.DataFrame()
-    X['subject'] = pd.Series(['S1', 'S1', 'S2', 'S2', 'S3', 'S3'])
-    X['feature1'] = pd.Series([0.1, 0.2, 0.3, 0.4, 0.5, 0.6])
-    X['feature2'] = pd.Series([0.1, 0.2, 0.3, 0.4, 0.5, 0.6])
-    y = pd.DataFrame()
-    y['subject'] = pd.Series(['S1', 'S1', 'S2', 'S2', 'S3', 'S3'],
-                             index=X.index)
-    y['target'] = pd.Series([0.1, 0.2, 0.3, 0.4, 0.5, 0.6],
-                            index=X.index)
-    return X, y
-
-
 def test_FunctionMinimizer():
     # DummyPredictor always predicts 'feature1'.
     # The best `dummy_var` value is 1.
-    X, y = generate_dummy_data()
+    X, y = shapes.generate_dummy_data()
     fmin = ms.FunctionMinimizer(DummyPredictor(), {'dummy_var': (0.5, 2.5)})
     with pytest.raises(NotFittedError):
         fmin.predict(X)
@@ -55,7 +43,7 @@ def test_FunctionMinimizer():
 def test_GridSearchOptimizer():
     # DummyPredictor always predicts 'feature1'.
     # The best `dummy_var` value is 1.
-    X, y = generate_dummy_data()
+    X, y = shapes.generate_dummy_data()
     search_params = {'dummy_var': np.linspace(0.5, 2, 4)}
     fmin = ms.GridSearchOptimizer(DummyPredictor(),
                                   ParameterGrid(search_params))
@@ -69,7 +57,7 @@ def test_GridSearchOptimizer():
 def test_ParticleSwarmOptimizer():
     # DummyPredictor always predicts 'feature1'.
     # The best `dummy_var` value is 1.
-    X, y = generate_dummy_data()
+    X, y = shapes.generate_dummy_data()
     fmin = ms.ParticleSwarmOptimizer(DummyPredictor(),
                                      {'dummy_var': (0.5, 2.5)},
                                      min_func=1e-6, min_step=1e-6)
@@ -81,7 +69,7 @@ def test_ParticleSwarmOptimizer():
 
 
 def test_crossval_predict():
-    X, y = generate_dummy_data()
+    X, y = shapes.generate_dummy_data()
     dummy = DummyPredictor()
 
     # Grouped by subject:
@@ -95,7 +83,7 @@ def test_crossval_predict():
 
 
 def test_crossval_score():
-    X, y = generate_dummy_data()
+    X, y = shapes.generate_dummy_data()
     dummy = DummyPredictor()
     dummy.fit(X, y)
     npt.assert_almost_equal(ms.crossval_score([y.target], [dummy.predict(X)]),
