@@ -11,7 +11,6 @@ import pytest
 import skimage.io as skio
 
 from .. import argus_shapes as shapes
-from .. import imgproc
 import pulse2percept.implants as p2pi
 
 try:
