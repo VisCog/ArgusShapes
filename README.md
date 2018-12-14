@@ -18,6 +18,9 @@ This code is based on [pulse2percept](https://github.com/uwescience/pulse2percep
 a Python-based simulation framework for bionic vision
 [(Beyeler et al. 2017)](https://doi.org/10.25080/shinma-7f4c6e7-00c).
 
+Data is available on the [Open Science Framework](https://osf.io/dw9nz/).
+You can either download and extract the data yourself
+or have the scripts under "figures/" do it for you.
 
 
 ## Installation
@@ -100,9 +103,22 @@ The code to reproduce figures in the paper can be found in the "figures/" folder
 - `fig6-inset-models.ipynb`: Scoreboard and axon map model schematics.
 - `fig7-model-scatter.ipynb`: Cross-validated shape descriptor predictions.
 
+These notebooks assume that the data live in a directory `${DATA_ROOT}/argus_shapes`,
+where `DATA_ROOT` is an environment variable.
+On Unix, make sure to add `DATA_ROOT` to your `~/.bashrc`:
+
+```
+    $ echo 'export DATA_ROOT=/home/username/data' >> ~/.bashrc
+    $ source ~/.bashrc
+```
+
+You can either download and extract the data from OSF yourself, or have
+the notebooks automatically do it for you. In the above case,
+the data will end up in "/home/username/data/argus_shapes".
 
 
-## Scripts
+
+## Miscellaneous
 
 - `minimal-example.ipynb`: A minimal usage example.
 - `run_fit.sh`: Bash script to fit the models to all subject data.

@@ -3,6 +3,7 @@ from __future__ import absolute_import, division, print_function
 from . import imgproc
 
 import os
+import shutil
 import glob
 import logging
 import pickle
@@ -71,11 +72,11 @@ def fetch_data(osf_zip_url='https://osf.io/rduj4', save_path=None):
     """
     if save_path is None:
         # Look for environment variable
-        if not hasattr(os.environ, 'ARGUS_SHAPES_DATA'):
+        if not hasattr(os.environ, 'DATA_ROOT'):
             raise ValueError(('No such environment variable: '
-                              '"ARGUS_SHAPES_DATA". Please explicitly '
+                              '"DATA_ROOT". Please explicitly '
                               'specify a path.'))
-        save_path = os.environ['ARGUS_SHAPES_DATA']
+        save_path = os.environ['DATA_ROOT']
 
     # Create save path if necessary:
     if save_path and not os.path.exists(save_path):
@@ -94,6 +95,7 @@ def fetch_data(osf_zip_url='https://osf.io/rduj4', save_path=None):
     fzip = zipfile.ZipFile(fzipname, 'r')
     fzip.extractall(save_path)
     fzip.close()
+
     print('Successfully unzipped file "%s".' % fzipname)
 
 
