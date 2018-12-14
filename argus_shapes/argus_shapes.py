@@ -3,7 +3,6 @@ from __future__ import absolute_import, division, print_function
 from . import imgproc
 
 import os
-import shutil
 import glob
 import logging
 import pickle
