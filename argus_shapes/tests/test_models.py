@@ -59,7 +59,7 @@ class ValidBaseModel(m.BaseModel):
 
 
 class ValidScoreboardModel(m.ShapeLossMixin, m.RetinalGridMixin,
-                           m.ScoreboardMixin):
+                           m.ScoreboardMixin, m.BaseModel):
     """A class that implements all abstract methods of BaseModel"""
 
     def _predicts_target_values(self, row):
@@ -71,7 +71,8 @@ class ValidScoreboardModel(m.ShapeLossMixin, m.RetinalGridMixin,
         return self._predicts_target_values(row)
 
 
-class ValidAxonMapModel(m.ShapeLossMixin, m.RetinalGridMixin, m.AxonMapMixin):
+class ValidAxonMapModel(m.ShapeLossMixin, m.RetinalGridMixin, m.AxonMapMixin,
+                        m.BaseModel):
     """A class that implements all abstract methods of AxonMapModel"""
 
     def build_optic_fiber_layer(self):
@@ -86,7 +87,8 @@ class ValidAxonMapModel(m.ShapeLossMixin, m.RetinalGridMixin, m.AxonMapMixin):
         return self._predicts_target_values(row)
 
 
-class ValidRetinalCoordTrafo(m.ShapeLossMixin, m.RetinalCoordTrafoMixin):
+class ValidRetinalCoordTrafo(m.ShapeLossMixin, m.RetinalCoordTrafoMixin,
+                             m.BaseModel):
     """A class that implements all abstract methods of BaseModel"""
 
     def _calcs_el_curr_map(self, electrode):
@@ -101,7 +103,7 @@ class ValidRetinalCoordTrafo(m.ShapeLossMixin, m.RetinalCoordTrafoMixin):
         return self._predicts_target_values(row)
 
 
-class ValidRetinalGrid(m.ShapeLossMixin, m.RetinalGridMixin):
+class ValidRetinalGrid(m.ShapeLossMixin, m.RetinalGridMixin, m.BaseModel):
     """A class that implements all abstract methods of BaseModel"""
 
     def _calcs_el_curr_map(self, electrode):
