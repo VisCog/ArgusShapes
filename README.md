@@ -1,6 +1,6 @@
 [![Build Status](https://travis-ci.org/VisCog/ArgusShapes.svg?branch=master)](https://travis-ci.org/VisCog/ArgusShapes)
 [![Coverage Status](https://coveralls.io/repos/github/VisCog/ArgusShapes/badge.svg?branch=master)](https://coveralls.io/github/VisCog/ArgusShapes?branch=master)
-[![Binder](https://mybinder.org/badge.svg)](https://mybinder.org/v2/gh/VisCog/ArgusShapes/master)
+[![DOI](https://zenodo.org/badge/109446024.svg)](https://zenodo.org/badge/latestdoi/109446024)
 [![Data](https://img.shields.io/badge/data-osf.io-lightgrey.svg)](https://osf.io/dw9nz)
 [![license](https://img.shields.io/badge/License-BSD%203--Clause-blue.svg)](https://github.com/uwescience/pulse2percept/blob/master/LICENSE)
 
