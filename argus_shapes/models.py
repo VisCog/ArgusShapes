@@ -151,6 +151,9 @@ class BaseModel(sklb.BaseEstimator):
         if not isinstance(electrode, six.string_types):
             raise TypeError("`electrode` must be a string.")
         # Calculate current map with method from derived class:
+        if self._ename(electrode) not in self._curr_map:
+            X = {'electrode': self._ename(electrode)}
+            self.calc_curr_map(pd.DataFrame([X]))
         curr_map = self._curr_map[self._ename(electrode)]
         if not isinstance(curr_map, np.ndarray):
             raise TypeError(("Method '_curr_map' must return a np.ndarray, "
