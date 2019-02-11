@@ -93,9 +93,14 @@ def plot_phosphenes_on_array(ax, subject, Xymu, subjectdata, alpha_bg=0.5,
         Subject ID, must be a valid value for column 'subject' in `Xymu` and
         `subjectdata`.
     Xymu : pd.DataFrame
-        DataFrame with columns 'subject', 'electrode', 'image'
+        DataFrame with required columns 'electrode', 'image'. May contain data
+        from more than one subject, in which case a column 'subject' must
+        exist. May also have a column 'img_shape' indicating the shape of each
+        phosphene image.
     subjectdata : pd.DataFrame
-        DataFrame with Subject ID as index
+        DataFrame with Subject ID as index. Must have columns 'implant_x',
+        'implant_y', 'implant_rot', 'implant_type'. May also have a column
+        'scale' containing a scaling factor applied to phosphene size.
     alpha_bg : float
         Alpha value for the array in the background
     thresh_fg : float
@@ -104,6 +109,12 @@ def plot_phosphenes_on_array(ax, subject, Xymu, subjectdata, alpha_bg=0.5,
         Whether to indicate the location of the fovea with a square
 
     """
+    for col in ['electrode', 'image']:
+        if col not in Xymu.columns:
+            raise ValueError('Xymu must contain column "%s".' % col)
+    for col in ['implant_x', 'implant_y', 'implant_rot', 'implant_type']:
+        if col not in subjectdata.columns:
+            raise ValueError('subjectdata must contain column "%s".' % col)
     img_argus1 = skio.imread(osp.join(data_path, 'argus_i.png'))
     img_argus2 = skio.imread(osp.join(data_path, 'argus_ii.png'))
     px_argus1 = np.array([
@@ -149,7 +160,8 @@ def plot_phosphenes_on_array(ax, subject, Xymu, subjectdata, alpha_bg=0.5,
         [492.4958184, 308.80489845], [527.1911589, 307.75352449],
         [559.78375149, 307.75352449], [590.27359618, 306.70215054]
     ])
-
+    if 'scale' not in subjectdata.columns:
+        subjectdata['scale'] = 1.0
     implant_type = subjectdata.loc[subject, 'implant_type']
     argus = implant_type(x_center=subjectdata.loc[subject, 'implant_x'],
                          y_center=subjectdata.loc[subject, 'implant_y'],
@@ -168,8 +180,18 @@ def plot_phosphenes_on_array(ax, subject, Xymu, subjectdata, alpha_bg=0.5,
     y_range = (p2pr.ret2dva(np.min([e.y_center for e in argus]) - padding),
                p2pr.ret2dva(np.max([e.y_center for e in argus]) + padding))
 
-    Xymu = Xymu[Xymu.subject == subject]
-    out_shape = Xymu.img_shape.unique()[0]
+    # If subject column not present, choose all entries:
+    if 'subject' in Xymu.columns:
+        Xymu = Xymu[Xymu.subject == subject]
+
+    # If img_shape column not present, choose shape of first entry:
+    if 'img_shape' in Xymu.columns:
+        out_shape = Xymu.img_shape.unique()[0]
+    else:
+        out_shape = Xymu.image.values[0].shape
+
+    # Coordinate transform from degrees of visual angle to output, and from
+    # image coordinates to output image:
     pts_in = []
     pts_dva = []
     pts_out = []
@@ -187,7 +209,7 @@ def plot_phosphenes_on_array(ax, subject, Xymu, subjectdata, alpha_bg=0.5,
     argus2out = skit.estimate_transform('similarity', np.array(pts_in),
                                         np.array(pts_out))
 
-    # top left, top right, bottom left, bottom right
+    # Top left, top right, bottom left, bottom right:
     x_range = subjectdata.loc[subject, 'xrange']
     y_range = subjectdata.loc[subject, 'yrange']
     pts_dva = [[x_range[0], y_range[0]], [x_range[0], y_range[1]],

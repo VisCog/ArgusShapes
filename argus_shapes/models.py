@@ -193,7 +193,7 @@ class BaseModel(sklb.BaseEstimator):
         self.calc_curr_map(X)
 
         # Predict percept
-        engine = 'serial' if self.engine is 'cython' else self.engine
+        engine = 'serial' if self.engine == 'cython' else self.engine
         y_pred = p2pu.parfor(self._predicts, X.iterrows(),
                              engine=engine, scheduler=self.scheduler,
                              n_jobs=self.n_jobs)
