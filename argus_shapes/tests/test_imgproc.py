@@ -146,10 +146,10 @@ def test_dice_coeff():
         with pytest.raises(TypeError):
             imgproc.dice_coeff(np.zeros((3, 3)), img1)
     for img0shape in [(3, 4), (4, 4), (5, 5)]:
-        with pytest.raises(TypeError):
+        with pytest.raises(ValueError):
             imgproc.dice_coeff(np.zeros(img0shape), np.zeros((3, 3)))
     for img1shape in [(3, 4), (4, 4), (5, 5)]:
-        with pytest.raises(TypeError):
+        with pytest.raises(ValueError):
             imgproc.dice_coeff(np.zeros((3, 3)), np.zeros(img1shape))
 
     # No overlap gives dice coefficient 0:

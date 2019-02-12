@@ -206,6 +206,6 @@ def dice_coeff(image0, image1):
         raise TypeError("'image1' must be of type np.ndarray.")
     if not np.all(image0.shape == image1.shape):
         raise ValueError(("'image0' and 'image1' must have the same shape "
-                          "(%s) vs. (%s)" % (", ".join(image0.shape),
-                                             ", ".join(image1.shape))))
+                          "(%s) vs. (%s)" % (str(image0.shape),
+                                             str(image1.shape))))
     return fi.fast_dice_coeff(image0, image1)
