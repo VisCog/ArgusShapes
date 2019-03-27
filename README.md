@@ -34,19 +34,83 @@ First make sure you have NumPy and Cython installed:
     $ pip install cython==0.27
 ```
 
-Then install all packages listed in `requirements.txt` and `argus_shapes`:
+Then install all packages listed in `requirements.txt`:
 
 ```
     $ pip install -r requirements.txt
+```
+
+After that, you are ready to install the main package, `argus_shapes`:
+
+```
     $ pip install -e .
-```
-
-Run the test suite:
 
 ```
+
+If you want to make sure that everything works as expect, you can run the test suite:
+
+```
+    $ pip install pytest
     $ py.test argus_shapes
 ```
 
+
+## Figures
+
+The code to reproduce figures in the paper can be found in the "figures/" folder:
+- `fig2-phosphene-shape.ipynb`: Phosphene drawings vary across electrodes.
+- `fig3-shape-descriptors.ipynb`: Shape descriptors used to measure phosphene variability.
+- `fig5-axon-map-orientation.ipynb`: Phosphene orientation is aligned with retinal nerve
+  fiber bundles.
+- `fig6-model-shapes.ipynb`: Cross-validated phosphene shape predictions.
+- `fig6-inset-models.ipynb`: Scoreboard and axon map model schematics.
+- `fig7-model-scatter.ipynb`: Cross-validated shape descriptor predictions.
+
+These notebooks assume that the data live in a directory `${DATA_ROOT}/argus_shapes`,
+where `DATA_ROOT` is an environment variable.
+On Unix, make sure to add `DATA_ROOT` to your `~/.bashrc`:
+
+```
+    $ echo 'export DATA_ROOT=/home/username/data' >> ~/.bashrc
+    $ source ~/.bashrc
+```
+
+You can either download and extract the data from OSF yourself, or have
+the notebooks automatically do it for you. In the above case,
+the data will end up in "/home/username/data/argus_shapes".
+
+
+## Loading your own data
+
+In order to load your own data, you will need two .csv files:
+
+`subjects.csv` should have the following columns:
+
+- `subject_id`: subject ID, has to be the same as in `drawings.csv` (e.g., S1)
+- `implant_type`: currently supported are either 'ArgusI' or 'ArgusII'
+- `implant_x` / `implant_y`: (x,y)-coordinates of array center in microns, assuming the fovea is at (0, 0)
+- `implant_rot`: array rotation in radians (positive: counter-clockwise rotation)
+- `loc_od_x` / `loc_od_y`: (x,y)-coordinates of optic disc center of this subject in microns
+- `xmin` / `xmax`: x-extent (horizontal) of touch screen in degrees of visual angle (e.g., xmin=-36, xmax=36)
+- `ymin` / `ymax`: y-extent (vertical) of touch screen in degrees of visual angle (e.g., ymin=-24, ymax=24)
+
+`drawings.csv` should have the following columns:
+
+- `subject_id`: subject ID, has to be the same as in `drawings.csv` (e.g., S1)
+- `stim_class`: currently supported is 'SingleElectrode'
+- `PTS_ELECTRODE`: electrode name
+- `PTS_FILE`: path to image file
+- `PTS_AMP`: applied current amplitude in micro-Amps
+- `PTS_FREQ`: applied pulse frequency in Hz
+- `date`: date of data collection
+
+Then the data can be loaded as Pandas DataFrames using the following Python recipe:
+
+```
+    >>> import argus_shapes as shapes
+    >>> df_subjects = shapes.load_subjects('subjects.csv')
+    >>> df_drawings = shapes.load_data('drawings.csv')
+```
 
 
 ## Submodules
@@ -89,34 +153,6 @@ Run the test suite:
       regression curve.
     - `plot_phosphenes_on_array`: Plots mean phosphenes on a schematic of
       the implant.
-
-
-
-## Figures
-
-The code to reproduce figures in the paper can be found in the "figures/" folder:
-- `fig2-phosphene-shape.ipynb`: Phosphene drawings vary across electrodes.
-- `fig3-shape-descriptors.ipynb`: Shape descriptors used to measure phosphene variability.
-- `fig5-axon-map-orientation.ipynb`: Phosphene orientation is aligned with retinal nerve
-  fiber bundles.
-- `fig6-model-shapes.ipynb`: Cross-validated phosphene shape predictions.
-- `fig6-inset-models.ipynb`: Scoreboard and axon map model schematics.
-- `fig7-model-scatter.ipynb`: Cross-validated shape descriptor predictions.
-
-These notebooks assume that the data live in a directory `${DATA_ROOT}/argus_shapes`,
-where `DATA_ROOT` is an environment variable.
-On Unix, make sure to add `DATA_ROOT` to your `~/.bashrc`:
-
-```
-    $ echo 'export DATA_ROOT=/home/username/data' >> ~/.bashrc
-    $ source ~/.bashrc
-```
-
-You can either download and extract the data from OSF yourself, or have
-the notebooks automatically do it for you. In the above case,
-the data will end up in "/home/username/data/argus_shapes".
-
-
 
 ## Miscellaneous
 
