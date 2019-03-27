@@ -96,7 +96,7 @@ In order to load your own data, you will need two .csv files:
 
 `drawings.csv` should have the following columns:
 
-- `subject_id`: subject ID, has to be the same as in `drawings.csv` (e.g., S1)
+- `subject_id`: subject ID, has to be the same as in `subjects.csv` (e.g., S1)
 - `stim_class`: currently supported is 'SingleElectrode'
 - `PTS_ELECTRODE`: electrode name
 - `PTS_FILE`: path to image file
