@@ -58,13 +58,13 @@ If you want to make sure that everything works as expect, you can run the test s
 ## Figures
 
 The code to reproduce figures in the paper can be found in the "figures/" folder:
-- `fig2-phosphene-shape.ipynb`: Phosphene drawings vary across electrodes.
-- `fig3-shape-descriptors.ipynb`: Shape descriptors used to measure phosphene variability.
-- `fig5-axon-map-orientation.ipynb`: Phosphene orientation is aligned with retinal nerve
+- [fig2-phosphene-shape.ipynb](https://github.com/VisCog/ArgusShapes/blob/master/figures/fig2-phosphene-shape.ipynb): Phosphene drawings vary across electrodes.
+- [fig3-shape-descriptors.ipynb](https://github.com/VisCog/ArgusShapes/blob/master/figures/fig3-shape-descriptors.ipynb): Shape descriptors used to measure phosphene variability.
+- [fig5-axon-map-orientation.ipynb](https://github.com/VisCog/ArgusShapes/blob/master/figures/fig5-axon-map-orientation.ipynb): Phosphene orientation is aligned with retinal nerve
   fiber bundles.
-- `fig6-model-shapes.ipynb`: Cross-validated phosphene shape predictions.
-- `fig6-inset-models.ipynb`: Scoreboard and axon map model schematics.
-- `fig7-model-scatter.ipynb`: Cross-validated shape descriptor predictions.
+- [fig6-model-shapes.ipynb](https://github.com/VisCog/ArgusShapes/blob/master/figures/fig6-model-shapes.ipynb): Cross-validated phosphene shape predictions.
+- [fig6-inset-models.ipynb](https://github.com/VisCog/ArgusShapes/blob/master/figures/fig6-inset-models.ipynb): Scoreboard and axon map model schematics.
+- [fig7-model-scatter.ipynb](https://github.com/VisCog/ArgusShapes/blob/master/figures/fig7-model-scatter.ipynb): Cross-validated shape descriptor predictions.
 
 These notebooks assume that the data live in a directory `${DATA_ROOT}/argus_shapes`,
 where `DATA_ROOT` is an environment variable.
