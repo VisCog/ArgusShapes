@@ -59,7 +59,7 @@ def scatter_correlation(xvals, yvals, ax, xticks=[], yticks=[], marker='o',
 
     # Fit the regression curve:
     def fit(x):
-        slope * x + intercept
+        return slope * x + intercept
     slope, intercept, rval, pval, _ = spst.linregress(xvals, yvals)
     ax.plot([np.min(xvals), np.max(xvals)], [
             fit(np.min(xvals)), fit(np.max(xvals))], 'k--')
@@ -71,14 +71,15 @@ def scatter_correlation(xvals, yvals, ax, xticks=[], yticks=[], marker='o',
     a = ax.axis()
     xt = np.max(xticks) if len(xticks) > 0 else a[1]
     yt = np.min(yticks) if len(yticks) > 0 else (a[3] if va == 'top' else a[2])
+
     if pval >= 0.001:
         ax.text(xt, yt,
                 "$N$=%d\n$r$=%.3f\n$p$=%.3f" % (len(yvals), rval, pval),
-                va='top', ha='right')
+                va=va, ha=ha)
     else:
         ax.text(xt, yt,
                 "$N$=%d\n$r$=%.3f\n$p$=%.2e" % (len(yvals), rval, pval),
-                va='top', ha='right')
+                va=va, ha=ha)
 
 
 def plot_phosphenes_on_array(ax, subject, Xymu, subjectdata, alpha_bg=0.5,
