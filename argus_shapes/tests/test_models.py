@@ -8,6 +8,7 @@ import sklearn.exceptions as skle
 import pulse2percept.implants as p2pi
 import pulse2percept.retina as p2pr
 from .. import models as m
+from .. import utils
 
 import numpy.testing as npt
 import pytest
@@ -221,6 +222,12 @@ def test_BaseModel___init__():
             model.set_params(**set_param)
         with pytest.raises(ValueError):
             ValidBaseModel(**set_param)
+
+    # You could bypass this by using model.key = value, but this only works for
+    # attributes that already exist. Adding new ones is prohibited after the
+    # constructor:
+    with pytest.raises(ValueError):
+        model.newvariable = 1234
 
 
 def test_BaseModel_fit():
@@ -514,3 +521,11 @@ def test_AxonMapModel__calcs_axon_contribution():
                        np.diff(axon[:, 1], axis=0) ** 2)
         sensitivity = np.exp(-d2 / (2.0 * model.axlambda ** 2))
         npt.assert_almost_equal(sensitivity, ax[:, 2])
+
+
+def test_AxonMapModel__calc_bundle_tangent():
+    model = m.ModelC(xystep=5, engine='serial', n_axons=500, n_ax_segments=500,
+                     axons_range=(-180, 180), ax_segments_range=(3, 50))
+    npt.assert_almost_equal(model.calc_bundle_tangent(0, 0), 0.4819, decimal=3)
+    npt.assert_almost_equal(model.calc_bundle_tangent(0, 1000), -0.5532,
+                            decimal=3)

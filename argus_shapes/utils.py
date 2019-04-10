@@ -43,7 +43,20 @@ def pol2cart(theta, rho):
 
 
 def angle_diff(angle1, angle2):
-    """Returns the signed difference between two angles (rad)"""
+    """Returns the signed difference between two angles (rad)
+
+    The difference is calculated as angle2 - angle1. The difference will thus
+    be positive if angle2 > angle1.
+
+    Parameters
+    ----------
+    angle1, angle2 : float
+        An angle in radians.
+
+    Returns
+    -------
+    The signed difference angle2 - angle1 in [0, 2*pi).
+    """
     # https://stackoverflow.com/questions/1878907/
     #    the-smallest-difference-between-2-angles
     return np.arctan2(np.sin(angle2 - angle1), np.cos(angle2 - angle1))

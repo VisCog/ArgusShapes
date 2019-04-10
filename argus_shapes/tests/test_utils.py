@@ -41,6 +41,12 @@ def test_pol2cart():
 
 
 def test_angle_diff():
+    npt.assert_almost_equal(utils.angle_diff(0, 2 * np.pi), 0)
+    npt.assert_almost_equal(utils.angle_diff(0, np.pi / 2), np.pi / 2)
+    npt.assert_almost_equal(utils.angle_diff(np.pi / 2, 0), -np.pi / 2)
+    npt.assert_almost_equal(utils.angle_diff(0, -np.pi / 2), -np.pi / 2)
+    npt.assert_almost_equal(utils.angle_diff(-np.pi / 2, np.pi / 2), np.pi)
+
     for offset1 in [-2 * np.pi, 0, 2 * np.pi]:
         npt.assert_almost_equal(utils.angle_diff(0.1 + offset1, 0.2), 0.1)
     for offset2 in [-2 * np.pi, 0, 2 * np.pi]:

@@ -35,6 +35,8 @@ except NameError:
 @six.add_metaclass(abc.ABCMeta)
 class BaseModel(sklb.BaseEstimator):
 
+    __is_frozen = False
+
     def __init__(self, **kwargs):
         # The following parameters serve as default values and can be
         # overwritten via `kwargs`
@@ -61,12 +63,30 @@ class BaseModel(sklb.BaseEstimator):
         # recompute the current maps for the same electrode on each trial.
         self._curr_map = {}
 
+        # Other variables to be set later:
+        self.implant = None
+        self.xret = None
+        self.yret = None
+
         # This flag will be flipped once the ``fit`` method was called
         self._is_fitted = False
 
         # Additional parameters can be set using ``_sets_default_params``
         self._sets_default_params()
+
+        # From here on out, adding more class attributes is not allowed:
+        self.__is_frozen = True
+
+        # Overwrite default parameters with kwargs:
         self.set_params(**kwargs)
+
+    def __setattr__(self, key, value):
+        if self.__is_frozen and key not in dir(self):
+            err = ("%s is a frozen class. You cannot add new attributes "
+                   "such as `%s` to it. Use ``get_params`` to see a dict "
+                   "of class attributes." % (type(self).__name__, key))
+            raise ValueError(err)
+        super(BaseModel, self).__setattr__(key, value)
 
     def get_params(self, deep=True):
         """Returns all params that can be set on-the-fly via 'set_params'"""
@@ -255,6 +275,8 @@ class AxonMapMixin(object):
         self.ax_segments_range = (3, 50)
         # Precomputed axon maps stored in the following file:
         self.axon_pickle = 'axons.pickle'
+        # To be set later:
+        self.axon_contrib = None
 
     def get_params(self, deep=True):
         params = super(AxonMapMixin, self).get_params(deep=deep)
@@ -397,6 +419,7 @@ class AxonMapMixin(object):
 
     def _finds_closest_axons(self, bundles, xret=None, yret=None):
         """Finds the closest axon segment for every point (`xret`, `yret`)"""
+        assert len(bundles) > 0
         xret = self.xret if xret is None else np.asarray(xret, dtype=float)
         yret = self.yret if yret is None else np.asarray(yret, dtype=float)
         # For every axon segment, store the corresponding axon ID:
@@ -442,6 +465,43 @@ class AxonMapMixin(object):
                 contrib = np.column_stack((axon[1:, :], sensitivity))
             axon_contrib.append(contrib)
         return axon_contrib
+
+    def calc_bundle_tangent(self, xc, yc):
+        """Calculates orientation of fiber bundle tangent at (xc,yc)
+
+        Parameters
+        ----------
+        xc, yc : float
+            (x,y) location of point at which to calculate bundle orientation
+            in microns.
+        """
+        # Check for scalar:
+        assert not isinstance(xc, list)
+        assert not isinstance(yc, list)
+        # Find the fiber bundle closest to (xc, yc):
+        bundles = self._grows_axon_bundles()
+        bundle = self._finds_closest_axons(bundles, xret=xc, yret=yc)[0]
+        # For that bundle, find the bundle segment closest to (xc, yc):
+        idx = np.argmin((bundle[:, 0] - xc) ** 2 + (bundle[:, 1] - yc) ** 2)
+        print(idx, bundle[idx, :])
+        # Calculate orientation from atan2(dy, dx):
+        if idx == 0:
+            # Bundle index 0: there's no index -1
+            dx = bundle[1, :] - bundle[0, :]
+        elif idx == bundle.shape[0] - 1:
+            # Bundle index -1: there's no index len(bundle)
+            dx = bundle[-1, :] - bundle[-2, :]
+        else:
+            # Else: Look at previous and subsequent segments:
+            dx = (bundle[idx + 1, :] - bundle[idx - 1, :]) / 2
+        dx[1] *= -1
+        tangent = np.arctan2(*dx[::-1])
+        # Confine to (-pi/2, pi/2):
+        if tangent < np.deg2rad(-90):
+            tangent += np.deg2rad(180)
+        if tangent > np.deg2rad(90):
+            tangent -= np.deg2rad(180)
+        return tangent
 
     def build_optic_fiber_layer(self):
         if self.implant.eye == 'LE':
@@ -575,6 +635,8 @@ class RetinalGridMixin(object):
         self.xrange = (-30, 30)  # dva
         self.yrange = (-20, 20)  # dva
         self.xystep = 0.2  # dva
+        self.xret = None
+        self.yret = None
 
     def get_params(self, deep=True):
         params = super(RetinalGridMixin, self).get_params(deep=deep)
