@@ -109,7 +109,7 @@ def test_calc_shape_descriptors():
 def test_center_phosphene():
     bright = 13
     img = np.zeros((5, 5))
-    img[0, 0] = bright
+    img[0, 1] = bright
     center_img = imgproc.center_phosphene(img)
     npt.assert_equal(np.sum(img), np.sum(center_img))
     npt.assert_equal(center_img[2, 2], bright)
@@ -118,7 +118,7 @@ def test_center_phosphene():
 
 def test_scale_phosphene():
     img = np.zeros((200, 200), dtype=np.double)
-    img[90:110, 90:110] = 1
+    img[90:110, 70:90] = 1
     img_area = skim.moments(img, order=0)
     for scale in [0.9, 1, 1.5, 2, 4]:
         scaled = imgproc.scale_phosphene(img, scale)
