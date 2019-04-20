@@ -67,6 +67,7 @@ class BaseModel(sklb.BaseEstimator):
         self.implant = None
         self.xret = None
         self.yret = None
+        self.name = "BaseModel"
 
         # This flag will be flipped once the ``fit`` method was called
         self._is_fitted = False
@@ -483,7 +484,6 @@ class AxonMapMixin(object):
         bundle = self._finds_closest_axons(bundles, xret=xc, yret=yc)[0]
         # For that bundle, find the bundle segment closest to (xc, yc):
         idx = np.argmin((bundle[:, 0] - xc) ** 2 + (bundle[:, 1] - yc) ** 2)
-        print(idx, bundle[idx, :])
         # Calculate orientation from atan2(dy, dx):
         if idx == 0:
             # Bundle index 0: there's no index -1
@@ -575,7 +575,6 @@ class RetinalCoordTrafoMixin(object):
         if (not isinstance(meridian, (np.ndarray, six.string_types)) or
                 not np.all([m in ['temporal', 'nasal']
                             for m in np.array([meridian]).ravel()])):
-            print(meridian)
             raise ValueError("'meridian' must be either 'temporal' or 'nasal'")
         alpha = np.where(meridian == 'temporal', 1.8938, 2.4607)
         beta = np.where(meridian == 'temporal', 2.4598, 1.7463)
@@ -721,11 +720,11 @@ class ShapeLossMixin(object):
         return self.calc_shape_loss(y, self.predict(X))
 
 
-class ModelA(ShapeLossMixin, RetinalGridMixin, ScoreboardMixin, BaseModel):
+class ScoreboardModel(ShapeLossMixin, RetinalGridMixin, ScoreboardMixin, BaseModel):
     """Scoreboard model with shape descriptor loss"""
 
     def get_params(self, deep=True):
-        params = super(ModelA, self).get_params(deep=deep)
+        params = super(ScoreboardModel, self).get_params(deep=deep)
         params.update(name="Scoreboard")
         return params
 
@@ -740,11 +739,11 @@ class ModelB(ShapeLossMixin, RetinalCoordTrafoMixin, ScoreboardMixin,
         return params
 
 
-class ModelC(ShapeLossMixin, RetinalGridMixin, AxonMapMixin, BaseModel):
+class AxonMapModel(ShapeLossMixin, RetinalGridMixin, AxonMapMixin, BaseModel):
     """Axon map model with shape descriptor loss"""
 
     def get_params(self, deep=True):
-        params = super(ModelC, self).get_params(deep=deep)
+        params = super(AxonMapModel, self).get_params(deep=deep)
         params.update(name="Axon map")
         return params
 

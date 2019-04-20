@@ -1,7 +1,7 @@
 #!/bin/bash
 # Run each fold separately:
-declare -a models=("A" "C")
-for model in "${models[@]}"
+models="Scoreboard AxonMap"
+for model in ${models}
 do
 	for fold in {0..11}
 	do
@@ -9,15 +9,15 @@ do
 	done
 done
 
-for model in "${models[@]}"
+for model in ${models}
 do
 	for fold in {0..21}
 	do
-		python crossval-swarm.py ${model} SS --n_folds=-1 --idx_fold=${fold} --n_jobs=1
+		python crossval-swarm.py ${model} S2 --n_folds=-1 --idx_fold=${fold} --n_jobs=1
 	done
 done
 
-for model in "${models[@]}"
+for model in ${models}
 do
 	for fold in {0..17}
 	do
@@ -25,7 +25,7 @@ do
 	done
 done
 
-for model in "${models[@]}"
+for model in ${models}
 do
 	for fold in {0..27}
 	do

@@ -14,8 +14,8 @@ import argus_shapes
 # All available models with their corresponding function calls, search
 # parameters and model parameters
 models = {
-    'A': {  # Scoreboard model
-        'object': argus_shapes.models.ModelA,
+    'Scoreboard': {  # Scoreboard model
+        'object': argus_shapes.models.ScoreboardModel,
         'search_params': ['rho'],
         'subject_params': ['implant_type',
                            'implant_x', 'implant_y', 'implant_rot',
@@ -27,8 +27,8 @@ models = {
         'subject_params': ['implant_type', 'implant_x', 'implant_y',
                            'implant_rot', 'xrange', 'yrange']
     },
-    'C': {  # Axon map model with shape loss
-        'object': argus_shapes.models.ModelC,
+    'AxonMap': {  # Axon map model with shape loss
+        'object': argus_shapes.models.AxonMapModel,
         'search_params': ['rho', 'axlambda'],
         'subject_params': ['implant_type', 'xrange', 'yrange',
                            'loc_od_x', 'loc_od_y',
@@ -162,7 +162,7 @@ def main():
     model = models[modelname]
     model_params = {'engine': 'cython', 'scheduler': 'threading',
                     'n_jobs': n_jobs, 'xystep': 0.25}
-    if 'C' in modelname or 'D' in modelname:
+    if 'AxonMap' in modelname or 'D' in modelname:
         model_params.update({'axon_pickle': 'axons-%s.pickle' % now})
     for key in model['subject_params']:
         value = subjects.loc[subject, key]

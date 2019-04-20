@@ -524,8 +524,8 @@ def test_AxonMapModel__calcs_axon_contribution():
 
 
 def test_AxonMapModel__calc_bundle_tangent():
-    model = m.ModelC(xystep=5, engine='serial', n_axons=500, n_ax_segments=500,
-                     axons_range=(-180, 180), ax_segments_range=(3, 50))
+    model = m.AxonMapModel(xystep=5, engine='serial', n_axons=500, n_ax_segments=500,
+                           axons_range=(-180, 180), ax_segments_range=(3, 50))
     npt.assert_almost_equal(model.calc_bundle_tangent(0, 0), 0.4819, decimal=3)
     npt.assert_almost_equal(model.calc_bundle_tangent(0, 1000), -0.5532,
                             decimal=3)
