@@ -56,3 +56,9 @@ def test_angle_diff():
         npt.assert_almost_equal(utils.angle_diff(0.2 + offset1, 0.1), -0.1)
     for offset2 in [-2 * np.pi, 0, 2 * np.pi]:
         npt.assert_almost_equal(utils.angle_diff(0.2, 0.1 + offset2), -0.1)
+
+
+def test_circfve():
+    npt.assert_almost_equal(utils.circfve([0, 0, 0], [0, 1, 2]), 0)
+    npt.assert_almost_equal(utils.circfve([0, 0, 0], [0, 0, 0]), 1)
+    npt.assert_almost_equal(utils.circfve([0, 0.5, 1], [0, 0.5, 1]), 1)

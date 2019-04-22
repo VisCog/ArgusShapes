@@ -1,4 +1,5 @@
 import numpy as np
+import scipy.stats as spst
 
 
 def ret2dva(r_um):
@@ -59,4 +60,35 @@ def angle_diff(angle1, angle2):
     """
     # https://stackoverflow.com/questions/1878907/
     #    the-smallest-difference-between-2-angles
+    angle1 = np.asarray(angle1)
+    angle2 = np.asarray(angle2)
     return np.arctan2(np.sin(angle2 - angle1), np.cos(angle2 - angle1))
+
+
+def circfve(r_true, r_pred, lo=0, hi=2 * np.pi):
+    """Calculates the fraction of variance explained (FVE) for circular data
+
+    Assumes circular data are in the range [lo, hi].
+    Uses SciPy's circular stats functions.
+
+    Parameters
+    ----------
+    r_true : array_like
+        Circular data (ground-truth)
+    r_pred : array_like
+        Circular data (predicted)
+    low : float or int, optional
+        Low boundary for circular variance range.  Default is 0.
+    high : float or int, optional
+        High boundary for circular variance range.  Default is ``2*pi``.
+    """
+    r_true = np.asarray(r_true)
+    r_pred = np.asarray(r_pred)
+    r_mu_true = spst.circmean(r_true, low=lo, high=hi)
+    var_err = spst.circvar(r_true - r_pred, low=lo, high=hi)
+    var_tot = spst.circvar(r_true - r_mu_true, low=lo, high=hi)
+    if np.isclose(var_err, 0) and np.isclose(var_tot, 0):
+        return 1
+    if np.isclose(var_tot, 0):
+        return 0
+    return (1 - var_err / var_tot)
