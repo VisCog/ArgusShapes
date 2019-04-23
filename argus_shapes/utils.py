@@ -43,7 +43,7 @@ def pol2cart(theta, rho):
     return x, y
 
 
-def angle_diff(angle1, angle2):
+def angle_diff(angle1, angle2, lo=0, hi=2 * np.pi):
     """Returns the signed difference between two angles (rad)
 
     The difference is calculated as angle2 - angle1. The difference will thus
@@ -51,18 +51,19 @@ def angle_diff(angle1, angle2):
 
     Parameters
     ----------
-    angle1, angle2 : float
-        An angle in radians.
+    angle1, angle2 : array_like
+        Input arrays with circular data in the range [lo, hi]
 
     Returns
     -------
-    The signed difference angle2 - angle1 in [0, 2*pi).
+    The signed difference angle2 - angle1 in [lo, hi]
     """
     # https://stackoverflow.com/questions/1878907/
     #    the-smallest-difference-between-2-angles
-    angle1 = np.asarray(angle1)
-    angle2 = np.asarray(angle2)
-    return np.arctan2(np.sin(angle2 - angle1), np.cos(angle2 - angle1))
+    _, angle1 = spst.morestats._circfuncs_common(angle1, hi, lo)
+    _, angle2 = spst.morestats._circfuncs_common(angle2, hi, lo)
+    diff = np.arctan2(np.sin(angle2 - angle1), np.cos(angle2 - angle1))
+    return diff * (hi - lo) / 2.0 / np.pi + lo
 
 
 def circfve(r_true, r_pred, lo=0, hi=2 * np.pi):
@@ -85,8 +86,10 @@ def circfve(r_true, r_pred, lo=0, hi=2 * np.pi):
     r_true = np.asarray(r_true)
     r_pred = np.asarray(r_pred)
     r_mu_true = spst.circmean(r_true, low=lo, high=hi)
-    var_err = spst.circvar(r_true - r_pred, low=lo, high=hi)
-    var_tot = spst.circvar(r_true - r_mu_true, low=lo, high=hi)
+    var_err = spst.circvar(angle_diff(r_true, r_pred, lo=lo, hi=hi),
+                           low=lo, high=hi)
+    var_tot = spst.circvar(angle_diff(r_true, r_mu_true, lo=lo, hi=hi),
+                           low=lo, high=hi)
     if np.isclose(var_err, 0) and np.isclose(var_tot, 0):
         return 1
     if np.isclose(var_tot, 0):
