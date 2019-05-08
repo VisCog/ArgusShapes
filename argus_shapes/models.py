@@ -23,15 +23,6 @@ import sklearn.exceptions as skle
 import sklearn.metrics as sklm
 
 
-try:
-    # Python 2
-    reduce(lambda x, y: x + y, [1, 2, 3])
-except NameError:
-    # Python 3
-    from functools import reduce
-    reduce(lambda x, y: x + y, [1, 2, 3])
-
-
 @six.add_metaclass(abc.ABCMeta)
 class BaseModel(sklb.BaseEstimator):
 
@@ -67,7 +58,8 @@ class BaseModel(sklb.BaseEstimator):
         self.implant = None
         self.xret = None
         self.yret = None
-        self.name = "BaseModel"
+        self.name = 'BaseModel'
+        self.eye = 'RE'
 
         # This flag will be flipped once the ``fit`` method was called
         self._is_fitted = False
@@ -96,6 +88,7 @@ class BaseModel(sklb.BaseEstimator):
                 'implant_y': self.implant_y,
                 'implant_rot': self.implant_rot,
                 'img_thresh': self.img_thresh,
+                'eye': self.eye,
                 'engine': self.engine,
                 'scheduler': self.scheduler,
                 'n_jobs': self.n_jobs}
@@ -729,6 +722,24 @@ class ScoreboardModel(ShapeLossMixin, RetinalGridMixin, ScoreboardMixin, BaseMod
         return params
 
 
+class AxonMapModel(ShapeLossMixin, RetinalGridMixin, AxonMapMixin, BaseModel):
+    """Axon map model with shape descriptor loss"""
+
+    def get_params(self, deep=True):
+        params = super(AxonMapModel, self).get_params(deep=deep)
+        params.update(name="Axon map")
+        return params
+
+
+class ModelA(ShapeLossMixin, RetinalGridMixin, ScoreboardMixin, BaseModel):
+    """Scoreboard model with shape descriptor loss (deprecated)"""
+
+    def get_params(self, deep=True):
+        params = super(ModelA, self).get_params(deep=deep)
+        params.update(name="Scoreboard")
+        return params
+
+
 class ModelB(ShapeLossMixin, RetinalCoordTrafoMixin, ScoreboardMixin,
              BaseModel):
     """Scoreboard model with perspective transform and shape descriptor loss"""
@@ -739,11 +750,11 @@ class ModelB(ShapeLossMixin, RetinalCoordTrafoMixin, ScoreboardMixin,
         return params
 
 
-class AxonMapModel(ShapeLossMixin, RetinalGridMixin, AxonMapMixin, BaseModel):
-    """Axon map model with shape descriptor loss"""
+class ModelC(ShapeLossMixin, RetinalGridMixin, AxonMapMixin, BaseModel):
+    """Axon map model with shape descriptor loss (deprecated)"""
 
     def get_params(self, deep=True):
-        params = super(AxonMapModel, self).get_params(deep=deep)
+        params = super(ModelC, self).get_params(deep=deep)
         params.update(name="Axon map")
         return params
 

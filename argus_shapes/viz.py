@@ -113,9 +113,13 @@ def plot_phosphenes_on_array(ax, subject, Xymu, subjectdata, alpha_bg=0.5,
     for col in ['electrode', 'image']:
         if col not in Xymu.columns:
             raise ValueError('Xymu must contain column "%s".' % col)
-    for col in ['implant_x', 'implant_y', 'implant_rot', 'implant_type']:
+    for col in ['implant_x', 'implant_y', 'implant_rot', 'implant_type',
+                'eye']:
         if col not in subjectdata.columns:
             raise ValueError('subjectdata must contain column "%s".' % col)
+    if subjectdata.loc[subject, 'eye'] != 'RE':
+        raise NotImplementedError
+
     img_argus1 = skio.imread(osp.join(data_path, 'argus_i.png'))
     img_argus2 = skio.imread(osp.join(data_path, 'argus_ii.png'))
     px_argus1 = np.array([

@@ -25,33 +25,35 @@ or have the scripts under "figures/" do it for you.
 
 ## Installation
 
-Required packages listed in `requirements.txt`.
+Make sure you are running Python 3!
+
+Required packages are listed in `requirements.txt`.
 
 First make sure you have NumPy and Cython installed:
 
 ```
-    $ pip install numpy==1.11
-    $ pip install cython==0.27
+    $ pip3 install numpy==1.11
+    $ pip3 install cython==0.27
 ```
 
 Then install all packages listed in `requirements.txt`:
 
 ```
-    $ pip install -r requirements.txt
+    $ pip3 install -r requirements.txt
 ```
 
 After that, you are ready to install the main package, `argus_shapes`:
 
 ```
-    $ pip install -e .
+    $ pip3 install -e .
 
 ```
 
 If you want to make sure that everything works as expect, you can run the test suite:
 
 ```
-    $ pip install pytest
-    $ py.test argus_shapes
+    $ pip3 install pytest
+    $ pytest argus_shapes
 ```
 
 
