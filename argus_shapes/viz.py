@@ -324,8 +324,8 @@ def plot_fundus(ax, subject, subjectdata, n_bundles=100, upside_down=False,
     rho_range = (2.0, 45.0)
 
     # Make sure x-coord of optic disc has the correct sign for LE/RE:
-    if (implant.eye == 'RE' and loc_od[0] <= 0
-            or implant.eye == 'LE' and loc_od[0] > 0):
+    if (implant.eye == 'RE' and loc_od[0] <= 0 or
+            implant.eye == 'LE' and loc_od[0] > 0):
         logstr = ("For eye==%s, expected opposite sign of x-coordinate of "
                   "the optic disc; changing %.2f to %.2f" % (implant.eye,
                                                              loc_od[0],
