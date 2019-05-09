@@ -256,7 +256,7 @@ class AxonMapMixin(object):
         self.rho = 100
         self.axlambda = 100
         # Set the (x,y) location of the optic disc:
-        self.loc_od_x = 15.5
+        self.loc_od_x = 15.5 if self.eye == 'RE' else -15.5
         self.loc_od_y = 1.5
         # Set parameters of the Jansonius model: Number of axons and number of
         # segments per axon can be overriden by the user:
@@ -497,8 +497,20 @@ class AxonMapMixin(object):
         return tangent
 
     def build_optic_fiber_layer(self):
-        if self.implant.eye == 'LE':
-            raise NotImplementedError
+        if self.implant_eye == 'LE':
+            if self.loc_od_x > 0:
+                err_str = ("In a left eye, the x-coordinate of the optic"
+                           "disc should be negative, not %f" % self.loc_od_x)
+                raise ValueError(err_str)
+        elif self.implant_eye == 'RE':
+            if self.loc_od_x < 0:
+                err_str = ("In a right eye, the x-coordinate of the optic"
+                           "disc should be positive, not %f" % self.loc_od_x)
+                raise ValueError(err_str)
+        else:
+            err_str = ("implant_eye should be either 'LE' or 'RE', "
+                       "not %s." % self.implant_eye)
+            raise ValueError(err_str)
         need_axons = False
         # Check if math for Jansonius model has been done before:
         if os.path.isfile(self.axon_pickle):

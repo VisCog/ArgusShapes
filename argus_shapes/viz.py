@@ -9,7 +9,9 @@ import skimage.transform as skit
 
 import pulse2percept.implants as p2pi
 import pulse2percept.retina as p2pr
+import pulse2percept.utils as p2pu
 
+from matplotlib import patches
 import os.path as osp
 import pkg_resources
 data_path = pkg_resources.resource_filename('argus_shapes', 'data/')
@@ -100,8 +102,8 @@ def plot_phosphenes_on_array(ax, subject, Xymu, subjectdata, alpha_bg=0.5,
         phosphene image.
     subjectdata : pd.DataFrame
         DataFrame with Subject ID as index. Must have columns 'implant_x',
-        'implant_y', 'implant_rot', 'implant_type'. May also have a column
-        'scale' containing a scaling factor applied to phosphene size.
+        'implant_y', 'implant_rot', 'implant_type', and 'eye'. May also have a
+        column 'scale' containing a scaling factor applied to phosphene size.
     alpha_bg : float
         Alpha value for the array in the background
     thresh_fg : float
@@ -113,15 +115,25 @@ def plot_phosphenes_on_array(ax, subject, Xymu, subjectdata, alpha_bg=0.5,
     for col in ['electrode', 'image']:
         if col not in Xymu.columns:
             raise ValueError('Xymu must contain column "%s".' % col)
+    # If subject column not present, choose all entries:
+    if 'subject' in Xymu.columns:
+        Xymu = Xymu[Xymu.subject == subject]
     for col in ['implant_x', 'implant_y', 'implant_rot', 'implant_type',
                 'eye']:
         if col not in subjectdata.columns:
             raise ValueError('subjectdata must contain column "%s".' % col)
-    if subjectdata.loc[subject, 'eye'] != 'RE':
-        raise NotImplementedError
+    if subject not in subjectdata.index:
+        raise ValueError('Subject "%s" not an index in subjectdata.' % subject)
+    if 'scale' not in subjectdata.columns:
+        print("'scale' not in subjectdata, setting scale=1.0")
+        subjectdata['scale'] = 1.0
 
+    eye = subjectdata.loc[subject, 'eye']
+    # Schematic of the array:
     img_argus1 = skio.imread(osp.join(data_path, 'argus_i.png'))
     img_argus2 = skio.imread(osp.join(data_path, 'argus_ii.png'))
+    # Pixel locations of electrodes (Argus I: A1-4, B1-4, ...; Argus II: A1-10,
+    # B1-10, ...) in the above images:
     px_argus1 = np.array([
         [163.12857037, 92.32202802], [208.00952276, 93.7029804],
         [248.74761799, 93.01250421], [297.77142752, 91.63155183],
@@ -132,7 +144,6 @@ def plot_phosphenes_on_array(ax, subject, Xymu, subjectdata, alpha_bg=0.5,
         [163.81904657, 226.27440898], [210.08095133, 226.27440898],
         [252.89047514, 227.65536136], [297.08095133, 227.65536136]
     ])
-
     px_argus2 = np.array([
         [296.94026284, 140.58506571], [328.48148148, 138.4823178],
         [365.27956989, 140.58506571], [397.87216249, 139.53369176],
@@ -165,12 +176,8 @@ def plot_phosphenes_on_array(ax, subject, Xymu, subjectdata, alpha_bg=0.5,
         [492.4958184, 308.80489845], [527.1911589, 307.75352449],
         [559.78375149, 307.75352449], [590.27359618, 306.70215054]
     ])
-    if 'scale' not in subjectdata.columns:
-        subjectdata['scale'] = 1.0
+    # Choose the appropriate image / electrode locations based on implant type:
     implant_type = subjectdata.loc[subject, 'implant_type']
-    argus = implant_type(x_center=subjectdata.loc[subject, 'implant_x'],
-                         y_center=subjectdata.loc[subject, 'implant_y'],
-                         rot=subjectdata.loc[subject, 'implant_rot'])
     is_argus2 = isinstance(implant_type(), p2pi.ArgusII)
     if is_argus2:
         px_argus = px_argus2
@@ -179,15 +186,24 @@ def plot_phosphenes_on_array(ax, subject, Xymu, subjectdata, alpha_bg=0.5,
         px_argus = px_argus1
         img_argus = img_argus1
 
-    padding = 2000
+    # To simulate an implant in a left eye, flip the image left-right (along
+    # with the electrode x-coordinates):
+    if eye == 'LE':
+        img_argus = np.fliplr(img_argus)
+        px_argus[:, 0] = img_argus.shape[1] - px_argus[:, 0] - 1
+
+    # Create an instance of the array using p2p:
+    argus = implant_type(x_center=subjectdata.loc[subject, 'implant_x'],
+                         y_center=subjectdata.loc[subject, 'implant_y'],
+                         rot=subjectdata.loc[subject, 'implant_rot'],
+                         eye=eye)
+
+    # Add some padding to the output image so the array is not cut off:
+    padding = 2000  # microns
     x_range = (p2pr.ret2dva(np.min([e.x_center for e in argus]) - padding),
                p2pr.ret2dva(np.max([e.x_center for e in argus]) + padding))
     y_range = (p2pr.ret2dva(np.min([e.y_center for e in argus]) - padding),
                p2pr.ret2dva(np.max([e.y_center for e in argus]) + padding))
-
-    # If subject column not present, choose all entries:
-    if 'subject' in Xymu.columns:
-        Xymu = Xymu[Xymu.subject == subject]
 
     # If img_shape column not present, choose shape of first entry:
     if 'img_shape' in Xymu.columns:
@@ -253,6 +269,152 @@ def plot_phosphenes_on_array(ax, subject, Xymu, subjectdata, alpha_bg=0.5,
         fovea = fovea = dva2out([0, 0])[0]
         ax.scatter(fovea[0], fovea[1], s=100,
                    marker='s', c='w', edgecolors='k')
+
+
+def plot_fundus(ax, subject, subjectdata, n_bundles=100, upside_down=False,
+                annot_array=True, annot_quadr=True):
+    """Plot an implant on top of the axon map
+
+    This function plots an electrode array on top of the axon map, akin to a
+    fundus photograph. Implant location should be given via `subjectdata`.
+
+    Parameters
+    ----------
+    ax : matplotlib.axes._subplots.AxesSubplot, optional, default: None
+        A Matplotlib axes object. If None given, a new one will be created.
+    subject : str
+        Subject ID, must be a valid value for column 'subject' in
+        `subjectdata`.
+    subjectdata : pd.DataFrame
+        DataFrame with Subject ID as index. Must have columns 'implant_x',
+        'implant_y', 'implant_rot', 'implant_type', 'eye', 'loc_od_x',
+        'loc_od_y'.
+    n_bundles : int, optional, default: 100
+        Number of nerve fiber bundles to plot.
+    upside_down : bool, optional, default: False
+        Flag whether to plot the retina upside-down, such that the upper
+        half of the plot corresponds to the upper visual field. In general,
+        inferior retina == upper visual field (and superior == lower).
+    annot_array : bool, optional, default: True
+        Flag whether to label electrodes and the tack.
+    annot_quadr : bool, optional, default: True
+        Flag whether to annotate the four retinal quadrants
+        (inferior/superior x temporal/nasal).
+
+    """
+    for col in ['implant_x', 'implant_y', 'implant_rot', 'implant_type',
+                'eye', 'loc_od_x', 'loc_od_y']:
+        if col not in subjectdata.columns:
+            raise ValueError('subjectdata must contain column "%s".' % col)
+    if subject not in subjectdata.index:
+        raise ValueError('Subject "%s" not an index in subjectdata.' % subject)
+    if n_bundles < 1:
+        raise ValueError('Number of nerve fiber bundles must be >= 1.')
+
+    # Choose the appropriate image / electrode locations based on implant type:
+    implant_type = subjectdata.loc[subject, 'implant_type']
+    implant = implant_type(x_center=subjectdata.loc[subject, 'implant_x'],
+                           y_center=subjectdata.loc[subject, 'implant_y'],
+                           rot=subjectdata.loc[subject, 'implant_rot'],
+                           eye=subjectdata.loc[subject, 'eye'])
+    loc_od = tuple(subjectdata.loc[subject, ['loc_od_x', 'loc_od_y']])
+
+    phi_range = (-180.0, 180.0)
+    n_rho = 801
+    rho_range = (2.0, 45.0)
+
+    # Make sure x-coord of optic disc has the correct sign for LE/RE:
+    if (implant.eye == 'RE' and loc_od[0] <= 0
+            or implant.eye == 'LE' and loc_od[0] > 0):
+        logstr = ("For eye==%s, expected opposite sign of x-coordinate of "
+                  "the optic disc; changing %.2f to %.2f" % (implant.eye,
+                                                             loc_od[0],
+                                                             -loc_od[0]))
+        print(logstr)
+        loc_od = (-loc_od[0], loc_od[1])
+    if ax is None:
+        # No axes object given: create
+        fig, ax = plt.subplots(1, figsize=(10, 8))
+    else:
+        fig = ax.figure
+
+    # Matplotlib<2 compatibility
+    if hasattr(ax, 'set_facecolor'):
+        ax.set_facecolor('black')
+    elif hasattr(ax, 'set_axis_bgcolor'):
+        ax.set_axis_bgcolor('black')
+
+    # Draw axon pathways:
+    phi = np.linspace(*phi_range, num=n_bundles)
+    func_kwargs = {'n_rho': n_rho, 'loc_od': loc_od,
+                   'rho_range': rho_range, 'eye': implant.eye}
+    axon_bundles = p2pu.parfor(p2pr.jansonius2009, phi,
+                               func_kwargs=func_kwargs)
+    for bundle in axon_bundles:
+        ax.plot(p2pr.dva2ret(bundle[:, 0]), p2pr.dva2ret(bundle[:, 1]),
+                c=(0.5, 1.0, 0.5))
+
+    # Plot all electrodes and label them (optional):
+    for e in implant.electrodes:
+        if annot_array:
+            ax.text(e.x_center + 100, e.y_center + 50, e.name,
+                    color='white', size='x-large')
+        ax.plot(e.x_center, e.y_center, 'ow', markersize=np.sqrt(e.radius))
+
+    # Plot the location of the array's tack and annotate it (optional):
+    if implant.tack:
+        tx, ty = implant.tack
+        ax.plot(tx, ty, 'ow')
+        if annot_array:
+            if upside_down:
+                offset = 100
+            else:
+                offset = -100
+            ax.text(tx, ty + offset, 'tack',
+                    horizontalalignment='center',
+                    verticalalignment='top',
+                    color='white', size='large')
+
+    # Show circular optic disc:
+    ax.add_patch(patches.Circle(p2pr.dva2ret(loc_od), radius=900, alpha=1,
+                                color='black', zorder=10))
+
+    xmin, xmax, ymin, ymax = p2pr.dva2ret([-20, 20, -15, 15])
+    ax.set_aspect('equal')
+    ax.set_xlim(xmin, xmax)
+    ax.set_xlabel('x (microns)')
+    ax.set_ylim(ymin, ymax)
+    ax.set_ylabel('y (microns)')
+    eyestr = {'LE': 'left', 'RE': 'right'}
+    ax.set_title('%s in %s eye' % (implant, eyestr[implant.eye]))
+    ax.grid('off')
+
+    # Annotate the four retinal quadrants near the corners of the plot:
+    # superior/inferior x temporal/nasal
+    if annot_quadr:
+        if upside_down:
+            topbottom = ['bottom', 'top']
+        else:
+            topbottom = ['top', 'bottom']
+        if implant.eye == 'RE':
+            temporalnasal = ['temporal', 'nasal']
+        else:
+            temporalnasal = ['nasal', 'temporal']
+        for yy, valign, si in zip([ymax, ymin], topbottom,
+                                  ['superior', 'inferior']):
+            for xx, halign, tn in zip([xmin, xmax], ['left', 'right'],
+                                      temporalnasal):
+                ax.text(xx, yy, si + ' ' + tn,
+                        color='black', fontsize=14,
+                        horizontalalignment=halign,
+                        verticalalignment=valign,
+                        backgroundcolor=(1, 1, 1, 0.8))
+
+    # Need to flip y axis to have upper half == upper visual field
+    if upside_down:
+        ax.invert_yaxis()
+
+    return fig, ax
 
 
 def plot_box(vals1, vals2, ax, is_signif=None):
