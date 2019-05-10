@@ -67,6 +67,7 @@ The code to reproduce figures in the paper can be found in the "figures/" folder
 - [fig6-model-shapes.ipynb](https://github.com/VisCog/ArgusShapes/blob/master/figures/fig6-model-shapes.ipynb): Cross-validated phosphene shape predictions.
 - [fig6-inset-models.ipynb](https://github.com/VisCog/ArgusShapes/blob/master/figures/fig6-inset-models.ipynb): Scoreboard and axon map model schematics.
 - [fig7-model-scatter.ipynb](https://github.com/VisCog/ArgusShapes/blob/master/figures/fig7-model-scatter.ipynb): Cross-validated shape descriptor predictions.
+- [fig8-model-phosphenes.ipynb](https://github.com/VisCog/ArgusShapes/blob/master/fig8-model-phosphenes.ipynb): Predicted phosphene shape as a function of electrode-retina distance.
 
 These notebooks assume that the data live in a directory `${DATA_ROOT}/argus_shapes`,
 where `DATA_ROOT` is an environment variable.
@@ -90,6 +91,7 @@ In order to load your own data, you will need two .csv files:
 
 - `subject_id`: subject ID, has to be the same as in `drawings.csv` (e.g., S1)
 - `implant_type`: currently supported are either 'ArgusI' or 'ArgusII'
+- `implant_eye`: either 'LE' for left eye or 'RE' for right eye
 - `implant_x` / `implant_y`: (x,y)-coordinates of array center in microns, assuming the fovea is at (0, 0)
 - `implant_rot`: array rotation in radians (positive: counter-clockwise rotation)
 - `loc_od_x` / `loc_od_y`: (x,y)-coordinates of optic disc center of this subject in microns
@@ -124,10 +126,8 @@ Then the data can be loaded as Pandas DataFrames using the following Python reci
     - `extract_best_pickle_files`: Return a list of pickle files with lowest train
       scores.
 - `models`: Code to run various versions of the scoreboard and axon map models.
-    - `ModelA`: Scoreboard model with shape descriptor loss
-    - `ModelB`: Scoreboard model with perspective transform and shape descriptor loss
-    - `ModelC`: Axon map model with shape descriptor loss
-    - `ModelD`: Axon map model with perspective transform and shape descriptor loss
+    - `ScoreboardModel`: Scoreboard model with shape descriptor loss
+    - `AxonMapModel`: Axon map model with shape descriptor loss
 - `model_selection`:
     - `FunctionMinimizer`: Perform function minimization.
     - `GridSearchOptimizer`: Perform grid search optimization.
@@ -155,6 +155,7 @@ Then the data can be loaded as Pandas DataFrames using the following Python reci
       regression curve.
     - `plot_phosphenes_on_array`: Plots mean phosphenes on a schematic of
       the implant.
+    - `plot_fundus`: Plots the implant on top of a simulated axon map.
 
 ## Miscellaneous
 

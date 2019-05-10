@@ -21,12 +21,6 @@ models = {
                            'implant_x', 'implant_y', 'implant_rot',
                            'xrange', 'yrange']
     },
-    'B': {  # Scoreboard model with perspective transform
-        'object': argus_shapes.models.ModelB,
-        'search_params': ['rho'],
-        'subject_params': ['implant_type', 'implant_x', 'implant_y',
-                           'implant_rot', 'xrange', 'yrange']
-    },
     'AxonMap': {  # Axon map model with shape loss
         'object': argus_shapes.models.AxonMapModel,
         'search_params': ['rho', 'axlambda'],
@@ -34,13 +28,6 @@ models = {
                            'loc_od_x', 'loc_od_y',
                            'implant_x', 'implant_y', 'implant_rot']
     },
-    'D': {  # Axon map model with perspective transform + predict area/orient
-        'object': argus_shapes.models.ModelD,
-        'search_params': ['rho', 'axlambda'],
-        'subject_params': ['implant_type', 'xrange', 'yrange',
-                           'loc_od_x', 'loc_od_y',
-                           'implant_x', 'implant_y', 'implant_rot']
-    }
 }
 
 search_param_ranges = {
