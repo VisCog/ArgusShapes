@@ -61,15 +61,18 @@ def main():
                                                        'subjects.csv'))
 
     # Parse input arguments
-    assert len(sys.argv) >= 3
+    if len(sys.argv) < 3:
+        raise ValueError("Must provide at least 3 arguments")
     modelname = sys.argv[1]
-    assert modelname in models
+    if modelname not in models:
+        raise ValueError("modelname not in models")
     subject = sys.argv[2]
-    assert subject in subjects.index
+    if subject not in subjects.index:
+        raise ValueError("subject not in subjects")
     try:
         longopts = ["n_folds=", "idx_fold=", "n_jobs=", "amplitude=",
                     "method=", "avg_img"]
-        opts, args = getopt.getopt(sys.argv[3:], "", longopts=longopts)
+        opts, _ = getopt.getopt(sys.argv[3:], "", longopts=longopts)
     except getopt.GetoptError as err:
         raise RuntimeError(err)
     for o, a in opts:
@@ -82,7 +85,8 @@ def main():
         elif o == "--amplitude":
             amplitude = float(a)
         elif o == "--method":
-            assert a in opt_methods.keys()
+            if a not in opt_methods.keys():
+                raise ValueError("flag not in methods.keys()")
             method = a
         elif o == "--avg_img":
             avg_img = True

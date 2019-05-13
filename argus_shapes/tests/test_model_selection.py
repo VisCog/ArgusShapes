@@ -62,7 +62,9 @@ def test_ParticleSwarmOptimizer():
                                      min_func=1e-6, min_step=1e-6)
     with pytest.raises(NotFittedError):
         fmin.predict(X)
-    fmin.fit(X, y)
+    # Test both {} and None:
+    fmin.fit(X, y, fit_params=None)
+    fmin.fit(X, y, fit_params={})
     npt.assert_almost_equal(fmin.estimator.dummy_var, 1.0, decimal=2)
     npt.assert_almost_equal(fmin.score(X, y), 0.0, decimal=2)
 
@@ -72,7 +74,7 @@ def test_crossval_predict():
     dummy = DummyPredictor()
 
     # Grouped by subject:
-    y_true, y_pred, best_params, best_train, best_test = ms.crossval_predict(
+    y_true, y_pred, best_params, best_train, _ = ms.crossval_predict(
         dummy, X, y, groups='subject', verbose=False
     )
     npt.assert_equal(len(y_true), len(X.subject.unique()))

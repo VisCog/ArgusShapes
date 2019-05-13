@@ -189,7 +189,8 @@ class BaseModel(sklb.BaseEstimator):
         elif hasattr(row, 'image'):
             out_shape = row['image'].shape
         # Apply threshold to arrive at binarized image:
-        assert hasattr(self, 'img_thresh')
+        if not hasattr(self, 'img_thresh'):
+            raise ValueError("DataFrame must have a column 'img_thresh'")
         img = imgproc.get_thresholded_image(curr_map, thresh=self.img_thresh,
                                             out_shape=out_shape)
         return self._predicts_target_values(row['electrode'], img)
@@ -238,7 +239,8 @@ class ScoreboardMixin(object):
 
     def _calcs_el_curr_map(self, electrode):
         """Calculates the current map for a specific electrode"""
-        assert isinstance(electrode, six.string_types)
+        if not isinstance(electrode, six.string_types):
+            raise TypeError("electrode must be a string")
         if not self.implant[electrode]:
             raise ValueError("Electrode '%s' could not be found." % electrode)
         r2 = (self.xret - self.implant[electrode].x_center) ** 2
@@ -398,7 +400,8 @@ class AxonMapMixin(object):
         bundles = p2pu.parfor(self._jansonius2009, phi,
                               engine=engine, n_jobs=self.n_jobs,
                               scheduler=self.scheduler)
-        assert len(bundles) == self.n_axons
+        if len(bundles) != self.n_axons:
+            raise ValueError("bundles must have the same length as n_axons")
         # Remove axon bundles outside the simulated area:
         bundles = list(filter(lambda x: (np.max(x[:, 0]) >= self.xrange[0] and
                                          np.min(x[:, 0]) <= self.xrange[1] and
@@ -413,7 +416,8 @@ class AxonMapMixin(object):
 
     def _finds_closest_axons(self, bundles, xret=None, yret=None):
         """Finds the closest axon segment for every point (`xret`, `yret`)"""
-        assert len(bundles) > 0
+        if len(bundles) <= 0:
+            raise ValueError("bundles must have length greater than zero")
         xret = self.xret if xret is None else np.asarray(xret, dtype=float)
         yret = self.yret if yret is None else np.asarray(yret, dtype=float)
         # For every axon segment, store the corresponding axon ID:
@@ -470,8 +474,10 @@ class AxonMapMixin(object):
             in microns.
         """
         # Check for scalar:
-        assert not isinstance(xc, list)
-        assert not isinstance(yc, list)
+        if isinstance(xc, (list, np.ndarray)):
+            raise TypeError("xc must be a scalar")
+        if isinstance(yc, (list, np.ndarray)):
+            raise TypeError("yc must be a scalar")
         # Find the fiber bundle closest to (xc, yc):
         bundles = self._grows_axon_bundles()
         bundle = self._finds_closest_axons(bundles, xret=xc, yret=yc)[0]
@@ -538,7 +544,8 @@ class AxonMapMixin(object):
 
     def _calcs_el_curr_map(self, electrode):
         """Calculates the current map for a specific electrode"""
-        assert isinstance(electrode, six.string_types)
+        if not isinstance(electrode, six.string_types):
+            raise TypeError("electrode must be a string")
         if not self.implant[electrode]:
             raise ValueError("Electrode '%s' could not be found." % electrode)
         ecm = []
@@ -692,7 +699,8 @@ class ShapeLossMixin(object):
 
         # `y` and `y_pred` must have the same index, otherwise subtraction
         # produces nan:
-        assert np.allclose(y_pred.index, y.index)
+        if not np.allclose(y_pred.index, y.index):
+            raise ValueError("y and y_pred must have the same index")
 
         cols = ['area', 'orientation', 'eccentricity']
         loss = np.zeros(len(cols))

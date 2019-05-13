@@ -38,7 +38,8 @@ def scatter_correlation(xvals, yvals, ax, xticks=[], yticks=[], marker='o',
     """
     xvals = np.asarray(xvals)
     yvals = np.asarray(yvals)
-    assert np.all(xvals.shape == yvals.shape)
+    if not np.all(xvals.shape == yvals.shape):
+        raise ValueError("xvals and yvals must have the same shape")
     # Scatter plot the data:
     ax.scatter(xvals, yvals, marker=marker, s=50,
                c=color, edgecolors='white', alpha=0.5)
@@ -68,8 +69,10 @@ def scatter_correlation(xvals, yvals, ax, xticks=[], yticks=[], marker='o',
 
     # Annotate with fitting results:
     va, ha = textloc.split(' ')
-    assert ha == 'left' or ha == 'right'
-    assert va == 'top' or va == 'bottom'
+    if ha != 'left' and ha != 'right':
+        raise ValueError("ha must be either 'left' or 'right'.")
+    if va != 'top' and va != 'bottom':
+        raise ValueError("va must be either 'left' or 'right'")
     a = ax.axis()
     xt = np.max(xticks) if len(xticks) > 0 else a[1]
     yt = np.min(yticks) if len(yticks) > 0 else (a[3] if va == 'top' else a[2])

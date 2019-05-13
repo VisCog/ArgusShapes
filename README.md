@@ -114,10 +114,10 @@ In order to load your own data, you will need two .csv files:
 
 Then the data can be loaded as Pandas DataFrames using the following Python recipe:
 
-```
-    >>> import argus_shapes as shapes
-    >>> df_subjects = shapes.load_subjects('subjects.csv')
-    >>> df_drawings = shapes.load_data('drawings.csv')
+```python
+>>> import argus_shapes as shapes
+>>> df_subjects = shapes.load_subjects('subjects.csv')
+>>> df_drawings = shapes.load_data('drawings.csv')
 ```
 
 ## Submodules
@@ -131,7 +131,7 @@ Then the data can be loaded as Pandas DataFrames using the following Python reci
     -   `load_subjects`: Load subject data from a local .csv file.
 
     -   `extract_best_pickle_files`: Return a list of pickle files with lowest train
-      scores.
+        scores.
 
 -   `models`: Code to run various versions of the scoreboard and axon map models.
 
@@ -156,11 +156,10 @@ Then the data can be loaded as Pandas DataFrames using the following Python reci
     -   `get_thresholded_image`: Apply a threshold to a grayscale image.
 
     -   `get_region_props`: Calculate region properties of a binary image
-
-      (area, center of mass, orientation, etc.)
+        (area, center of mass, orientation, etc.)
 
     -   `calc_shape_descriptors`: Calculate area, orientation, elongation
-      of a phosphene.
+        of a phosphene.
 
     -   `center_phosphene`: Center a phosphene in an image.
 
@@ -185,11 +184,10 @@ Then the data can be loaded as Pandas DataFrames using the following Python reci
 -   `viz`: Some visualization functions.
 
     -   `scatter_correlation`: Scatter plots some data points and fits a
-
-      regression curve.
+        regression curve.
 
     -   `plot_phosphenes_on_array`: Plots mean phosphenes on a schematic of
-      the implant.
+        the implant.
 
     -   `plot_fundus`: Plots the implant on top of a simulated axon map.
 

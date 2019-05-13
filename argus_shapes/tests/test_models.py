@@ -8,7 +8,6 @@ import sklearn.exceptions as skle
 import pulse2percept.implants as p2pi
 import pulse2percept.retina as p2pr
 from .. import models as m
-from .. import utils
 
 import numpy.testing as npt
 import pytest

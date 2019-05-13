@@ -38,7 +38,9 @@ class FunctionMinimizer(sklb.BaseEstimator):
             Flag whether to print more stuff
         """
         self.estimator = estimator
-        assert hasattr(estimator, 'greater_is_better')
+        if not hasattr(estimator, 'greater_is_better'):
+            raise ValueError(("%s must have an attribute "
+                              "'greater_is_better'" % estimator))
         self.search_params = search_params
         if search_params_init is None:
             search_params_init = {}
@@ -51,7 +53,7 @@ class FunctionMinimizer(sklb.BaseEstimator):
         self.min_step = min_step
         self.verbose = verbose
 
-    def calc_error(self, search_vals, X, y, fit_params={}):
+    def calc_error(self, search_vals, X, y, fit_params=None):
         """Calculates the estimator's error
 
         The error is calculated using the estimator's scoring function (assumes
@@ -65,6 +67,8 @@ class FunctionMinimizer(sklb.BaseEstimator):
             search_params[k] = v
 
         # Clone the estimator to make sure we have a clean slate
+        if fit_params is None:
+            fit_params = {}
         estimator = sklb.clone(self.estimator)
         estimator.set_params(**search_params)
         estimator.fit(X, y=y, **fit_params)
@@ -81,7 +85,7 @@ class FunctionMinimizer(sklb.BaseEstimator):
         self.iter += 1
         return loss
 
-    def fit(self, X, y, fit_params={}):
+    def fit(self, X, y, fit_params=None):
         """Runs the optimizer"""
         self.iter = 0
         # (lower, upper) bounds for every parameter
@@ -102,6 +106,8 @@ class FunctionMinimizer(sklb.BaseEstimator):
         print('Best err:', res['fun'], 'Best params:', self.best_params_)
 
         # Fit the class attribute with best params
+        if fit_params is None:
+            fit_params = {}
         self.estimator.set_params(**self.best_params_)
         self.estimator.fit(X, y=y, **fit_params)
 
@@ -134,11 +140,15 @@ class GridSearchOptimizer(sklb.BaseEstimator):
 
         """
         self.estimator = estimator
-        assert hasattr(estimator, 'greater_is_better')
+        if not hasattr(estimator, 'greater_is_better'):
+            raise ValueError(("%s must have an attribute "
+                              "'greater_is_better'" % estimator))
         self.search_params = search_params
         self.verbose = verbose
 
-    def fit(self, X, y, fit_params={}):
+    def fit(self, X, y, fit_params=None):
+        if fit_params is None:
+            fit_params = {}
         best_params = {}
         best_loss = np.inf
         for params in self.search_params:
@@ -196,7 +206,9 @@ class ParticleSwarmOptimizer(sklb.BaseEstimator):
         if swarm_size is None:
             swarm_size = 10 * len(search_params)
         self.estimator = estimator
-        assert hasattr(estimator, 'greater_is_better')
+        if not hasattr(estimator, 'greater_is_better'):
+            raise ValueError(("%s must have an attribute "
+                              "'greater_is_better'" % estimator))
         self.search_params = search_params
         self.swarm_size = swarm_size
         self.max_iter = max_iter
@@ -204,7 +216,7 @@ class ParticleSwarmOptimizer(sklb.BaseEstimator):
         self.min_step = min_step
         self.verbose = verbose
 
-    def swarm_error(self, search_vals, X, y, fit_params={}):
+    def swarm_error(self, search_vals, X, y, fit_params=None):
         """Calculates the particle swarm error
 
         The error is calculated using the estimator's scoring function (assumes
@@ -218,6 +230,8 @@ class ParticleSwarmOptimizer(sklb.BaseEstimator):
             search_params[k] = v
 
         # Clone the estimator to make sure we have a clean slate
+        if fit_params is None:
+            fit_params = {}
         estimator = sklb.clone(self.estimator)
         estimator.set_params(**search_params)
         estimator.fit(X, y=y, **fit_params)
@@ -228,7 +242,7 @@ class ParticleSwarmOptimizer(sklb.BaseEstimator):
         loss = -loss if estimator.greater_is_better else loss
         return loss
 
-    def fit(self, X, y, fit_params={}):
+    def fit(self, X, y, fit_params=None):
         # Run particle swarm optimization
         lb = [v[0] for v in self.search_params.values()]
         ub = [v[1] for v in self.search_params.values()]
@@ -247,6 +261,8 @@ class ParticleSwarmOptimizer(sklb.BaseEstimator):
         print('Best err:', best_err, 'Best params:', self.best_params_)
 
         # Fit the class attribute with best params
+        if fit_params is None:
+            fit_params = {}
         self.estimator.set_params(**self.best_params_)
         self.estimator.fit(X, y=y, **fit_params)
 
@@ -259,7 +275,7 @@ class ParticleSwarmOptimizer(sklb.BaseEstimator):
         return self.estimator.score(X, y, sample_weight=None)
 
 
-def crossval_predict(estimator, X, y, fit_params={}, n_folds=5, idx_fold=-1,
+def crossval_predict(estimator, X, y, fit_params=None, n_folds=5, idx_fold=-1,
                      groups=None, verbose=True):
     """Performs cross-validation
 
@@ -286,10 +302,14 @@ def crossval_predict(estimator, X, y, fit_params={}, n_folds=5, idx_fold=-1,
     y_pred : list
     best_params = dict
     """
-    assert isinstance(X, pd.core.frame.DataFrame)
-    assert isinstance(y, pd.core.frame.DataFrame)
-    assert n_folds > 1
-    assert idx_fold >= -1 and idx_fold < n_folds
+    if not isinstance(X, pd.core.frame.DataFrame):
+        raise TypeError("X must be a Pandas DataFrame")
+    if not isinstance(y, pd.core.frame.DataFrame):
+        raise TypeError("y must be a Pandas DataFrame")
+    if n_folds <= 0:
+        raise ValueError("n_folds must be greater than zero")
+    if idx_fold < -1 or idx_fold >= n_folds:
+        raise ValueError("idx_fold must be -1, or in the range [0, n_folds).")
     # Manual partitioning of X
     all_idx = np.arange(len(X))
     if groups is None:
@@ -297,8 +317,10 @@ def crossval_predict(estimator, X, y, fit_params={}, n_folds=5, idx_fold=-1,
         groups = np.array_split(all_idx, n_folds)
     else:
         # `groups` must be a column of `X`
-        assert isinstance(groups, six.string_types)
-        assert groups in X.columns
+        if not isinstance(groups, six.string_types):
+            raise TypeError("groups must be a string")
+        if groups not in X.columns:
+            raise ValueError("groups must be in X.columns")
         # Transform into a list of folds, each of which has an array of
         # data sample indices, thus mimicking np.array split; i.e. from
         # ['S1', 'S1', 'S2, 'S2', 'S3', 'S3']
@@ -306,7 +328,6 @@ def crossval_predict(estimator, X, y, fit_params={}, n_folds=5, idx_fold=-1,
         # [np.array([0, 1]), np.array([2, 3]), np.array([4, 5])]:
         groups = [np.where(X[groups] == i)[0] for i in np.unique(X[groups])]
         n_folds = len(groups)
-        assert idx_fold < n_folds
 
     y_true = []
     y_pred = []
@@ -344,7 +365,8 @@ def crossval_score(y_true, y_pred, metric='mse', key='all', weights=None):
                    'msle': sklm.mean_squared_log_error,
                    'var_explained': sklm.explained_variance_score,
                    'r2': sklm.r2_score}
-    assert metric in score_funcs.keys()
+    if metric not in score_funcs.keys():
+        raise ValueError("Unknown scoring function '%s'" % metric)
     scores = []
     for yt, yp in zip(y_true, y_pred):
         if key is not None and key != 'all':

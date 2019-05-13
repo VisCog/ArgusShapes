@@ -437,8 +437,11 @@ def calc_mean_images(Xy, groupby=['subject', 'amp', 'electrode'], thresh=True,
 def _extracts_score_from_pickle(file, col_score, col_groupby):
     """Private helper function to extract the score from a pickle file"""
     _, _, _, specifics = pickle.load(open(file, 'rb'))
-    assert np.all([g in specifics for g in col_groupby])
-    assert col_score in specifics
+    for g in col_groupby:
+        if g not in specifics:
+            raise ValueError("%s not in specifics" % g)
+    if col_score not in specifics:
+        raise ValueError("%s not in specifics" % col_score)
     params = specifics['optimizer'].get_params()
     # TODO: make this work for n_folds > 1
     if isinstance(specifics[col_score], (list, np.ndarray)):
@@ -490,7 +493,9 @@ def extract_best_pickle_files(results_dir, col_score, col_groupby):
     # Convert to DataFrame:
     df = pd.DataFrame(data)
     # Make sure all estimator use the same scoring logic:
-    assert np.isclose(np.var(df.greater_is_better), 0)
+    if not np.isclose(np.var(df.greater_is_better), 0):
+        raise ValueError(("All estimators must use the same scoring logic "
+                          "(either 'greater_is_better'==0 or ==1 for all)"))
     # Find the rows that minimize/maximize the score:
     if df.loc[0, 'greater_is_better']:
         # greater score is better: maximize
