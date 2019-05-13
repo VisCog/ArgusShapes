@@ -1,9 +1,9 @@
+[![DOI](https://zenodo.org/badge/109446024.svg)](https://zenodo.org/badge/latestdoi/109446024)
+[![license](https://img.shields.io/badge/License-BSD%203--Clause-blue.svg)](https://github.com/uwescience/pulse2percept/blob/master/LICENSE)
+[![Data](https://img.shields.io/badge/data-osf.io-lightgrey.svg)](https://osf.io/dw9nz)
 [![Codacy Badge](https://api.codacy.com/project/badge/Grade/a2827a9c61ba41a8a9cf90ef21a956c0)](https://app.codacy.com/app/mbeyeler/ArgusShapes?utm_source=github.com&utm_medium=referral&utm_content=VisCog/ArgusShapes&utm_campaign=Badge_Grade_Dashboard)
 [![Build Status](https://travis-ci.org/VisCog/ArgusShapes.svg?branch=master)](https://travis-ci.org/VisCog/ArgusShapes)
 [![Coverage Status](https://coveralls.io/repos/github/VisCog/ArgusShapes/badge.svg?branch=master)](https://coveralls.io/github/VisCog/ArgusShapes?branch=master)
-[![DOI](https://zenodo.org/badge/109446024.svg)](https://zenodo.org/badge/latestdoi/109446024)
-[![Data](https://img.shields.io/badge/data-osf.io-lightgrey.svg)](https://osf.io/dw9nz)
-[![license](https://img.shields.io/badge/License-BSD%203--Clause-blue.svg)](https://github.com/uwescience/pulse2percept/blob/master/LICENSE)
 
 # ArgusShapes
 
@@ -31,29 +31,28 @@ Required packages are listed in `requirements.txt`.
 
 First make sure you have NumPy and Cython installed:
 
-```
-    $ pip3 install numpy==1.11
-    $ pip3 install cython==0.27
+```bash
+$ pip3 install numpy==1.11
+$ pip3 install cython==0.27
 ```
 
 Then install all packages listed in `requirements.txt`:
 
-```
-    $ pip3 install -r requirements.txt
+```bash
+$ pip3 install -r requirements.txt
 ```
 
 After that, you are ready to install the main package, `argus_shapes`:
 
-```
-    $ pip3 install -e .
-
+```bash
+$ pip3 install -e .
 ```
 
 If you want to make sure that everything works as expect, you can run the test suite:
 
-```
-    $ pip3 install pytest
-    $ pytest argus_shapes
+```bash
+$ pip3 install pytest
+$ pytest argus_shapes
 ```
 
 ## Figures
@@ -79,9 +78,9 @@ These notebooks assume that the data live in a directory `${DATA_ROOT}/argus_sha
 where `DATA_ROOT` is an environment variable.
 On Unix, make sure to add `DATA_ROOT` to your `~/.bashrc`:
 
-```
-    $ echo 'export DATA_ROOT=/home/username/data' >> ~/.bashrc
-    $ source ~/.bashrc
+```bash
+$ echo 'export DATA_ROOT=/home/username/data' >> ~/.bashrc
+$ source ~/.bashrc
 ```
 
 You can either download and extract the data from OSF yourself, or have

@@ -98,7 +98,7 @@ def fetch_data(osf_zip_url='https://osf.io/rduj4', save_path=None):
     print('Successfully unzipped file "%s".' % fzipname)
 
 
-def load_data(fname, subject=None, electrodes=None, amp=None, add_cols=[],
+def load_data(fname, subject=None, electrodes=None, amp=None, add_cols=None,
               auto_fetch=True, random_state=42):
     """Loads shuffled shape data
 
@@ -158,6 +158,8 @@ def load_data(fname, subject=None, electrodes=None, amp=None, add_cols=[],
     is_singlestim = is_singlestim_dataframe(data)
 
     # Make sure .csv file has all necessary columns:
+    if add_cols is None:
+        add_cols = []
     has_cols = set(data.columns)
     needs_cols = set(['PTS_AMP', 'PTS_FILE', 'PTS_FREQ', 'PTS_PULSE_DUR',
                       'date', 'stim_class', 'subject_id'] + add_cols)
@@ -393,7 +395,7 @@ def _calcs_mean_image(Xy, groupcols, thresh=True, max_area=np.inf):
     return columns
 
 
-def calc_mean_images(Xy, groupby=['subject', 'amp', 'electrode'], thresh=True,
+def calc_mean_images(Xy, groupby=None, thresh=True,
                      max_area=np.inf):
     """Extract mean images on an electrode from all raw trial drawings
 
@@ -417,6 +419,8 @@ def calc_mean_images(Xy, groupby=['subject', 'amp', 'electrode'], thresh=True,
         Data matrix, single entry per electrode
     """
     # Need something to group by:
+    if groupby is None:
+        groupby = ['subject', 'amp', 'electrode']
     if len(groupby) == 0:
         raise ValueError("groupby cannot be an empty list.")
     # Make sure required columns are present:

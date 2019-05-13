@@ -17,7 +17,7 @@ import pkg_resources
 data_path = pkg_resources.resource_filename('argus_shapes', 'data/')
 
 
-def scatter_correlation(xvals, yvals, ax, xticks=[], yticks=[], marker='o',
+def scatter_correlation(xvals, yvals, ax, xticks=None, yticks=None, marker='o',
                         color='k', textloc='top right'):
     """Scatter plots some data points and fits a regression curve to them
 

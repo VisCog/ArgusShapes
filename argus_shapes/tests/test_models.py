@@ -37,13 +37,13 @@ class ValidBaseModel(m.BaseModel):
     def _calcs_el_curr_map(self, electrode):
         return np.array([[0]])
 
-    def _predicts_target_values(self, row):
+    def _predicts_target_values(self, row, unused):
         return row
 
     def _predicts(self, Xrow):
         """Returns the input (a DataFrame row, without its index)"""
         _, row = Xrow
-        return self._predicts_target_values(row)
+        return self._predicts_target_values(row, None)
 
     def build_ganglion_cell_layer(self):
         self.xret = [[0]]
@@ -62,13 +62,13 @@ class ValidScoreboardModel(m.ShapeLossMixin, m.RetinalGridMixin,
                            m.ScoreboardMixin, m.BaseModel):
     """A class that implements all abstract methods of BaseModel"""
 
-    def _predicts_target_values(self, row):
+    def _predicts_target_values(self, row, unused):
         return row
 
     def _predicts(self, Xrow):
         """Returns the input (a DataFrame row, without its index)"""
         _, row = Xrow
-        return self._predicts_target_values(row)
+        return self._predicts_target_values(row, None)
 
 
 class ValidAxonMapModel(m.ShapeLossMixin, m.RetinalGridMixin, m.AxonMapMixin,
@@ -78,13 +78,13 @@ class ValidAxonMapModel(m.ShapeLossMixin, m.RetinalGridMixin, m.AxonMapMixin,
     def build_optic_fiber_layer(self):
         self.axon_contrib = [np.zeros((1, 3))] * int(np.prod(self.xret.shape))
 
-    def _predicts_target_values(self, row):
+    def _predicts_target_values(self, row, unused):
         return row
 
     def _predicts(self, Xrow):
         """Returns the input (a DataFrame row, without its index)"""
         _, row = Xrow
-        return self._predicts_target_values(row)
+        return self._predicts_target_values(row, None)
 
 
 class ValidRetinalCoordTrafo(m.ShapeLossMixin, m.RetinalCoordTrafoMixin,
@@ -94,13 +94,13 @@ class ValidRetinalCoordTrafo(m.ShapeLossMixin, m.RetinalCoordTrafoMixin,
     def _calcs_el_curr_map(self, electrode):
         return np.array([[0]])
 
-    def _predicts_target_values(self, row):
+    def _predicts_target_values(self, row, unused):
         return row
 
     def _predicts(self, Xrow):
         """Returns the input (a DataFrame row, without its index)"""
         _, row = Xrow
-        return self._predicts_target_values(row)
+        return self._predicts_target_values(row, None)
 
 
 class ValidRetinalGrid(m.ShapeLossMixin, m.RetinalGridMixin, m.BaseModel):
@@ -109,13 +109,13 @@ class ValidRetinalGrid(m.ShapeLossMixin, m.RetinalGridMixin, m.BaseModel):
     def _calcs_el_curr_map(self, electrode):
         return np.array([[0]])
 
-    def _predicts_target_values(self, row):
+    def _predicts_target_values(self, row, unused):
         return row
 
     def _predicts(self, Xrow):
         """Returns the input (a DataFrame row, without its index)"""
         _, row = Xrow
-        return self._predicts_target_values(row)
+        return self._predicts_target_values(row, None)
 
 
 def test_RetinalCoordTrafo():
@@ -413,7 +413,7 @@ def test_AxonMapModel():
     X.loc[0, 'electrode'] = 'F09'
     model.predict(X)
 
-    for electrode, cm in six.iteritems(model._curr_map):
+    for _, cm in six.iteritems(model._curr_map):
         # Current maps must be in [0, 1]
         npt.assert_almost_equal(cm.min(), 0, decimal=3)
         npt.assert_almost_equal(cm.max(), 0, decimal=3)  # FIXME
@@ -473,7 +473,7 @@ def test_AxonMapModel__jansonius2009():
     for eye in ['LE', 'RE']:
         for loc_od in [(15.5, 1.5), (7.0, 3.0), (-2.0, -2.0)]:
             model = ValidAxonMapModel(loc_od_x=loc_od[0], loc_od_y=loc_od[1],
-                                      xystep=2, engine='serial',
+                                      xystep=2, engine='serial', eye=eye,
                                       ax_segments_range=(0, 0),
                                       n_ax_segments=1)
             single_fiber = model._jansonius2009(0)

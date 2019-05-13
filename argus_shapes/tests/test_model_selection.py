@@ -74,7 +74,7 @@ def test_crossval_predict():
     dummy = DummyPredictor()
 
     # Grouped by subject:
-    y_true, y_pred, best_params, best_train, _ = ms.crossval_predict(
+    y_true, y_pred, _, _, _ = ms.crossval_predict(
         dummy, X, y, groups='subject', verbose=False
     )
     npt.assert_equal(len(y_true), len(X.subject.unique()))
