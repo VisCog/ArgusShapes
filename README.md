@@ -1,3 +1,4 @@
+[![Codacy Badge](https://api.codacy.com/project/badge/Grade/a2827a9c61ba41a8a9cf90ef21a956c0)](https://app.codacy.com/app/mbeyeler/ArgusShapes?utm_source=github.com&utm_medium=referral&utm_content=VisCog/ArgusShapes&utm_campaign=Badge_Grade_Dashboard)
 [![Build Status](https://travis-ci.org/VisCog/ArgusShapes.svg?branch=master)](https://travis-ci.org/VisCog/ArgusShapes)
 [![Coverage Status](https://coveralls.io/repos/github/VisCog/ArgusShapes/badge.svg?branch=master)](https://coveralls.io/github/VisCog/ArgusShapes?branch=master)
 [![DOI](https://zenodo.org/badge/109446024.svg)](https://zenodo.org/badge/latestdoi/109446024)
