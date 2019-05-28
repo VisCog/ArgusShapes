@@ -503,19 +503,19 @@ class AxonMapMixin(object):
         return tangent
 
     def build_optic_fiber_layer(self):
-        if self.implant_eye == 'LE':
+        if self.implant.eye == 'LE':
             if self.loc_od_x > 0:
                 err_str = ("In a left eye, the x-coordinate of the optic"
                            "disc should be negative, not %f" % self.loc_od_x)
                 raise ValueError(err_str)
-        elif self.implant_eye == 'RE':
+        elif self.implant.eye == 'RE':
             if self.loc_od_x < 0:
                 err_str = ("In a right eye, the x-coordinate of the optic"
                            "disc should be positive, not %f" % self.loc_od_x)
                 raise ValueError(err_str)
         else:
-            err_str = ("implant_eye should be either 'LE' or 'RE', "
-                       "not %s." % self.implant_eye)
+            err_str = ("Implant eye should be either 'LE' or 'RE', "
+                       "not %s." % self.implant.eye)
             raise ValueError(err_str)
         need_axons = False
         # Check if math for Jansonius model has been done before:
