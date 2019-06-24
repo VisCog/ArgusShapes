@@ -11,9 +11,9 @@
 
 Please cite as:
 
-> M. Beyeler, D. Nanduri, J. D. Weiland, A. Rokem, G. M. Boynton, I. Fine (2018).
+> M. Beyeler, D. Nanduri, J. D. Weiland, A. Rokem, G. M. Boynton, I. Fine (2019).
 > A model of ganglion axon pathways accounts for percepts
-> elicited by retinal implants. bioRxiv 453035, doi:10.1101/453035.
+> elicited by retinal implants. *Scientific Reports* 9(1):9199, doi:[10.1038/s41598-019-45416-4](https://doi.org/10.1038/s41598-019-45416-4).
 
 This code is based on [pulse2percept](https://github.com/uwescience/pulse2percept),
 a Python-based simulation framework for bionic vision
