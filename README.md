@@ -27,9 +27,7 @@ or have the scripts under "figures/" do it for you.
 
 Make sure you are running Python 3!
 
-Required packages are listed in `requirements.txt`.
-
-First make sure you have NumPy and Cython installed:
+Before you get started, make sure you have NumPy and Cython installed:
 
 ```bash
 $ pip3 install numpy==1.11
@@ -41,6 +39,8 @@ Then install all packages listed in `requirements.txt`:
 ```bash
 $ pip3 install -r requirements.txt
 ```
+
+These packages all have their recommended version numbers - these are the tested versions that I used to run the code for the paper. It's likely that other versions (e.g., of NumPy) might work just as well. The only problem I encountered was that phosphenes aren't centered correctly with `scikit-image` 0.14.
 
 After that, you are ready to install the main package, `argus_shapes`:
 
