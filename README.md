@@ -34,9 +34,16 @@ $ pip3 install numpy==1.11
 $ pip3 install cython==0.27
 ```
 
-Then install all packages listed in `requirements.txt`:
+Then download the source code from GitHub:
 
 ```bash
+$ git clone https://github.com/VisCog/ArgusShapes.git
+```
+
+This will put all the source code in a directory called `argus_shapes`. Now change directory and install all packages listed in `requirements.txt`:
+
+```bash
+$ cd argus_shapes
 $ pip3 install -r requirements.txt
 ```
 
