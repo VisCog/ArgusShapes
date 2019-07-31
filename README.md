@@ -40,7 +40,7 @@ Then download the source code from GitHub:
 $ git clone https://github.com/VisCog/ArgusShapes.git
 ```
 
-This will put all the source code in a directory called `argus_shapes`. Now change directory and install all packages listed in `requirements.txt`:
+This will put all the source code in a directory called `argus_shapes`. Note that this directory might be called `ArgusShapes-master` if you download the code in a zip file. Now change to that directory and install all packages listed in `requirements.txt`:
 
 ```bash
 $ cd argus_shapes
@@ -53,6 +53,13 @@ After that, you are ready to install the main package, `argus_shapes`:
 
 ```bash
 $ pip3 install -e .
+```
+
+Now you should be able to import the `argus_shapes` module from within a Jupyter notebook or IPyhton:
+
+```python
+>>> import argus_shapes as shapes
+>>> model = shapes.models.AxonMapModel()
 ```
 
 If you want to make sure that everything works as expect, you can run the test suite:
