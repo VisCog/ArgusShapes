@@ -25,6 +25,10 @@ or have the scripts under "figures/" do it for you.
 
 ## Installation
 
+> :warning: ArgusShapes requires scikit-image 0.13. To get the same results as the paper, it is recommended
+> that you install the exact version for all software packages listed in requirements.txt. You may want to
+> do this in a clean Python venv, conda environment, or Docker container.
+
 Make sure you are running Python 3!
 
 Before you get started, make sure you have NumPy and Cython installed:
