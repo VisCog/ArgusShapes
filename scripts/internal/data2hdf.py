@@ -89,3 +89,7 @@ def main():
     hdf_file = 'argus_shapes.h5'
     df2hdf(Xy, hdf_file)
     df = hdf2df(hdf_file)
+
+    
+if __name__ == "__main__":
+    main()
